@@ -193,11 +193,13 @@ impl EditCredentialView {
             EditCredentialMessage::FormMessage(form_msg) => {
                 match form_msg {
                     CredentialFormMessage::Save => {
+                        tracing::debug!("Save button clicked in edit credential view");
                         return Command::perform(async {}, |_| {
                             EditCredentialMessage::UpdateCredential
                         });
                     }
                     CredentialFormMessage::Cancel => {
+                        tracing::debug!("Cancel button clicked in edit credential view");
                         return Command::perform(async {}, |_| EditCredentialMessage::Cancel);
                     }
                     _ => {
@@ -208,13 +210,16 @@ impl EditCredentialView {
             }
 
             EditCredentialMessage::UpdateCredential => {
+                tracing::debug!("Processing UpdateCredential message");
                 if !self.form.is_valid() {
+                    tracing::warn!("Form validation failed in edit credential");
                     self.current_error = Some(AlertMessage::warning(
                         "Please fill in all required fields".to_string(),
                     ));
                     return Command::none();
                 }
 
+                tracing::debug!("Form validation passed, proceeding with credential update");
                 self.state = EditCredentialState::Saving;
                 let mut config = CredentialFormConfig::default();
                 config.is_loading = true;
@@ -238,10 +243,12 @@ impl EditCredentialView {
             EditCredentialMessage::CredentialUpdated(result) => {
                 match result {
                     Ok(()) => {
+                        tracing::info!("Credential updated successfully");
                         self.state = EditCredentialState::Complete;
                         self.current_error = None;
                     }
                     Err(e) => {
+                        tracing::error!("Failed to update credential: {}", e);
                         self.current_error = Some(AlertMessage::ipc_error(e));
                         self.state =
                             EditCredentialState::Error("Failed to update credential".to_string());
@@ -459,6 +466,11 @@ impl EditCredentialView {
                 (field_name, field)
             })
             .collect();
+
+        tracing::debug!("Calling IPC client to update credential with ID: {}", id);
+        tracing::debug!("Title: {}", title);
+        tracing::debug!("Credential type: {}", credential_type);
+        tracing::debug!("Fields: {:?}", fields);
 
         client
             .update_credential(

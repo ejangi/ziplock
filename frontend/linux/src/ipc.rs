@@ -152,7 +152,6 @@ pub enum ResponseData {
 /// Main IPC client struct
 pub struct IpcClient {
     socket_path: PathBuf,
-    stream: Option<UnixStream>,
     reader: Option<BufReader<tokio::io::ReadHalf<UnixStream>>>,
     writer: Option<tokio::io::WriteHalf<UnixStream>>,
     session_id: Option<String>,
@@ -177,7 +176,6 @@ impl IpcClient {
     pub fn new() -> Result<Self, String> {
         Ok(Self {
             socket_path: Self::default_socket_path(),
-            stream: None,
             reader: None,
             writer: None,
             session_id: None,
@@ -210,7 +208,7 @@ impl IpcClient {
             request,
         };
 
-        if self.stream.is_none() {
+        if self.reader.is_none() || self.writer.is_none() {
             self.connect().await?;
         }
 

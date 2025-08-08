@@ -136,18 +136,30 @@ impl CredentialForm {
     pub fn update(&mut self, message: CredentialFormMessage) {
         match message {
             CredentialFormMessage::TitleChanged(title) => {
+                tracing::debug!("Title changed to: '{}'", title);
                 self.title = title;
             }
             CredentialFormMessage::FieldChanged(field_name, value) => {
+                tracing::debug!("Field '{}' changed to: '{}'", field_name, value);
                 self.field_values.insert(field_name, value);
             }
             CredentialFormMessage::ToggleFieldSensitivity(field_name) => {
                 if let Some(sensitive) = self.field_sensitivity.get(&field_name).copied() {
+                    tracing::debug!(
+                        "Toggled sensitivity for field '{}' to: {}",
+                        field_name,
+                        !sensitive
+                    );
                     self.field_sensitivity.insert(field_name, !sensitive);
                 }
             }
-            CredentialFormMessage::Save | CredentialFormMessage::Cancel => {
-                // These are handled by the parent component
+            CredentialFormMessage::Save => {
+                tracing::debug!("Save button clicked in credential form");
+                // This is handled by the parent component
+            }
+            CredentialFormMessage::Cancel => {
+                tracing::debug!("Cancel button clicked in credential form");
+                // This is handled by the parent component
             }
         }
     }
@@ -321,13 +333,19 @@ impl CredentialForm {
 
     /// Check if the form has valid data for submission
     pub fn is_valid(&self) -> bool {
+        tracing::debug!("Validating credential form...");
+        tracing::debug!("Title: '{}'", self.title);
+        tracing::debug!("Field values: {:?}", self.field_values);
+
         // Title is required
         if self.title.trim().is_empty() {
+            tracing::warn!("Validation failed: Title is empty");
             return false;
         }
 
         // Check required fields if template is available
         if let Some(template) = &self.template {
+            tracing::debug!("Template: {}", template.name);
             for field_template in &template.fields {
                 if field_template.required {
                     let value = self
@@ -336,13 +354,24 @@ impl CredentialForm {
                         .map(|v| v.trim())
                         .unwrap_or("");
 
+                    tracing::debug!(
+                        "Checking required field '{}': '{}'",
+                        field_template.name,
+                        value
+                    );
+
                     if value.is_empty() {
+                        tracing::warn!(
+                            "Validation failed: Required field '{}' is empty",
+                            field_template.name
+                        );
                         return false;
                     }
                 }
             }
         }
 
+        tracing::debug!("Validation passed!");
         true
     }
 }

@@ -199,11 +199,13 @@ impl AddCredentialView {
             AddCredentialMessage::FormMessage(form_msg) => {
                 match form_msg {
                     CredentialFormMessage::Save => {
+                        tracing::debug!("Save button clicked in add credential view");
                         return Command::perform(async {}, |_| {
                             AddCredentialMessage::CreateCredential
                         });
                     }
                     CredentialFormMessage::Cancel => {
+                        tracing::debug!("Cancel button clicked in add credential view");
                         return Command::perform(async {}, |_| AddCredentialMessage::Cancel);
                     }
                     _ => {
@@ -214,13 +216,16 @@ impl AddCredentialView {
             }
 
             AddCredentialMessage::CreateCredential => {
+                tracing::debug!("Processing CreateCredential message");
                 if !self.form.is_valid() {
+                    tracing::warn!("Form validation failed in add credential");
                     self.current_error = Some(AlertMessage::warning(
                         "Please fill in all required fields".to_string(),
                     ));
                     return Command::none();
                 }
 
+                tracing::debug!("Form validation passed, proceeding with credential creation");
                 self.state = AddCredentialState::Creating;
                 self.is_loading = true;
 
@@ -249,10 +254,12 @@ impl AddCredentialView {
                 self.is_loading = false;
                 match result {
                     Ok(_id) => {
+                        tracing::info!("Credential created successfully");
                         self.state = AddCredentialState::Complete;
                         self.current_error = None;
                     }
                     Err(e) => {
+                        tracing::error!("Failed to create credential: {}", e);
                         self.current_error = Some(AlertMessage::error(e));
                         self.state =
                             AddCredentialState::Error("Failed to create credential".to_string());
@@ -483,6 +490,11 @@ impl AddCredentialView {
                 (field_name, field)
             })
             .collect();
+
+        tracing::debug!("Calling IPC client to create credential");
+        tracing::debug!("Title: {}", title);
+        tracing::debug!("Credential type: {}", credential_type);
+        tracing::debug!("Fields: {:?}", fields);
 
         client
             .create_credential(session_id, title, credential_type, fields, Vec::new(), None)
