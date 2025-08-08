@@ -418,14 +418,60 @@ impl IpcServer {
         debug!("Processing request: {:?}", request.request);
 
         // Validate session for authenticated requests
-        let is_authenticated = if let Some(session_id) = &request.session_id {
+        let session_validation = if let Some(session_id) = &request.session_id {
             let sessions_guard = sessions.read().await;
-            sessions_guard
-                .get(session_id)
-                .map(|session| session.authenticated)
-                .unwrap_or(false)
+            if let Some(session) = sessions_guard.get(session_id) {
+                // Check if session has expired (1 hour timeout)
+                let now = std::time::SystemTime::now();
+                let timeout = std::time::Duration::from_secs(3600); // 1 hour
+
+                if now
+                    .duration_since(session.last_activity)
+                    .unwrap_or_default()
+                    > timeout
+                {
+                    Some(Err("SessionExpired"))
+                } else if session.authenticated {
+                    Some(Ok(true))
+                } else {
+                    Some(Ok(false))
+                }
+            } else {
+                Some(Err("SessionNotFound"))
+            }
         } else {
-            false
+            None
+        };
+
+        // Check for session validation errors before processing authenticated requests
+        let is_authenticated = match session_validation {
+            Some(Ok(authenticated)) => authenticated,
+            Some(Err(error_type)) => {
+                // Return session error immediately for authenticated operations
+                if !matches!(
+                    request.request,
+                    Request::Ping { .. } | Request::CreateSession
+                ) {
+                    return Ok(IpcResponse {
+                        request_id: request.request_id,
+                        result: RequestResult::Error {
+                            error_type: error_type.to_string(),
+                            message: match error_type {
+                                "SessionExpired" => {
+                                    "Session expired - please re-authenticate".to_string()
+                                }
+                                "SessionNotFound" => {
+                                    "Session not found - please create a new session".to_string()
+                                }
+                                _ => "Session validation failed".to_string(),
+                            },
+                            details: None,
+                        },
+                    });
+                }
+                false
+            }
+            None => false,
         };
 
         // Process the request
@@ -459,7 +505,7 @@ impl IpcServer {
             Request::LockDatabase => {
                 if is_authenticated {
                     Self::handle_lock_database(
-                        &request.session_id.unwrap(),
+                        request.session_id.as_ref().unwrap(),
                         sessions,
                         archive_manager,
                     )
@@ -612,6 +658,16 @@ impl IpcServer {
                 }
             }
         };
+
+        // Update session activity for successful authenticated requests
+        if let Some(session_id) = &request.session_id {
+            if matches!(response_result, RequestResult::Success(_)) {
+                let mut sessions_guard = sessions.write().await;
+                if let Some(session) = sessions_guard.get_mut(session_id) {
+                    session.last_activity = std::time::SystemTime::now();
+                }
+            }
+        }
 
         Ok(IpcResponse {
             request_id: request.request_id,

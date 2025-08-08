@@ -7,6 +7,7 @@ use iced::{
     widget::{button, column, container, row, scrollable, svg, text, text_input, Space},
     Alignment, Command, Element, Length,
 };
+use tracing::debug;
 
 use crate::ipc::IpcClient;
 use crate::ui::theme::alerts::AlertMessage;
@@ -27,13 +28,16 @@ pub enum MainViewMessage {
     RefreshCredentials,
 
     // IPC operations
-    CredentialsLoaded(Result<Vec<CredentialItem>, String>),
+    CredentialsLoaded(Result<(Vec<CredentialItem>, Option<String>, bool), String>),
     OperationCompleted(Result<String, String>),
 
     // Navigation
     ShowSettings,
     ShowAbout,
     Lock,
+
+    // Session management
+    SessionTimeout,
 
     // Error handling and demonstration
     ShowError(String),
@@ -48,6 +52,8 @@ pub enum MainViewMessage {
 pub struct MainView {
     search_query: String,
     credentials: Vec<CredentialItem>,
+    session_id: Option<String>,
+    is_authenticated: bool,
     selected_credential: Option<String>,
     is_loading: bool,
     current_error: Option<AlertMessage>,
@@ -83,6 +89,8 @@ impl Default for MainView {
                     last_modified: "1 week ago".to_string(),
                 },
             ],
+            session_id: None,
+            is_authenticated: false,
             selected_credential: None,
             is_loading: false,
             current_error: None,
@@ -94,6 +102,25 @@ impl MainView {
     /// Create a new main view instance
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Set the session ID for this view
+    pub fn set_session_id(&mut self, session_id: Option<String>) {
+        self.session_id = session_id;
+        // Don't automatically set authenticated=true just because we have a session
+        // Authentication status will be updated when we actually load credentials
+    }
+
+    /// Create a command to refresh credentials if we have a session
+    pub fn initial_refresh_command(&self) -> Command<MainViewMessage> {
+        if self.session_id.is_some() {
+            Command::perform(
+                Self::load_credentials_async(self.session_id.clone()),
+                MainViewMessage::CredentialsLoaded,
+            )
+        } else {
+            Command::none()
+        }
     }
 
     /// Update the main view based on messages
@@ -129,7 +156,7 @@ impl MainView {
                 self.is_loading = true;
                 self.current_error = None;
                 Command::perform(
-                    Self::load_credentials_async(),
+                    Self::load_credentials_async(self.session_id.clone()),
                     MainViewMessage::CredentialsLoaded,
                 )
             }
@@ -137,29 +164,67 @@ impl MainView {
             MainViewMessage::CredentialsLoaded(result) => {
                 self.is_loading = false;
                 match result {
-                    Ok(credentials) => {
+                    Ok((credentials, session_id, authenticated)) => {
+                        let cred_count = credentials.len();
                         self.credentials = credentials;
+                        if let Some(sid) = session_id {
+                            self.session_id = Some(sid);
+                        }
+                        self.is_authenticated = authenticated;
                         self.current_error = None;
+                        // Log for debugging
+                        if authenticated {
+                            tracing::debug!(
+                                "Successfully loaded {} credentials, authenticated=true",
+                                cred_count
+                            );
+                        } else {
+                            tracing::debug!(
+                                "Loaded {} credentials but authenticated=false",
+                                cred_count
+                            );
+                        }
                     }
-                    Err(error) => {
-                        self.current_error = Some(AlertMessage::ipc_error(error));
+                    Err(e) => {
+                        // Check if this is a session timeout error
+                        if let Some(timeout_command) = self.handle_potential_session_timeout(&e) {
+                            return timeout_command;
+                        }
+                        self.current_error = Some(AlertMessage::error(e));
+                        self.is_authenticated = false;
                     }
                 }
                 Command::none()
             }
 
             MainViewMessage::OperationCompleted(result) => {
+                self.is_loading = false;
                 match result {
                     Ok(success_msg) => {
-                        self.current_error = Some(AlertMessage::success(success_msg));
-                        // Auto-refresh credentials after successful operation
-                        Command::perform(
-                            Self::load_credentials_async(),
-                            MainViewMessage::CredentialsLoaded,
-                        )
+                        if success_msg.contains("locked") {
+                            // If we locked the database, clear our session and credentials
+                            self.session_id = None;
+                            self.is_authenticated = false;
+                            self.credentials.clear();
+                            self.current_error = Some(AlertMessage::success(success_msg));
+                            Command::none()
+                        } else {
+                            self.current_error = Some(AlertMessage::success(success_msg));
+                            // Auto-refresh credentials after successful operation
+                            Command::perform(
+                                Self::load_credentials_async(self.session_id.clone()),
+                                MainViewMessage::CredentialsLoaded,
+                            )
+                        }
                     }
-                    Err(error) => {
-                        self.current_error = Some(AlertMessage::ipc_error(error));
+                    Err(error_msg) => {
+                        // Check if this is a session timeout error
+                        if let Some(timeout_command) =
+                            self.handle_potential_session_timeout(&error_msg)
+                        {
+                            return timeout_command;
+                        }
+                        self.current_error = Some(AlertMessage::error(error_msg));
                         Command::none()
                     }
                 }
@@ -208,7 +273,17 @@ impl MainView {
             }
 
             MainViewMessage::Lock => {
-                // TODO: Lock the application and return to login
+                self.is_loading = true;
+                self.current_error = None;
+                Command::perform(
+                    Self::lock_database_async(self.session_id.clone()),
+                    MainViewMessage::OperationCompleted,
+                )
+            }
+
+            MainViewMessage::SessionTimeout => {
+                // This is handled by the helper method and parent application
+                // Just return none as the timeout has already been processed
                 Command::none()
             }
         }
@@ -407,23 +482,79 @@ impl MainView {
             .collect();
 
         if filtered_credentials.is_empty() {
-            return column![
-                Space::with_height(Length::Fixed(50.0)),
-                text("No credentials found")
-                    .size(16)
-                    .style(iced::theme::Text::Color(iced::Color::from_rgb(0.5, 0.5, 0.5))),
-                if self.search_query.is_empty() {
-                    text("Click 'Add' to create your first credential or 'Refresh' to load from backend")
-                        .size(14)
-                        .style(iced::theme::Text::Color(iced::Color::from_rgb(0.7, 0.7, 0.7)))
+            return if self.search_query.is_empty() {
+                if self.is_authenticated {
+                    // No credentials and authenticated - show friendly empty state
+                    column![
+                        Space::with_height(Length::Fixed(80.0)),
+                        text("No credentials yet!")
+                            .size(24)
+                            .style(iced::theme::Text::Color(iced::Color::from_rgb(
+                                0.4, 0.4, 0.4
+                            ))),
+                        Space::with_height(Length::Fixed(10.0)),
+                        text("Let's add your first credential to get started")
+                            .size(16)
+                            .style(iced::theme::Text::Color(iced::Color::from_rgb(
+                                0.6, 0.6, 0.6
+                            ))),
+                        Space::with_height(Length::Fixed(30.0)),
+                        button(
+                            row![
+                                svg(theme::plus_icon())
+                                    .width(Length::Fixed(18.0))
+                                    .height(Length::Fixed(18.0)),
+                                Space::with_width(Length::Fixed(8.0)),
+                                text("Add Your First Credential").size(16)
+                            ]
+                            .align_items(Alignment::Center)
+                        )
+                        .on_press(MainViewMessage::AddCredential)
+                        .padding([12, 24])
+                        .style(button_styles::primary()),
+                        Space::with_height(Length::Fixed(20.0)),
+                        text("or click 'Refresh' to reload from backend")
+                            .size(12)
+                            .style(iced::theme::Text::Color(iced::Color::from_rgb(
+                                0.7, 0.7, 0.7
+                            ))),
+                    ]
+                    .align_items(Alignment::Center)
+                    .into()
                 } else {
-                    text("Try adjusting your search terms")
-                        .size(14)
-                        .style(iced::theme::Text::Color(iced::Color::from_rgb(0.7, 0.7, 0.7)))
+                    // Not authenticated - show locked state
+                    column![
+                        Space::with_height(Length::Fixed(50.0)),
+                        text("Database is locked")
+                            .size(16)
+                            .style(iced::theme::Text::Color(iced::Color::from_rgb(
+                                0.5, 0.5, 0.5
+                            ))),
+                        text("Please unlock it first to view credentials.")
+                            .size(14)
+                            .style(iced::theme::Text::Color(iced::Color::from_rgb(
+                                0.9, 0.6, 0.4
+                            ))),
+                    ]
+                    .align_items(Alignment::Center)
+                    .into()
                 }
-            ]
-            .align_items(Alignment::Center)
-            .into();
+            } else {
+                // Search returned no results
+                column![
+                    Space::with_height(Length::Fixed(50.0)),
+                    text("No credentials found")
+                        .size(16)
+                        .style(iced::theme::Text::Color(iced::Color::from_rgb(
+                            0.5, 0.5, 0.5
+                        ))),
+                    text("Try adjusting your search terms").size(14).style(
+                        iced::theme::Text::Color(iced::Color::from_rgb(0.7, 0.7, 0.7))
+                    ),
+                ]
+                .align_items(Alignment::Center)
+                .into()
+            };
         }
 
         let credential_items: Vec<Element<MainViewMessage>> = filtered_credentials
@@ -511,7 +642,9 @@ impl MainView {
     }
 
     /// Async function to load credentials from backend
-    async fn load_credentials_async() -> Result<Vec<CredentialItem>, String> {
+    async fn load_credentials_async(
+        session_id: Option<String>,
+    ) -> Result<(Vec<CredentialItem>, Option<String>, bool), String> {
         let socket_path = IpcClient::default_socket_path();
         let mut client = IpcClient::new(socket_path);
 
@@ -521,7 +654,25 @@ impl MainView {
             .await
             .map_err(|e| format!("Could not connect to ZipLock backend: {}", e))?;
 
-        // Load credentials
+        // Create a session if we don't have one
+        let current_session_id = if let Some(sid) = session_id {
+            client.set_session_id(sid.clone());
+            sid
+        } else {
+            // Create a new session
+            client
+                .create_session()
+                .await
+                .map_err(|e| format!("Failed to create session: {}", e))?;
+
+            // Get the session ID from the client
+            match client.get_session_id() {
+                Some(sid) => sid,
+                None => return Err("Failed to obtain session ID after creation".to_string()),
+            }
+        };
+
+        // Try listing credentials with the session
         match client.list_credentials().await {
             Ok(summaries) => {
                 let credentials = summaries
@@ -530,7 +681,7 @@ impl MainView {
                         id: summary.id,
                         title: summary.title,
                         username: format!("Type: {}", summary.credential_type),
-                        url: None, // URL not available in summary
+                        url: None,
                         last_modified: summary
                             .updated_at
                             .duration_since(std::time::UNIX_EPOCH)
@@ -540,9 +691,68 @@ impl MainView {
                             + " (timestamp)",
                     })
                     .collect();
-                Ok(credentials)
+                Ok((credentials, Some(current_session_id), true))
             }
-            Err(e) => Err(format!("Failed to load credentials: {}", e)),
+            Err(e) => {
+                let error_msg = e.to_string();
+                if error_msg.contains("Database not unlocked")
+                    || error_msg.contains("NotAuthenticated")
+                {
+                    // Database is not unlocked - this is expected behavior
+                    Ok((Vec::new(), Some(current_session_id), false))
+                } else if crate::ipc::IpcClient::is_session_timeout_error(&error_msg) {
+                    // Session timeout - return error to trigger timeout handling
+                    Err(format!("Session expired: {}", e))
+                } else {
+                    Err(format!("Failed to load credentials: {}", e))
+                }
+            }
+        }
+    }
+
+    /// Async function to lock the database
+    async fn lock_database_async(session_id: Option<String>) -> Result<String, String> {
+        let socket_path = IpcClient::default_socket_path();
+        let mut client = IpcClient::new(socket_path);
+
+        // Connect to backend
+        client
+            .connect()
+            .await
+            .map_err(|e| format!("Could not connect to ZipLock backend: {}", e))?;
+
+        // Set session ID if we have one
+        if let Some(sid) = session_id {
+            client.set_session_id(sid);
+        }
+
+        // Lock the database
+        match client.close_archive().await {
+            Ok(()) => Ok("Database locked successfully".to_string()),
+            Err(e) => Err(format!("Failed to lock database: {}", e)),
+        }
+    }
+
+    /// Handle potential session timeout errors
+    fn handle_potential_session_timeout(
+        &mut self,
+        error_msg: &str,
+    ) -> Option<Command<MainViewMessage>> {
+        if crate::ipc::IpcClient::is_session_timeout_error(error_msg) {
+            // Clear local session state immediately
+            self.session_id = None;
+            self.is_authenticated = false;
+            self.credentials.clear();
+            self.current_error = Some(AlertMessage::warning(
+                "Your session has expired. You will be redirected to unlock your repository."
+                    .to_string(),
+            ));
+            // Return command to trigger session timeout handling
+            Some(Command::perform(async {}, |_| {
+                MainViewMessage::SessionTimeout
+            }))
+        } else {
+            None
         }
     }
 
@@ -551,7 +761,7 @@ impl MainView {
         self.current_error = None;
     }
 
-    /// Check if there's a current error
+    /// Check if there's currently an error to display
     pub fn has_error(&self) -> bool {
         self.current_error.is_some()
     }

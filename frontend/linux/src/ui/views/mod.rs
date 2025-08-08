@@ -11,11 +11,13 @@
 // - About view
 // etc.
 
+pub mod add_credential;
 pub mod main;
 pub mod open_repository;
 pub mod wizard;
 
 // Re-export components for easy access
+pub use add_credential::{AddCredentialMessage, AddCredentialView};
 pub use main::{MainView, MainViewMessage};
 pub use open_repository::{OpenRepositoryMessage, OpenRepositoryView};
 pub use wizard::{RepositoryWizard, WizardMessage};

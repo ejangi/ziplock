@@ -176,6 +176,7 @@ pub struct BackendStatus {
 }
 
 /// IPC client for communicating with the backend
+#[derive(Debug)]
 pub struct IpcClient {
     socket_path: PathBuf,
     stream: Option<UnixStream>,
@@ -190,6 +191,11 @@ impl IpcClient {
             stream: None,
             session_id: None,
         }
+    }
+
+    /// Set the session ID for this client
+    pub fn set_session_id(&mut self, session_id: String) {
+        self.session_id = Some(session_id);
     }
 
     /// Connect to the backend daemon
@@ -369,7 +375,7 @@ impl IpcClient {
     }
 
     /// Create a session with the backend
-    async fn create_session(&mut self) -> Result<()> {
+    pub async fn create_session(&mut self) -> Result<()> {
         let request = Request::CreateSession;
         let response = self.send_request_with_session(request, None).await?;
 
@@ -591,6 +597,11 @@ impl IpcClient {
         }
     }
 
+    /// Get the current session ID
+    pub fn get_session_id(&self) -> Option<String> {
+        self.session_id.clone()
+    }
+
     /// Convert backend error messages to user-friendly messages
     fn convert_backend_error_to_user_message(backend_message: &str) -> String {
         // Common error patterns and their user-friendly alternatives
@@ -601,6 +612,14 @@ impl IpcClient {
             || backend_message.contains("ConnectionLost")
         {
             "Lost connection to the backend service. Please restart the application.".to_string()
+        } else if backend_message.contains("Session expired")
+            || backend_message.contains("SessionExpired")
+        {
+            "Your session has expired. Please unlock the database again.".to_string()
+        } else if backend_message.contains("Authentication timeout")
+            || backend_message.contains("AuthTimeout")
+        {
+            "Authentication session timed out. Please unlock the database again.".to_string()
         } else if backend_message.contains("Authentication failed")
             || backend_message.contains("Invalid passphrase")
         {
@@ -630,6 +649,14 @@ impl IpcClient {
             // For unknown errors, provide a generic message but include some context
             format!("An error occurred: {}", backend_message)
         }
+    }
+
+    /// Check if an error indicates session timeout/expiry
+    pub fn is_session_timeout_error(error_message: &str) -> bool {
+        error_message.contains("Session expired")
+            || error_message.contains("SessionExpired")
+            || error_message.contains("Authentication timeout")
+            || error_message.contains("AuthTimeout")
     }
 
     /// Check if backend is available and responsive

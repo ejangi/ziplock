@@ -30,7 +30,7 @@ pub enum OpenRepositoryMessage {
     /// Cancel and return to previous view
     Cancel,
     /// Opening process completed
-    OpenComplete(Result<(), String>),
+    OpenComplete(Result<String, String>), // Now returns session ID on success
 }
 
 /// State of the repository opening process
@@ -63,6 +63,8 @@ pub struct OpenRepositoryView {
     passphrase_validator: PassphraseValidator,
     /// Whether the form can be submitted
     can_open: bool,
+    /// Session ID after successful repository opening
+    session_id: Option<String>,
 }
 
 impl Default for OpenRepositoryView {
@@ -81,6 +83,7 @@ impl OpenRepositoryView {
             show_passphrase: false,
             passphrase_validator: PassphraseValidator::minimal(), // For opening, we just need any passphrase
             can_open: false,
+            session_id: None,
         }
     }
 
@@ -93,6 +96,7 @@ impl OpenRepositoryView {
             show_passphrase: false,
             passphrase_validator: PassphraseValidator::minimal(),
             can_open: false,
+            session_id: None,
         }
     }
 
@@ -161,8 +165,9 @@ impl OpenRepositoryView {
 
             OpenRepositoryMessage::OpenComplete(result) => {
                 match result {
-                    Ok(()) => {
+                    Ok(session_id) => {
                         info!("Repository opened successfully");
+                        self.session_id = Some(session_id);
                         self.state = OpenState::Complete;
                     }
                     Err(error) => {
@@ -438,13 +443,23 @@ impl OpenRepositoryView {
         }
     }
 
+    /// Get the session ID if repository was opened successfully
+    pub fn session_id(&self) -> Option<&String> {
+        if self.is_complete() {
+            self.session_id.as_ref()
+        } else {
+            None
+        }
+    }
+
     /// Reset the view to initial state
-    fn reset(&mut self) {
+    pub fn reset(&mut self) {
         self.state = OpenState::Input;
         self.selected_file = None;
         self.passphrase.clear();
         self.show_passphrase = false;
         self.can_open = false;
+        self.session_id = None;
     }
 
     /// Check if the opening process is complete
@@ -491,7 +506,10 @@ impl OpenRepositoryView {
     }
 
     /// Async function to open a repository
-    async fn open_repository_async(file_path: PathBuf, passphrase: String) -> Result<(), String> {
+    async fn open_repository_async(
+        file_path: PathBuf,
+        passphrase: String,
+    ) -> Result<String, String> {
         use crate::ipc::IpcClient;
 
         // Connect to backend
@@ -509,7 +527,12 @@ impl OpenRepositoryView {
             .await
             .map_err(|e| format!("Failed to open repository: {}", e))?;
 
-        Ok(())
+        // Get the session ID for later use
+        let session_id = client
+            .get_session_id()
+            .ok_or_else(|| "Failed to get session ID after opening repository".to_string())?;
+
+        Ok(session_id)
     }
 }
 

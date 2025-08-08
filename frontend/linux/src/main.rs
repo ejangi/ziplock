@@ -18,7 +18,10 @@ use ui::{create_ziplock_theme, theme};
 use config::{ConfigManager, RepositoryInfo};
 use ipc::IpcClient;
 use ui::views::main::{MainView, MainViewMessage};
-use ui::views::{OpenRepositoryMessage, OpenRepositoryView, RepositoryWizard, WizardMessage};
+use ui::views::{
+    AddCredentialMessage, AddCredentialView, OpenRepositoryMessage, OpenRepositoryView,
+    RepositoryWizard, WizardMessage,
+};
 
 /// Main application messages
 #[derive(Debug, Clone)]
@@ -49,9 +52,17 @@ pub enum Message {
     // Main view messages
     MainView(MainViewMessage),
 
+    // Add credential messages
+    AddCredential(AddCredentialMessage),
+    ShowAddCredential,
+    HideAddCredential,
+
     // Alert management
     ShowAlert(AlertMessage),
     DismissAlert,
+
+    // Session management
+    SessionTimeout,
 
     // General
     Quit,
@@ -67,7 +78,8 @@ pub enum AppState {
     WizardRequired,
     WizardActive(RepositoryWizard),
     OpenRepositoryActive(OpenRepositoryView),
-    MainInterface,
+    AddCredentialActive(AddCredentialView),
+    MainInterface(MainView),
     Error(String),
 }
 
@@ -78,8 +90,7 @@ pub struct ZipLockApp {
     ipc_client: Option<IpcClient>,
     theme: Theme,
     current_alert: Option<AlertMessage>,
-    main_view: MainView,
-    detected_repositories: Vec<RepositoryInfo>,
+    session_id: Option<String>,
 }
 
 impl Application for ZipLockApp {
@@ -97,8 +108,7 @@ impl Application for ZipLockApp {
             ipc_client: None,
             theme: create_ziplock_theme(),
             current_alert: None,
-            main_view: MainView::new(),
-            detected_repositories: Vec::new(),
+            session_id: None,
         };
 
         let load_config_command =
@@ -116,7 +126,8 @@ impl Application for ZipLockApp {
                 "ZipLock - Setup Wizard".to_string()
             }
             AppState::OpenRepositoryActive(_) => "ZipLock - Open Repository".to_string(),
-            AppState::MainInterface => "ZipLock Password Manager".to_string(),
+            AppState::AddCredentialActive(_) => "ZipLock - Add Credential".to_string(),
+            AppState::MainInterface(_) => "ZipLock Password Manager".to_string(),
             AppState::Error(_) => "ZipLock - Error".to_string(),
         }
     }
@@ -163,7 +174,7 @@ impl Application for ZipLockApp {
 
             Message::RepositoriesDetected(repositories) => {
                 info!("Detected {} repositories", repositories.len());
-                self.detected_repositories = repositories.clone();
+                // Store repositories for selection view
 
                 if repositories.is_empty() {
                     debug!("No repositories detected, showing wizard");
@@ -216,7 +227,7 @@ impl Application for ZipLockApp {
 
             Message::HideWizard => {
                 debug!("Hiding wizard, returning to main interface");
-                self.state = AppState::MainInterface;
+                self.state = AppState::MainInterface(MainView::new());
                 // Try to connect to backend after wizard completion
                 Command::perform(Self::connect_backend_async(), Message::BackendConnected)
             }
@@ -283,7 +294,7 @@ impl Application for ZipLockApp {
                     }
                 }
 
-                self.state = AppState::MainInterface;
+                self.state = AppState::MainInterface(MainView::new());
 
                 // Save to config if we have a path
                 if let Some(repo_path) = save_repo_path {
@@ -310,10 +321,23 @@ impl Application for ZipLockApp {
 
                     // Check if opening completed successfully or was cancelled
                     if open_view.is_complete() {
-                        return Command::batch([
-                            command,
-                            Command::perform(async {}, |_| Message::HideOpenRepository),
-                        ]);
+                        // Capture session ID and create MainView
+                        if let Some(session_id) = open_view.session_id() {
+                            self.session_id = Some(session_id.clone());
+                            let mut main_view = MainView::new();
+                            main_view.set_session_id(Some(session_id.clone()));
+                            self.state = AppState::MainInterface(main_view);
+                            // Trigger initial refresh to update authentication state
+                            return Command::batch([
+                                command,
+                                Command::perform(async {}, |_| {
+                                    Message::MainView(MainViewMessage::RefreshCredentials)
+                                }),
+                            ]);
+                        } else {
+                            self.state = AppState::MainInterface(MainView::new());
+                        }
+                        return command;
                     }
 
                     // Check if user cancelled - return to welcome screen
@@ -362,13 +386,101 @@ impl Application for ZipLockApp {
                 Command::none()
             }
 
-            Message::MainView(main_msg) => match main_msg {
-                MainViewMessage::ShowError(error) => {
-                    self.current_alert = Some(AlertMessage::ipc_error(error));
+            Message::MainView(main_msg) => {
+                if let AppState::MainInterface(main_view) = &mut self.state {
+                    match main_msg {
+                        MainViewMessage::ShowError(error) => {
+                            // Check if this is a session timeout error
+                            if crate::ipc::IpcClient::is_session_timeout_error(&error) {
+                                return Command::perform(async {}, |_| Message::SessionTimeout);
+                            }
+                            self.current_alert = Some(AlertMessage::ipc_error(error));
+                            Command::none()
+                        }
+                        MainViewMessage::SessionTimeout => {
+                            // Forward session timeout to main application handler
+                            return Command::perform(async {}, |_| Message::SessionTimeout);
+                        }
+                        MainViewMessage::AddCredential => {
+                            // Show add credential view
+                            return Command::perform(async {}, |_| Message::ShowAddCredential);
+                        }
+                        _ => main_view.update(main_msg).map(Message::MainView),
+                    }
+                } else {
                     Command::none()
                 }
-                _ => self.main_view.update(main_msg).map(Message::MainView),
-            },
+            }
+
+            Message::ShowAddCredential => {
+                debug!("Showing add credential view");
+                let add_view = AddCredentialView::with_session(self.session_id.clone());
+                self.state = AppState::AddCredentialActive(add_view);
+                Command::none()
+            }
+
+            Message::HideAddCredential => {
+                debug!("Hiding add credential view, returning to main interface");
+                if let Some(session_id) = &self.session_id {
+                    let mut main_view = MainView::new();
+                    main_view.set_session_id(Some(session_id.clone()));
+                    self.state = AppState::MainInterface(main_view);
+                    // Trigger refresh to reload credentials
+                    return Command::perform(async {}, |_| {
+                        Message::MainView(MainViewMessage::RefreshCredentials)
+                    });
+                } else {
+                    self.state = AppState::MainInterface(MainView::new());
+                }
+                Command::none()
+            }
+
+            Message::AddCredential(add_msg) => {
+                if let AppState::AddCredentialActive(add_view) = &mut self.state {
+                    let command = add_view.update(add_msg.clone()).map(Message::AddCredential);
+
+                    // Check if add credential completed or was cancelled
+                    if add_view.is_complete() || add_msg == AddCredentialMessage::Cancel {
+                        return Command::batch([
+                            command,
+                            Command::perform(async {}, |_| Message::HideAddCredential),
+                        ]);
+                    }
+
+                    return command;
+                }
+                Command::none()
+            }
+
+            Message::SessionTimeout => {
+                info!("Session timeout detected, redirecting to login");
+                // Clear session state
+                self.session_id = None;
+                // Show repository selection or wizard based on configuration
+                if let Some(config_manager) = &self.config_manager {
+                    if config_manager.should_show_wizard() {
+                        self.state = AppState::WizardRequired;
+                    } else {
+                        // Try to detect repositories again
+                        if let Some(config_manager) = &self.config_manager {
+                            let repositories = config_manager.detect_all_accessible_repositories();
+                            return Command::perform(
+                                async move { repositories },
+                                Message::RepositoriesDetected,
+                            );
+                        } else {
+                            self.state = AppState::WizardRequired;
+                        }
+                    }
+                } else {
+                    self.state = AppState::WizardRequired;
+                }
+                // Show timeout notification
+                self.current_alert = Some(AlertMessage::warning(
+                    "Your session has expired. Please unlock your repository again.".to_string(),
+                ));
+                Command::none()
+            }
 
             Message::Quit => {
                 info!("Application quit requested");
@@ -389,7 +501,8 @@ impl Application for ZipLockApp {
             AppState::OpenRepositoryActive(open_view) => {
                 open_view.view().map(Message::OpenRepository)
             }
-            AppState::MainInterface => self.view_main_interface(),
+            AppState::AddCredentialActive(add_view) => add_view.view().map(Message::AddCredential),
+            AppState::MainInterface(main_view) => main_view.view().map(Message::MainView),
             AppState::Error(error) => self.view_error(error),
         };
 
@@ -592,11 +705,6 @@ impl ZipLockApp {
         .center_x()
         .center_y()
         .into()
-    }
-
-    /// View main interface
-    fn view_main_interface(&self) -> Element<Message> {
-        self.main_view.view().map(Message::MainView)
     }
 
     /// View error screen
