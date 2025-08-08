@@ -260,13 +260,15 @@ impl RepositoryValidator {
         let can_auto_repair = issues.iter().any(|issue| {
             matches!(
                 issue,
-                ValidationIssue::StructuralIssue {
-                    auto_fixable: true,
-                    ..
-                } | ValidationIssue::LegacyFormat {
-                    migration_needed: true,
-                    ..
-                }
+                ValidationIssue::MissingRequired { .. }
+                    | ValidationIssue::StructuralIssue {
+                        auto_fixable: true,
+                        ..
+                    }
+                    | ValidationIssue::LegacyFormat {
+                        migration_needed: true,
+                        ..
+                    }
             )
         });
 

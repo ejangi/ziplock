@@ -244,7 +244,7 @@ mod tests {
     use super::*;
     use std::fs;
     use std::sync::atomic::{AtomicBool, Ordering};
-    use std::sync::Arc;
+    use std::sync::{Arc, Mutex};
     use std::thread;
     use tempfile::NamedTempFile;
 
@@ -268,36 +268,54 @@ mod tests {
         let temp_file = NamedTempFile::new().unwrap();
         let path = temp_file.path().to_path_buf();
 
-        let success_count = Arc::new(AtomicBool::new(false));
+        // First, acquire a lock in the main thread to ensure the mechanism works
+        let _main_lock = FileLock::new(&path, 1).expect("Main thread should acquire lock");
+
+        // Use a barrier to synchronize thread starts
+        let barrier = Arc::new(std::sync::Barrier::new(3));
+        let results = Arc::new(Mutex::new(Vec::new()));
         let mut handles = vec![];
 
-        // Try to acquire the same lock from multiple threads
+        // Try to acquire the same lock from multiple threads while main thread holds it
         for i in 0..3 {
             let path_clone = path.clone();
-            let success_clone = Arc::clone(&success_count);
+            let barrier_clone = Arc::clone(&barrier);
+            let results_clone = Arc::clone(&results);
 
             let handle = thread::spawn(move || {
-                let lock = FileLock::new(&path_clone, 1);
-                if lock.is_ok() {
-                    success_clone.store(true, Ordering::Relaxed);
-                    // Hold the lock briefly
-                    thread::sleep(Duration::from_millis(100));
-                }
-                lock
+                // Wait for all threads to be ready
+                barrier_clone.wait();
+
+                // Try to acquire lock with short timeout since main thread has it
+                let start = std::time::Instant::now();
+                let lock_result = FileLock::new(&path_clone, 1);
+                let duration = start.elapsed();
+
+                // Record the result with timing info
+                let mut results = results_clone.lock().unwrap();
+                results.push((i, lock_result.is_ok(), duration));
+
+                lock_result
             });
             handles.push(handle);
         }
 
-        // Wait for all threads and count successes
-        let mut successful_locks = 0;
+        // Wait for all threads to complete
         for handle in handles {
-            if handle.join().unwrap().is_ok() {
-                successful_locks += 1;
-            }
+            let _ = handle.join();
         }
 
-        // Only one thread should have successfully acquired the lock
-        assert_eq!(successful_locks, 1);
+        // Check results - all should fail since main thread holds the lock
+        let results = results.lock().unwrap();
+        let successful_locks = results.iter().filter(|(_, success, _)| *success).count();
+
+        // All threads should fail to acquire the lock since main thread has it
+        // If file locking doesn't work properly, this test will detect it
+        assert_eq!(
+            successful_locks, 0,
+            "Expected 0 successful locks since main thread holds the lock. Results: {:?}",
+            *results
+        );
     }
 
     #[test]
