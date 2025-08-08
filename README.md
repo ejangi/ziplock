@@ -169,7 +169,7 @@ cargo build --release --bin ziplock --manifest-path frontend/linux/Cargo.toml
 ./target/release/ziplock
 ```
 
-For detailed build instructions, see the [development documentation](docs/development.md).
+For detailed build instructions, see the [Linux Build Guide](docs/technical/build-linux.md).
 
 ### Configuration
 
@@ -217,7 +217,7 @@ ui:
 ### Developer Documentation
 - [Development Guide](docs/development.md) - Setting up the development environment
 - [Contributing Guidelines](docs/contributing.md) - How to contribute to ZipLock
-- [Build Instructions](docs/build.md) - Platform-specific build instructions
+- [Linux Build Guide](docs/technical/build-linux.md) - Comprehensive Linux build process, packaging, and CI/CD setup
 
 ## 🤝 Contributing
 

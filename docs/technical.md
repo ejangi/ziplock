@@ -59,6 +59,7 @@ Do not place technical documentation in the root `docs/` directory or other loca
 
 ## Development and Testing
 
+- [Linux Build Guide](technical/build-linux.md) - Comprehensive Linux build process, packaging, and CI/CD setup
 - Build system configuration
 - Testing strategies and coverage requirements
 - Continuous integration setup

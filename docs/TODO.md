@@ -1,3 +1,3 @@
 # TODO
 
-- Taking into consideration the contents of README.md and `docs/technical.md`, can you please plan the linux build process? It will need to consider that in accordance with the `docs/architecture.md` file there is a backend to compile along with the frontend to compile. I want the build process to package a *.deb file, initially so that the backend service gets installed and runs on startup. The frontend app should have a relevant *.desktop file installed in the linux distributions usual location so the user can easily launch the app. Be mindful that I am using github, so if there is a suitable CI/CD or github action we need, I'm happy for you to propose one.
+-
