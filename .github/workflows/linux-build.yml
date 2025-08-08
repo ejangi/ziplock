@@ -53,7 +53,9 @@ jobs:
             libgtk-4-dev \
             libadwaita-1-dev \
             libatk1.0-dev \
-            libatk-bridge2.0-dev
+            libatk-bridge2.0-dev \
+            libgtk-3-dev \
+            libgdk-pixbuf-2.0-dev
 
       - name: Check formatting
         run: cargo fmt --all -- --check
@@ -134,6 +136,8 @@ jobs:
             libadwaita-1-dev \
             libatk1.0-dev \
             libatk-bridge2.0-dev \
+            libgtk-3-dev \
+            libgdk-pixbuf-2.0-dev \
             dpkg-dev \
             fakeroot
 
@@ -329,7 +333,9 @@ jobs:
             libgtk-4-dev \
             libadwaita-1-dev \
             libatk1.0-dev \
-            libatk-bridge2.0-dev
+            libatk-bridge2.0-dev \
+            libgtk-3-dev \
+            libgdk-pixbuf-2.0-dev
 
       - name: Run benchmarks
         run: |
