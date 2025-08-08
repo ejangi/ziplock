@@ -1,0 +1,14 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=ZipLock
+GenericName=Password Manager
+Comment=A secure, portable password manager using encrypted 7z archives
+Icon=ziplock
+Exec=ziplock
+Terminal=false
+StartupNotify=true
+Categories=Utility;Security;Office;
+Keywords=password;manager;security;encryption;vault;
+MimeType=application/x-7z-compressed;
+StartupWMClass=ziplock

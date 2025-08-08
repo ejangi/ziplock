@@ -1,0 +1,71 @@
+[workspace]
+resolver = "2"
+members = ["backend", "shared", "frontend/linux"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["James Angus"]
+license = "Apache-2.0"
+repository = "https://github.com/ejangi/ziplock"
+homepage = "https://github.com/ejangi/ziplock"
+description = "A secure, portable password manager using encrypted 7z archives"
+keywords = ["password-manager", "security", "encryption", "7zip"]
+categories = ["authentication", "cryptography"]
+
+[workspace.dependencies]
+# Core dependencies
+tokio = { version = "1.0", features = ["full"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_yaml = "0.9"
+anyhow = "1.0"
+thiserror = "1.0"
+tracing = "0.1"
+tracing-subscriber = "0.3"
+
+# Cryptography
+aes-gcm = "0.10"
+argon2 = "0.5"
+rand = "0.8"
+zeroize = "1.7"
+
+# 7z archive handling
+sevenz-rust2 = { version = "0.17", features = ["aes256", "compress", "util"] }
+
+# Additional dependencies
+num_cpus = "1.16"
+toml = "0.8"
+uuid = { version = "1.6", features = ["v4", "serde"] }
+dirs = "5.0"
+config = "0.14"
+clap = { version = "4.4", features = ["derive"] }
+image = "0.24"
+
+# IPC and communication
+tonic = "0.10"
+prost = "0.12"
+
+# GUI frameworks (conditional)
+gtk = { version = "0.9", package = "gtk4" }
+iced = { version = "0.12" }
+tauri = { version = "1.5", features = ["api-all"] }
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
+
+[profile.dev]
+opt-level = 0
+debug = true
+overflow-checks = true
+
+# Security-focused profile for releases
+[profile.security]
+inherits = "release"
+opt-level = "s"      # Optimize for size to reduce attack surface
+debug = false
+strip = true
+panic = "abort"

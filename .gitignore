@@ -1,0 +1,198 @@
+# Rust
+/target/
+**/target/
+Cargo.lock
+**/*.rs.bk
+*.pdb
+
+# Build artifacts
+/release/
+/debug/
+*.exe
+*.dll
+*.so
+*.dylib
+*.a
+*.lib
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Logs and temporary files
+*.log
+*.tmp
+*.temp
+/logs/
+
+# Configuration files with secrets
+.env
+.env.local
+.env.*.local
+config/local.toml
+config/secrets.toml
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Generated documentation
+/doc/
+/docs/build/
+
+# Test coverage
+/coverage/
+*.profraw
+
+# Backup files
+*.bak
+*.backup
+*~
+
+# Platform-specific ignores
+
+## Linux
+*.AppImage
+*.deb
+*.rpm
+*.tar.gz
+*.tar.xz
+
+## Windows
+*.msi
+*.exe
+*.pdb
+desktop.ini
+
+## macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+*.dmg
+*.app
+
+# Mobile development
+
+## Android
+**/android/**/build/
+**/android/.gradle/
+**/android/local.properties
+**/android/.idea/
+**/android/gradle.properties
+**/android/key.properties
+**/android/app/release/
+**/android/**/*.keystore
+**/android/**/*.jks
+
+## iOS
+**/ios/build/
+**/ios/Pods/
+**/ios/.symlinks/
+**/ios/Flutter/App.framework
+**/ios/Flutter/Flutter.framework
+**/ios/Flutter/Generated.xcconfig
+**/ios/Flutter/app.flx
+**/ios/Flutter/app.zip
+**/ios/Flutter/flutter_assets/
+**/ios/ServiceDefinitions.json
+**/ios/Runner/GeneratedPluginRegistrant.*
+**/ios/DerivedData/
+*.xcworkspace
+*.xcuserdata
+
+# GUI framework specific
+
+## GTK
+*.glade~
+*.ui~
+
+## Tauri
+**/src-tauri/target/
+**/src-tauri/WixTools/
+
+# Node.js (if using for build tools or Tauri)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.npm
+.yarn-integrity
+package-lock.json
+yarn.lock
+
+# Security and sensitive files
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+keys/
+secrets/
+*.asc
+*.gpg
+
+# Archive files (except for testing)
+*.7z
+*.zip
+*.tar
+*.rar
+*.gz
+!**/tests/**/*.7z
+!**/examples/**/*.7z
+
+# Runtime and cache
+.cache/
+*.pid
+*.seed
+*.pid.lock
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# JetBrains IDEs
+.idea/
+*.iml
+*.iws
+*.ipr
+out/
+
+# Visual Studio Code
+.vscode/
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+# Vim
+*.swp
+*.swo
+.vimrc.local
+
+# Emacs
+*~
+\#*\#
+/.emacs.desktop
+/.emacs.desktop.lock
+*.elc
+auto-save-list
+tramp
+.\#*
+
+# Project specific
+/dist/
+/build/
+*.zip.enc
+test_archives/
+benchmark_results/
+perf_data/

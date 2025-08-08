@@ -1,0 +1,536 @@
+//! Main Application View for ZipLock Linux Frontend
+//!
+//! This view represents the primary interface shown after the initial setup wizard.
+//! It demonstrates how to use the shared theme system across different views.
+
+use iced::{
+    widget::{button, column, container, row, scrollable, text, text_input, Space},
+    Alignment, Command, Element, Length,
+};
+
+use crate::ipc::IpcClient;
+use crate::ui::theme::alerts::AlertMessage;
+use crate::ui::{button_styles, theme, utils};
+
+/// Messages for the main application view
+#[derive(Debug, Clone)]
+pub enum MainViewMessage {
+    // Search functionality
+    SearchChanged(String),
+    ClearSearch,
+
+    // Credential management
+    AddCredential,
+    EditCredential(String),
+    DeleteCredential(String),
+    RefreshCredentials,
+
+    // IPC operations
+    CredentialsLoaded(Result<Vec<CredentialItem>, String>),
+    OperationCompleted(Result<String, String>),
+
+    // Navigation
+    ShowSettings,
+    ShowAbout,
+    Lock,
+
+    // Error handling and demonstration
+    ShowError(String),
+    DismissError,
+    TriggerConnectionError,
+    TriggerAuthError,
+    TriggerValidationError,
+}
+
+/// Main application view state
+#[derive(Debug)]
+pub struct MainView {
+    search_query: String,
+    credentials: Vec<CredentialItem>,
+    selected_credential: Option<String>,
+    is_loading: bool,
+    current_error: Option<AlertMessage>,
+}
+
+/// Represents a credential item in the list
+#[derive(Debug, Clone)]
+pub struct CredentialItem {
+    pub id: String,
+    pub title: String,
+    pub username: String,
+    pub url: Option<String>,
+    pub last_modified: String,
+}
+
+impl Default for MainView {
+    fn default() -> Self {
+        Self {
+            search_query: String::new(),
+            credentials: vec![
+                CredentialItem {
+                    id: "1".to_string(),
+                    title: "GitHub".to_string(),
+                    username: "user@example.com".to_string(),
+                    url: Some("https://github.com".to_string()),
+                    last_modified: "2 days ago".to_string(),
+                },
+                CredentialItem {
+                    id: "2".to_string(),
+                    title: "Gmail".to_string(),
+                    username: "user@gmail.com".to_string(),
+                    url: Some("https://gmail.com".to_string()),
+                    last_modified: "1 week ago".to_string(),
+                },
+            ],
+            selected_credential: None,
+            is_loading: false,
+            current_error: None,
+        }
+    }
+}
+
+impl MainView {
+    /// Create a new main view instance
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Update the main view based on messages
+    pub fn update(&mut self, message: MainViewMessage) -> Command<MainViewMessage> {
+        match message {
+            MainViewMessage::SearchChanged(query) => {
+                self.search_query = query;
+                Command::none()
+            }
+
+            MainViewMessage::ClearSearch => {
+                self.search_query.clear();
+                Command::none()
+            }
+
+            MainViewMessage::AddCredential => {
+                // TODO: Show add credential dialog
+                Command::none()
+            }
+
+            MainViewMessage::EditCredential(id) => {
+                self.selected_credential = Some(id);
+                // TODO: Show edit credential dialog
+                Command::none()
+            }
+
+            MainViewMessage::DeleteCredential(_id) => {
+                // TODO: Show confirmation dialog and delete
+                Command::none()
+            }
+
+            MainViewMessage::RefreshCredentials => {
+                self.is_loading = true;
+                self.current_error = None;
+                Command::perform(
+                    Self::load_credentials_async(),
+                    MainViewMessage::CredentialsLoaded,
+                )
+            }
+
+            MainViewMessage::CredentialsLoaded(result) => {
+                self.is_loading = false;
+                match result {
+                    Ok(credentials) => {
+                        self.credentials = credentials;
+                        self.current_error = None;
+                    }
+                    Err(error) => {
+                        self.current_error = Some(AlertMessage::ipc_error(error));
+                    }
+                }
+                Command::none()
+            }
+
+            MainViewMessage::OperationCompleted(result) => {
+                match result {
+                    Ok(success_msg) => {
+                        self.current_error = Some(AlertMessage::success(success_msg));
+                        // Auto-refresh credentials after successful operation
+                        Command::perform(
+                            Self::load_credentials_async(),
+                            MainViewMessage::CredentialsLoaded,
+                        )
+                    }
+                    Err(error) => {
+                        self.current_error = Some(AlertMessage::ipc_error(error));
+                        Command::none()
+                    }
+                }
+            }
+
+            MainViewMessage::ShowError(error) => {
+                self.current_error = Some(AlertMessage::error(error));
+                Command::none()
+            }
+
+            MainViewMessage::DismissError => {
+                self.current_error = None;
+                Command::none()
+            }
+
+            // Error demonstration handlers
+            MainViewMessage::TriggerConnectionError => {
+                self.current_error = Some(AlertMessage::ipc_error(
+                    "Unable to connect to the ZipLock backend service. Please ensure the daemon is running."
+                ));
+                Command::none()
+            }
+
+            MainViewMessage::TriggerAuthError => {
+                self.current_error = Some(AlertMessage::ipc_error(
+                    "Authentication failed. Please check your passphrase and try again.",
+                ));
+                Command::none()
+            }
+
+            MainViewMessage::TriggerValidationError => {
+                self.current_error = Some(AlertMessage::error(
+                    "Invalid data provided. Please check your input and try again.",
+                ));
+                Command::none()
+            }
+
+            MainViewMessage::ShowSettings => {
+                // TODO: Navigate to settings view
+                Command::none()
+            }
+
+            MainViewMessage::ShowAbout => {
+                // TODO: Show about dialog
+                Command::none()
+            }
+
+            MainViewMessage::Lock => {
+                // TODO: Lock the application and return to login
+                Command::none()
+            }
+        }
+    }
+
+    /// Render the main view
+    pub fn view(&self) -> Element<MainViewMessage> {
+        let header = self.view_header();
+        let search_bar = self.view_search_bar();
+
+        let mut content_column = column![
+            header,
+            Space::with_height(Length::Fixed(utils::standard_spacing().into())),
+            search_bar,
+            Space::with_height(Length::Fixed(utils::standard_spacing().into())),
+        ];
+
+        // Add error alert if present
+        if let Some(error_alert) = &self.current_error {
+            content_column = content_column.push(crate::ui::theme::alerts::render_alert(
+                error_alert,
+                Some(MainViewMessage::DismissError),
+            ));
+            content_column = content_column.push(Space::with_height(Length::Fixed(10.0)));
+        }
+
+        let credential_list = self.view_credential_list();
+        content_column = content_column.push(credential_list);
+
+        let main_content = content_column.padding(30).spacing(10);
+
+        container(main_content)
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .into()
+    }
+
+    /// Render the application header with title and action buttons
+    fn view_header(&self) -> Element<MainViewMessage> {
+        row![
+            text("ZipLock Password Manager")
+                .size(24)
+                .style(iced::theme::Text::Color(theme::DARK_TEXT)),
+            Space::with_width(Length::Fill),
+            row![
+                button("Refresh")
+                    .on_press(MainViewMessage::RefreshCredentials)
+                    .padding(utils::button_padding())
+                    .style(if self.is_loading {
+                        button_styles::disabled()
+                    } else {
+                        button_styles::secondary()
+                    }),
+                Space::with_width(Length::Fixed(10.0)),
+                button("Add")
+                    .on_press(MainViewMessage::AddCredential)
+                    .padding(utils::button_padding())
+                    .style(button_styles::primary()),
+                Space::with_width(Length::Fixed(10.0)),
+                button("Settings")
+                    .on_press(MainViewMessage::ShowSettings)
+                    .padding(utils::button_padding())
+                    .style(button_styles::secondary()),
+                Space::with_width(Length::Fixed(10.0)),
+                button("Lock")
+                    .on_press(MainViewMessage::Lock)
+                    .padding(utils::button_padding())
+                    .style(button_styles::destructive()),
+                Space::with_width(Length::Fixed(20.0)),
+                // Error demonstration buttons
+                text("Demo:").size(12),
+                Space::with_width(Length::Fixed(5.0)),
+                button("Connection Error")
+                    .on_press(MainViewMessage::TriggerConnectionError)
+                    .padding(utils::small_button_padding())
+                    .style(button_styles::secondary()),
+                Space::with_width(Length::Fixed(5.0)),
+                button("Auth Error")
+                    .on_press(MainViewMessage::TriggerAuthError)
+                    .padding(utils::small_button_padding())
+                    .style(button_styles::secondary()),
+                Space::with_width(Length::Fixed(5.0)),
+                button("Validation Error")
+                    .on_press(MainViewMessage::TriggerValidationError)
+                    .padding(utils::small_button_padding())
+                    .style(button_styles::secondary()),
+            ]
+            .spacing(5)
+        ]
+        .align_items(Alignment::Center)
+        .into()
+    }
+
+    /// Render the search bar
+    fn view_search_bar(&self) -> Element<MainViewMessage> {
+        row![
+            text_input("Search credentials...", &self.search_query)
+                .on_input(MainViewMessage::SearchChanged)
+                .width(Length::FillPortion(3))
+                .padding([8, 12]),
+            Space::with_width(Length::Fixed(10.0)),
+            if !self.search_query.is_empty() {
+                button("Clear")
+                    .on_press(MainViewMessage::ClearSearch)
+                    .padding(utils::small_button_padding())
+                    .style(button_styles::secondary())
+            } else {
+                button("Clear")
+                    .padding(utils::small_button_padding())
+                    .style(button_styles::disabled())
+            }
+        ]
+        .align_items(Alignment::Center)
+        .into()
+    }
+
+    /// Render the list of credentials
+    fn view_credential_list(&self) -> Element<MainViewMessage> {
+        if self.is_loading {
+            return column![
+                Space::with_height(Length::Fixed(50.0)),
+                text("Loading credentials...")
+                    .size(16)
+                    .style(iced::theme::Text::Color(theme::LOGO_PURPLE)),
+                Space::with_height(Length::Fixed(20.0)),
+                text("Please wait while we fetch your credentials from the backend...")
+                    .size(12)
+                    .style(iced::theme::Text::Color(iced::Color::from_rgb(
+                        0.7, 0.7, 0.7
+                    ))),
+            ]
+            .align_items(Alignment::Center)
+            .into();
+        }
+
+        let filtered_credentials: Vec<&CredentialItem> = self
+            .credentials
+            .iter()
+            .filter(|cred| {
+                if self.search_query.is_empty() {
+                    true
+                } else {
+                    let query_lower = self.search_query.to_lowercase();
+                    cred.title.to_lowercase().contains(&query_lower)
+                        || cred.username.to_lowercase().contains(&query_lower)
+                        || cred
+                            .url
+                            .as_ref()
+                            .map_or(false, |url| url.to_lowercase().contains(&query_lower))
+                }
+            })
+            .collect();
+
+        if filtered_credentials.is_empty() {
+            return column![
+                Space::with_height(Length::Fixed(50.0)),
+                text("No credentials found")
+                    .size(16)
+                    .style(iced::theme::Text::Color(iced::Color::from_rgb(0.5, 0.5, 0.5))),
+                if self.search_query.is_empty() {
+                    text("Click 'Add' to create your first credential or 'Refresh' to load from backend")
+                        .size(14)
+                        .style(iced::theme::Text::Color(iced::Color::from_rgb(0.7, 0.7, 0.7)))
+                } else {
+                    text("Try adjusting your search terms")
+                        .size(14)
+                        .style(iced::theme::Text::Color(iced::Color::from_rgb(0.7, 0.7, 0.7)))
+                }
+            ]
+            .align_items(Alignment::Center)
+            .into();
+        }
+
+        let credential_items: Vec<Element<MainViewMessage>> = filtered_credentials
+            .iter()
+            .map(|credential| self.view_credential_item(credential))
+            .collect();
+
+        scrollable(column(credential_items).spacing(10).padding([10, 0]))
+            .height(Length::Fill)
+            .into()
+    }
+
+    /// Render a single credential item
+    fn view_credential_item(&self, credential: &CredentialItem) -> Element<MainViewMessage> {
+        let is_selected = self
+            .selected_credential
+            .as_ref()
+            .map_or(false, |id| id == &credential.id);
+
+        let background_color = if is_selected {
+            iced::Color::from_rgba(0.514, 0.220, 0.925, 0.1) // Light purple tint
+        } else {
+            iced::Color::WHITE
+        };
+
+        let border_color = if is_selected {
+            theme::LOGO_PURPLE
+        } else {
+            iced::Color::from_rgb(0.9, 0.9, 0.9)
+        };
+
+        container(
+            row![
+                column![
+                    text(&credential.title)
+                        .size(16)
+                        .style(iced::theme::Text::Color(theme::DARK_TEXT)),
+                    text(&credential.username)
+                        .size(12)
+                        .style(iced::theme::Text::Color(iced::Color::from_rgb(
+                            0.6, 0.6, 0.6
+                        ))),
+                    if let Some(url) = &credential.url {
+                        text(url)
+                            .size(10)
+                            .style(iced::theme::Text::Color(theme::LOGO_PURPLE))
+                    } else {
+                        text("")
+                    }
+                ]
+                .width(Length::Fill)
+                .spacing(4),
+                column![
+                    text(&credential.last_modified)
+                        .size(10)
+                        .style(iced::theme::Text::Color(iced::Color::from_rgb(
+                            0.7, 0.7, 0.7
+                        ))),
+                    Space::with_height(Length::Fixed(10.0)),
+                    row![
+                        button("Edit")
+                            .on_press(MainViewMessage::EditCredential(credential.id.clone()))
+                            .padding(utils::small_button_padding())
+                            .style(button_styles::secondary()),
+                        Space::with_width(Length::Fixed(5.0)),
+                        button("Delete")
+                            .on_press(MainViewMessage::DeleteCredential(credential.id.clone()))
+                            .padding(utils::small_button_padding())
+                            .style(button_styles::destructive()),
+                    ]
+                ]
+                .align_items(Alignment::End)
+            ]
+            .padding(15)
+            .align_items(Alignment::Center),
+        )
+        .width(Length::Fill)
+        .style(iced::theme::Container::Custom(Box::new(
+            CredentialItemStyle {
+                background_color,
+                border_color,
+            },
+        )))
+        .into()
+    }
+
+    /// Async function to load credentials from backend
+    async fn load_credentials_async() -> Result<Vec<CredentialItem>, String> {
+        let socket_path = IpcClient::default_socket_path();
+        let mut client = IpcClient::new(socket_path);
+
+        // Connect to backend
+        client
+            .connect()
+            .await
+            .map_err(|e| format!("Could not connect to ZipLock backend: {}", e))?;
+
+        // Load credentials
+        match client.list_credentials().await {
+            Ok(summaries) => {
+                let credentials = summaries
+                    .into_iter()
+                    .map(|summary| CredentialItem {
+                        id: summary.id,
+                        title: summary.title,
+                        username: format!("Type: {}", summary.credential_type),
+                        url: None, // URL not available in summary
+                        last_modified: summary
+                            .updated_at
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .unwrap_or_default()
+                            .as_secs()
+                            .to_string()
+                            + " (timestamp)",
+                    })
+                    .collect();
+                Ok(credentials)
+            }
+            Err(e) => Err(format!("Failed to load credentials: {}", e)),
+        }
+    }
+
+    /// Dismiss the current error alert
+    pub fn dismiss_error(&mut self) {
+        self.current_error = None;
+    }
+
+    /// Check if there's a current error
+    pub fn has_error(&self) -> bool {
+        self.current_error.is_some()
+    }
+}
+
+/// Custom container style for credential items
+struct CredentialItemStyle {
+    background_color: iced::Color,
+    border_color: iced::Color,
+}
+
+impl container::StyleSheet for CredentialItemStyle {
+    type Style = iced::Theme;
+
+    fn appearance(&self, _style: &Self::Style) -> container::Appearance {
+        container::Appearance {
+            background: Some(self.background_color.into()),
+            border: iced::Border {
+                color: self.border_color,
+                width: 1.0,
+                radius: utils::border_radius().into(),
+            },
+            text_color: None,
+            shadow: iced::Shadow::default(),
+        }
+    }
+}

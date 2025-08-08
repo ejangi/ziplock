@@ -1,0 +1,31 @@
+I have an idea for an app that I would like you to help me write  a comprehensive specification for. This spec should make sense to humans reading it, but mostly be catered towards Google Gemini AI Code Assist so that it can write the code according to the spec.
+
+The basic vision for the app is:
+- An open source (Apache 2 license) password manager that uses an encrypted ZIP file as it's storage mechanism. This way the password database (ZIP file) is portable.
+- Use 7z format with AES-256 encryption and a Master Key that is set by the user during the initial set up process.
+- The user only needs the Master Key to unlock the app (which the backend uses to decrypt the zip file) and interact with their stored credentials.
+
+
+Here are the elements I want you to incorporate:
+- The backend service/daemon written in Rust (for platforms that support Rust).
+- Frontend for linux written in Rust and compatible with Wayland.
+- Frontend for windows written in Rust, if possible, otherwise revert to something like C#.
+- The app will be called ZipLock
+- The architecture should include a backend daemon or service that is always running and this service manages the storage in the zip file.
+- The service will need to save some basic user data like the location of the zip file and the user's preferred time period before the app automatically locks itself. This data should be stored in the usual user folders for each system architecture (i.e. Something like `~/.config/ziplock/` on linux and something like `%APPDATA%/ZipLock/` on Windows.
+- User interfaces on each architecture (Linux, Windows, Mac and possibly iOS and Android Apps) so that no matter where the ZIP file is located a user can interact with the password credentials stored inside the ZIP file.
+- On systems that support daemons or system services, use a backend to be always available and a thin and light user interface written in the platform-specific languages and architectures to interface with the underlying service.
+- The app should be have different types of credentials that come with a standard set of fields. However, the user should always be able to add custom fields to a specific credential. For instance, a credential type of "login" should have username, password and url fields by default. The user can add a second url field or any other field type.
+- The app should provide various field types like text, password, email, url, file (that stores the file in the credential folder within the zip file), one-time password (for multi factor authentication), address, date, phone.
+- Credential types are essentially templates that incorporate various field types. Basic credential type (templates) provided out of the box should include: Login, Secure Note, Credit Card, Identity, Password, Document, SSH Key, Bank Account, API Credentials, Cypto Wallet, Database, Software License.
+- A user should be able to configure their own credential types as well.
+- Each credential has a title that helps the user to identify it and search for it in the app.
+- The zip file should structure it's folders and files such that each credential is saved in its own folder (perhaps within a folder called `credentials`).
+- Custom credential types can be stored in a folder called `types`.
+- The files that the data is stored in should use the yaml format and always be named `record.yml`. So, if we had a credential record for a Google Account login with the title "My Google Login", the zip file would have the folder `credentials/my-google-login` and the main record file `credentials/my-google-login/record.yml`.
+- The `record.yml` file should structure itself so that every field within the record knows the field type, the data in the field (or the file location for the file field type). The file should also record the full title for the credential that the user has given it, along with the credential type and any tags that the user has recorded to make searching and navigating through their list of credentials easier.
+- The app will allow the user to add tags to a credential record to help them organise their credentials and make it easier to search. The apps should allow the user to search full text across all the credential records, but preference records that have matching tags.
+- The frontend apps should use a flat design with large fonts and flat, modern icons. It should be farely simple to use and use white space generously to make information easier to read and understand.
+- Please outline the folder structure for the project so that the services, the frontend are in separate folders, but also that it's easy for a developer to navigate and debug.
+
+What other elements do you think I should add to this specification?

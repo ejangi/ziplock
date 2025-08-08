@@ -1,0 +1,71 @@
+[package]
+name = "ziplock-backend"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Backend service for ZipLock password manager"
+keywords.workspace = true
+categories.workspace = true
+
+[[bin]]
+name = "ziplock-backend"
+path = "src/main.rs"
+
+[dependencies]
+# Workspace dependencies
+ziplock-shared = { path = "../shared" }
+tokio.workspace = true
+serde.workspace = true
+serde_yaml.workspace = true
+anyhow.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+
+# Cryptography
+aes-gcm.workspace = true
+argon2.workspace = true
+rand.workspace = true
+zeroize.workspace = true
+
+# Archive handling
+sevenz-rust2.workspace = true
+
+# IPC and communication
+tonic.workspace = true
+prost.workspace = true
+
+# Additional backend-specific dependencies
+uuid = { version = "1.6", features = ["v4", "serde"] }
+bytes = "1.5"
+tempfile = "3.8"
+file-lock = "2.1"
+clap = { version = "4.4", features = ["derive"] }
+config = "0.14"
+dirs = "5.0"
+num_cpus.workspace = true
+toml.workspace = true
+libc = "0.2"
+serde_json = "1.0"
+
+# Platform-specific dependencies
+[target.'cfg(unix)'.dependencies]
+nix = "0.27"
+
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.52", features = [
+    "Win32_Foundation",
+    "Win32_System_Threading",
+] }
+
+[dev-dependencies]
+tempfile = "3.8"
+assert_matches = "1.5"
+
+[features]
+default = []
+# Enable additional logging for debugging
+debug-logging = []
