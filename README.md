@@ -92,7 +92,7 @@ ZipLock follows a client-server architecture with native applications for each p
 | Platform | Status | Technology | Features |
 |----------|--------|------------|----------|
 | **Linux** | ✅ Stable | Rust + iced/GTK4 | Full desktop experience, Wayland support |
-| **Windows** | ✅ Stable | Rust + Tauri | Native Windows integration |
+| **Windows** | 🚧 In Development | Rust + Tauri | Native Windows integration |
 | **iOS** | 🚧 In Development | Swift + SwiftUI | iOS-native backend service |
 | **Android** | 🚧 In Development | Kotlin + Jetpack Compose | Android-native backend service |
 | **macOS** | 📋 Planned | Swift + SwiftUI | Native macOS experience |
@@ -140,9 +140,7 @@ wget -O- https://github.com/ejangi/ziplock/releases/latest/download/ziplock_amd6
 sudo dpkg -i ziplock_amd64.deb
 ```
 
-**Windows**:
-1. Download the `.msi` installer from [releases](https://github.com/ejangi/ziplock/releases)
-2. Run the installer and follow the setup wizard
+**Windows**: Not yet available - Windows implementation is currently in development
 
 **iOS**: Available on the App Store (coming soon)
 
