@@ -419,21 +419,44 @@ impl EditCredentialView {
     ) -> Result<(), String> {
         let mut client = IpcClient::new().map_err(|e| e.to_string())?;
 
+        // Get the template to properly map field types and sensitivity
+        let template = match credential_type.as_str() {
+            "login" => Some(ziplock_shared::models::CommonTemplates::login()),
+            "credit_card" => Some(ziplock_shared::models::CommonTemplates::credit_card()),
+            "secure_note" => Some(ziplock_shared::models::CommonTemplates::secure_note()),
+            _ => None,
+        };
+
         // Convert field values back to credential fields
+        // Use template information to set correct field types and sensitivity
         let fields: HashMap<String, CredentialField> = field_values
             .into_iter()
-            .map(|(label, value)| {
-                // For this mock, we'll use default FieldType::Text and sensitive: false
-                // In a real scenario, this would involve retrieving the original field
-                // templates or types.
+            .map(|(field_name, value)| {
+                // Find the template field to get the correct type and sensitivity
+                let (field_type, sensitive, label) = if let Some(ref template) = template {
+                    if let Some(field_template) =
+                        template.fields.iter().find(|f| f.name == field_name)
+                    {
+                        (
+                            field_template.field_type.clone(),
+                            field_template.sensitive,
+                            field_template.label.clone(),
+                        )
+                    } else {
+                        (FieldType::Text, false, field_name.clone())
+                    }
+                } else {
+                    (FieldType::Text, false, field_name.clone())
+                };
+
                 let field = CredentialField {
-                    field_type: FieldType::Text, // Default for now
+                    field_type,
                     value,
-                    sensitive: false, // Default for now
-                    label: Some(label.clone()),
+                    sensitive,
+                    label: Some(label),
                     metadata: HashMap::new(),
                 };
-                (label, field)
+                (field_name, field)
             })
             .collect();
 
