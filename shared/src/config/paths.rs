@@ -4,7 +4,7 @@
 //! for configuration directories, data directories, and other application paths.
 
 use anyhow::{Context, Result};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// Get the user's configuration directory for ZipLock
 ///
@@ -57,7 +57,7 @@ pub fn get_cache_directory() -> Result<PathBuf> {
 /// - All platforms: ~/Documents/ZipLock or ~/ZipLock if Documents doesn't exist
 pub fn get_default_repositories_directory() -> Result<PathBuf> {
     let default_dir = dirs::document_dir()
-        .or_else(|| dirs::home_dir())
+        .or_else(dirs::home_dir)
         .context("Could not determine default repositories directory")?
         .join("ZipLock");
 
@@ -107,13 +107,13 @@ pub fn get_common_repository_search_paths() -> Vec<PathBuf> {
 pub fn ensure_directory_exists(path: &PathBuf) -> Result<()> {
     if !path.exists() {
         std::fs::create_dir_all(path)
-            .with_context(|| format!("Failed to create directory: {:?}", path))?;
+            .with_context(|| format!("Failed to create directory: {path:?}"))?;
     }
     Ok(())
 }
 
 /// Check if a path is within the user's home directory
-pub fn is_in_user_directory(path: &PathBuf) -> bool {
+pub fn is_in_user_directory(path: &Path) -> bool {
     if let Some(home_dir) = dirs::home_dir() {
         path.starts_with(&home_dir)
     } else {
@@ -122,7 +122,7 @@ pub fn is_in_user_directory(path: &PathBuf) -> bool {
 }
 
 /// Get a relative path from the user's home directory if possible
-pub fn get_relative_to_home(path: &PathBuf) -> Option<PathBuf> {
+pub fn get_relative_to_home(path: &Path) -> Option<PathBuf> {
     if let Some(home_dir) = dirs::home_dir() {
         path.strip_prefix(&home_dir).ok().map(|p| p.to_path_buf())
     } else {
@@ -132,9 +132,8 @@ pub fn get_relative_to_home(path: &PathBuf) -> Option<PathBuf> {
 
 /// Expand a path that starts with ~ to the full home directory path
 pub fn expand_home_path(path: &str) -> Result<PathBuf> {
-    if path.starts_with('~') {
+    if let Some(relative_path) = path.strip_prefix('~') {
         let home_dir = dirs::home_dir().context("Could not determine home directory")?;
-        let relative_path = &path[1..];
         if relative_path.starts_with('/') || relative_path.starts_with('\\') {
             Ok(home_dir.join(&relative_path[1..]))
         } else if relative_path.is_empty() {

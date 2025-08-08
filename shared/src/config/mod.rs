@@ -11,6 +11,8 @@ use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 use tracing::{debug, info, warn};
 
+use crate::SharedError;
+
 pub mod paths;
 pub mod repository;
 
@@ -159,7 +161,7 @@ impl Default for FrontendConfig {
 impl Default for RepositoryConfig {
     fn default() -> Self {
         let default_directory = dirs::document_dir()
-            .or_else(|| dirs::home_dir())
+            .or_else(dirs::home_dir)
             .map(|p| p.join("ZipLock"));
 
         Self {
@@ -246,8 +248,8 @@ impl RepositoryInfo {
     pub fn from_path<P: AsRef<Path>>(path: P) -> SharedResult<Self> {
         let path = path.as_ref().to_path_buf();
 
-        let metadata = fs::metadata(&path).map_err(|e| crate::SharedError::Internal {
-            message: format!("Failed to read file metadata: {}", e),
+        let metadata = fs::metadata(&path).map_err(|e| SharedError::Internal {
+            message: format!("Failed to read file metadata: {e}"),
         })?;
 
         let display_name = path
@@ -293,7 +295,7 @@ impl ConfigManager {
         // Ensure config directory exists
         if !config_dir.exists() {
             fs::create_dir_all(&config_dir)
-                .with_context(|| format!("Failed to create config directory: {:?}", config_dir))?;
+                .with_context(|| format!("Failed to create config directory: {config_dir:?}"))?;
             info!("Created config directory: {:?}", config_dir);
         }
 
@@ -319,10 +321,10 @@ impl ConfigManager {
         debug!("Loading config from: {:?}", path);
 
         let content = fs::read_to_string(path)
-            .with_context(|| format!("Failed to read config file: {:?}", path))?;
+            .with_context(|| format!("Failed to read config file: {path:?}"))?;
 
         let mut config: FrontendConfig = serde_yaml::from_str(&content)
-            .with_context(|| format!("Failed to parse config file: {:?}", path))?;
+            .with_context(|| format!("Failed to parse config file: {path:?}"))?;
 
         // Validate and clean up recent repositories
         config.repository.recent_repositories.retain(|repo| {
@@ -348,7 +350,7 @@ impl ConfigManager {
         let content = serde_yaml::to_string(config).context("Failed to serialize config")?;
 
         fs::write(path, content)
-            .with_context(|| format!("Failed to write config file: {:?}", path))?;
+            .with_context(|| format!("Failed to write config file: {path:?}"))?;
 
         info!("Successfully saved config to: {:?}", path);
         Ok(())

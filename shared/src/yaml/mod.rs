@@ -34,7 +34,7 @@ impl YamlUtils {
                 message: format!("Failed to deserialize credential from YAML: {}", e),
             })?;
 
-        yaml_cred.to_credential()
+        yaml_cred.into_credential()
     }
 
     /// Write a credential to a YAML file
@@ -81,7 +81,7 @@ impl YamlUtils {
 
         yaml_creds
             .into_iter()
-            .map(|yaml_cred| yaml_cred.to_credential())
+            .map(|yaml_cred| yaml_cred.into_credential())
             .collect()
     }
 
@@ -166,7 +166,7 @@ impl YamlCredential {
     }
 
     /// Convert from YamlCredential to CredentialRecord
-    fn to_credential(self) -> SharedResult<CredentialRecord> {
+    fn into_credential(self) -> SharedResult<CredentialRecord> {
         use crate::utils::TimeUtils;
 
         let fields = self
@@ -175,7 +175,7 @@ impl YamlCredential {
             .map(|(name, yaml_field)| {
                 let name_clone = name.clone();
                 yaml_field
-                    .to_field()
+                    .into_field()
                     .map(|field| (name, field))
                     .map_err(|e| SharedError::Field {
                         field: name_clone,
@@ -212,7 +212,7 @@ impl YamlField {
     }
 
     /// Convert from YamlField to CredentialField
-    fn to_field(self) -> SharedResult<CredentialField> {
+    fn into_field(self) -> SharedResult<CredentialField> {
         let field_type = Self::string_to_field_type(&self.field_type)?;
 
         Ok(CredentialField {

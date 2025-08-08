@@ -148,7 +148,7 @@ impl CredentialUtils {
                 if !password_field.value.is_empty() {
                     password_map
                         .entry(password_field.value.clone())
-                        .or_insert_with(Vec::new)
+                        .or_default()
                         .push(cred.id.clone());
                 }
             }
@@ -261,7 +261,7 @@ impl CredentialUtils {
             }
 
             let mut credential = CredentialRecord::new(
-                values.get(0).unwrap_or(&"Untitled").to_string(),
+                values.first().unwrap_or(&"Untitled").to_string(),
                 "login".to_string(),
             );
 

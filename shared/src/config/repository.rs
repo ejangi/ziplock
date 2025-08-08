@@ -27,12 +27,12 @@ pub fn find_repositories_in_directory<P: AsRef<Path>>(dir: P) -> SharedResult<Ve
     debug!("Searching for repositories in: {:?}", dir);
 
     let entries = fs::read_dir(dir).map_err(|e| SharedError::Internal {
-        message: format!("Failed to read directory {:?}: {}", dir, e),
+        message: format!("Failed to read directory {dir:?}: {e}"),
     })?;
 
     for entry in entries {
         let entry = entry.map_err(|e| SharedError::Internal {
-            message: format!("Failed to read directory entry: {}", e),
+            message: format!("Failed to read directory entry: {e}"),
         })?;
 
         let path = entry.path();
@@ -205,7 +205,7 @@ pub fn get_repository_metadata<P: AsRef<Path>>(path: P) -> SharedResult<Reposito
     let path = path.as_ref();
 
     let metadata = fs::metadata(path).map_err(|e| SharedError::Internal {
-        message: format!("Failed to read file metadata for {:?}: {}", path, e),
+        message: format!("Failed to read file metadata for {path:?}: {e}"),
     })?;
 
     let display_name = path

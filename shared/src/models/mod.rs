@@ -276,7 +276,7 @@ impl CredentialRecord {
         for (name, field) in &self.fields {
             if let Err(field_errors) = field.validate() {
                 for error in field_errors {
-                    errors.push(format!("Field '{}': {}", name, error));
+                    errors.push(format!("Field '{name}': {error}"));
                 }
             }
         }

@@ -179,7 +179,7 @@ unsafe fn credential_to_c(record: &CredentialRecord) -> Result<CCredentialRecord
     let id = string_to_c_char(&record.id);
     let title = string_to_c_char(&record.title);
     let credential_type = string_to_c_char(&record.credential_type);
-    let notes = string_to_c_char(&record.notes.as_deref().unwrap_or(""));
+    let notes = string_to_c_char(record.notes.as_deref().unwrap_or(""));
 
     // Convert fields
     let field_count = record.fields.len() as c_uint;
@@ -191,7 +191,7 @@ unsafe fn credential_to_c(record: &CredentialRecord) -> Result<CCredentialRecord
                 name: string_to_c_char(name),
                 field_type: field_type_to_c_int(&field.field_type),
                 value: string_to_c_char(&field.value),
-                label: string_to_c_char(&field.label.as_deref().unwrap_or("")),
+                label: string_to_c_char(field.label.as_deref().unwrap_or("")),
                 sensitive: if field.sensitive { 1 } else { 0 },
             })
             .collect();
@@ -252,6 +252,13 @@ pub extern "C" fn ziplock_init() -> c_int {
 }
 
 /// Free a string allocated by the library
+///
+/// # Safety
+///
+/// The caller must ensure that:
+/// - `ptr` was allocated by this library (e.g., returned from other functions)
+/// - `ptr` is not used after this call
+/// - `ptr` can be null (this function handles null pointers safely)
 #[no_mangle]
 pub unsafe extern "C" fn ziplock_string_free(ptr: *mut c_char) {
     if !ptr.is_null() {
@@ -260,6 +267,13 @@ pub unsafe extern "C" fn ziplock_string_free(ptr: *mut c_char) {
 }
 
 /// Free a credential record allocated by the library
+///
+/// # Safety
+///
+/// The caller must ensure that:
+/// - `credential` was allocated by this library (e.g., from `ziplock_credential_new`)
+/// - `credential` is not used after this call
+/// - `credential` can be null (this function handles null pointers safely)
 #[no_mangle]
 pub unsafe extern "C" fn ziplock_credential_free(credential: *mut CCredentialRecord) {
     if credential.is_null() {
@@ -303,6 +317,12 @@ pub unsafe extern "C" fn ziplock_credential_free(credential: *mut CCredentialRec
 
 /// Create a new credential record
 /// Returns pointer to new credential or null on error
+///
+/// # Safety
+///
+/// The caller must ensure that:
+/// - `title` and `credential_type` are valid, null-terminated C strings
+/// - The returned pointer is freed with `ziplock_credential_free`
 #[no_mangle]
 pub unsafe extern "C" fn ziplock_credential_new(
     title: *const c_char,
@@ -327,7 +347,13 @@ pub unsafe extern "C" fn ziplock_credential_new(
 }
 
 /// Add a field to a credential record
-#[no_mangle]
+///
+/// # Safety
+///
+/// The caller must ensure that:
+/// - `credential` is a valid pointer to a CCredentialRecord
+/// - `name`, `value`, and `label` are valid, null-terminated C strings
+/// - `field_type` corresponds to a valid CredentialFieldType
 pub unsafe extern "C" fn ziplock_credential_add_field(
     credential: *mut CCredentialRecord,
     name: *const c_char,
@@ -353,10 +379,7 @@ pub unsafe extern "C" fn ziplock_credential_add_field(
     let _label_str = if label.is_null() {
         None
     } else {
-        match c_char_to_string(label) {
-            Ok(s) => Some(s),
-            Err(_) => None,
-        }
+        c_char_to_string(label).ok()
     };
 
     let _field_type = c_int_to_field_type(field_type);
@@ -368,7 +391,12 @@ pub unsafe extern "C" fn ziplock_credential_add_field(
 }
 
 /// Validate a password and return strength information
-#[no_mangle]
+///
+/// # Safety
+///
+/// The caller must ensure that:
+/// - `password` is a valid, null-terminated C string
+/// - The returned pointer is freed with `ziplock_password_strength_free`
 pub unsafe extern "C" fn ziplock_validate_password(
     password: *const c_char,
 ) -> *mut CPasswordStrength {
@@ -405,7 +433,14 @@ pub unsafe extern "C" fn ziplock_validate_password(
     Box::into_raw(Box::new(strength))
 }
 
-/// Free password strength result
+/// Free a password strength result
+///
+/// # Safety
+///
+/// The caller must ensure that:
+/// - `strength` was allocated by this library (e.g., from `ziplock_validate_password`)
+/// - `strength` is not used after this call
+/// - `strength` can be null (this function handles null pointers safely)
 #[no_mangle]
 pub unsafe extern "C" fn ziplock_password_strength_free(strength: *mut CPasswordStrength) {
     if !strength.is_null() {
@@ -416,6 +451,13 @@ pub unsafe extern "C" fn ziplock_password_strength_free(strength: *mut CPassword
 
 /// Generate a secure password
 #[no_mangle]
+/// Generate a random password with specified criteria
+///
+/// # Safety
+///
+/// The caller must ensure that:
+/// - The returned C string is freed with `ziplock_string_free`
+/// - `length` is a reasonable value (not excessively large)
 pub unsafe extern "C" fn ziplock_generate_password(
     length: c_uint,
     include_uppercase: c_int,
@@ -438,6 +480,11 @@ pub unsafe extern "C" fn ziplock_generate_password(
 }
 
 /// Validate an email address
+///
+/// # Safety
+///
+/// The caller must ensure that:
+/// - `email` is a valid, null-terminated C string
 #[no_mangle]
 pub unsafe extern "C" fn ziplock_validate_email(email: *const c_char) -> c_int {
     let email_str = match c_char_to_string(email) {
@@ -453,6 +500,11 @@ pub unsafe extern "C" fn ziplock_validate_email(email: *const c_char) -> c_int {
 }
 
 /// Validate a URL
+///
+/// # Safety
+///
+/// The caller must ensure that:
+/// - `url` is a valid, null-terminated C string
 #[no_mangle]
 pub unsafe extern "C" fn ziplock_validate_url(url: *const c_char) -> c_int {
     let url_str = match c_char_to_string(url) {
@@ -470,6 +522,14 @@ pub unsafe extern "C" fn ziplock_validate_url(url: *const c_char) -> c_int {
 /// Search credentials by query string
 /// Returns search result structure or null on error
 #[no_mangle]
+/// Search credentials (placeholder implementation)
+///
+/// # Safety
+///
+/// The caller must ensure that:
+/// - `_credentials` points to a valid array of CCredentialRecord with `_credential_count` elements
+/// - `_query` is a valid, null-terminated C string
+/// - The returned pointer is freed with `ziplock_search_result_free`
 pub unsafe extern "C" fn ziplock_search_credentials(
     _credentials: *const CCredentialRecord,
     _credential_count: c_uint,
@@ -481,7 +541,14 @@ pub unsafe extern "C" fn ziplock_search_credentials(
     ptr::null_mut()
 }
 
-/// Free search result
+/// Free a search result
+///
+/// # Safety
+///
+/// The caller must ensure that:
+/// - `result` was allocated by this library (e.g., from `ziplock_search_credentials`)
+/// - `result` is not used after this call
+/// - `result` can be null (this function handles null pointers safely)
 #[no_mangle]
 pub unsafe extern "C" fn ziplock_search_result_free(result: *mut CSearchResult) {
     if result.is_null() {
@@ -506,13 +573,23 @@ pub unsafe extern "C" fn ziplock_search_result_free(result: *mut CSearchResult) 
 }
 
 /// Get library version
+///
+/// # Safety
+///
+/// The caller must ensure that:
+/// - The returned C string is freed with `ziplock_string_free`
 #[no_mangle]
 pub unsafe extern "C" fn ziplock_get_version() -> *mut c_char {
     string_to_c_char(crate::VERSION)
 }
 
 /// Validate a credential record
-#[no_mangle]
+///
+/// # Safety
+///
+/// The caller must ensure that:
+/// - `credential` is a valid pointer to a CCredentialRecord
+/// - The returned pointer is freed with `ziplock_validation_result_free`
 pub unsafe extern "C" fn ziplock_validate_credential(
     credential: *const CCredentialRecord,
 ) -> *mut CValidationResult {
@@ -531,7 +608,14 @@ pub unsafe extern "C" fn ziplock_validate_credential(
     Box::into_raw(Box::new(result))
 }
 
-/// Free validation result
+/// Free a validation result
+///
+/// # Safety
+///
+/// The caller must ensure that:
+/// - `result` was allocated by this library (e.g., from `ziplock_validate_credential`)
+/// - `result` is not used after this call
+/// - `result` can be null (this function handles null pointers safely)
 #[no_mangle]
 pub unsafe extern "C" fn ziplock_validation_result_free(result: *mut CValidationResult) {
     if result.is_null() {
@@ -557,6 +641,12 @@ pub unsafe extern "C" fn ziplock_validation_result_free(result: *mut CValidation
 // ============================================================================
 
 /// Test function to verify FFI is working
+///
+/// # Safety
+///
+/// The caller must ensure that:
+/// - `input` is a valid, null-terminated C string
+/// - The returned C string is freed with `ziplock_string_free`
 #[no_mangle]
 pub unsafe extern "C" fn ziplock_test_echo(input: *const c_char) -> *mut c_char {
     match c_char_to_string(input) {

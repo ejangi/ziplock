@@ -284,12 +284,12 @@ pub struct EncodingUtils;
 impl EncodingUtils {
     /// Encode bytes as hex string
     pub fn encode_hex(bytes: &[u8]) -> String {
-        bytes.iter().map(|b| format!("{:02x}", b)).collect()
+        bytes.iter().map(|b| format!("{b:02x}")).collect()
     }
 
     /// Decode hex string to bytes
     pub fn decode_hex(hex: &str) -> Option<Vec<u8>> {
-        if hex.len() % 2 != 0 {
+        if !hex.len().is_multiple_of(2) {
             return None;
         }
 
