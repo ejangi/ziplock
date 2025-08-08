@@ -921,9 +921,26 @@ impl IpcServer {
         match archive_manager.add_credential(credential).await {
             Ok(credential_id) => {
                 info!("Created credential: {}", credential_id);
-                Ok(RequestResult::Success(ResponseData::CredentialCreated {
-                    credential_id,
-                }))
+                // Automatically save the archive after creating credential
+                match archive_manager.save_archive().await {
+                    Ok(()) => {
+                        info!("Archive automatically saved after credential creation");
+                        Ok(RequestResult::Success(ResponseData::CredentialCreated {
+                            credential_id,
+                        }))
+                    }
+                    Err(save_err) => {
+                        error!(
+                            "Failed to save archive after credential creation: {}",
+                            save_err
+                        );
+                        Ok(RequestResult::Error {
+                            error_type: "SaveFailed".to_string(),
+                            message: "Credential created but failed to save archive".to_string(),
+                            details: Some(save_err.to_string()),
+                        })
+                    }
+                }
             }
             Err(e) => {
                 error!("Failed to create credential: {}", e);
@@ -948,7 +965,24 @@ impl IpcServer {
         {
             Ok(()) => {
                 info!("Updated credential: {}", credential_id);
-                Ok(RequestResult::Success(ResponseData::CredentialUpdated))
+                // Automatically save the archive after updating credential
+                match archive_manager.save_archive().await {
+                    Ok(()) => {
+                        info!("Archive automatically saved after credential update");
+                        Ok(RequestResult::Success(ResponseData::CredentialUpdated))
+                    }
+                    Err(save_err) => {
+                        error!(
+                            "Failed to save archive after credential update: {}",
+                            save_err
+                        );
+                        Ok(RequestResult::Error {
+                            error_type: "SaveFailed".to_string(),
+                            message: "Credential updated but failed to save archive".to_string(),
+                            details: Some(save_err.to_string()),
+                        })
+                    }
+                }
             }
             Err(e) => {
                 error!("Failed to update credential {}: {}", credential_id, e);
@@ -969,7 +1003,24 @@ impl IpcServer {
         match archive_manager.delete_credential(credential_id).await {
             Ok(()) => {
                 info!("Deleted credential: {}", credential_id);
-                Ok(RequestResult::Success(ResponseData::CredentialDeleted))
+                // Automatically save the archive after deleting credential
+                match archive_manager.save_archive().await {
+                    Ok(()) => {
+                        info!("Archive automatically saved after credential deletion");
+                        Ok(RequestResult::Success(ResponseData::CredentialDeleted))
+                    }
+                    Err(save_err) => {
+                        error!(
+                            "Failed to save archive after credential deletion: {}",
+                            save_err
+                        );
+                        Ok(RequestResult::Error {
+                            error_type: "SaveFailed".to_string(),
+                            message: "Credential deleted but failed to save archive".to_string(),
+                            details: Some(save_err.to_string()),
+                        })
+                    }
+                }
             }
             Err(e) => {
                 error!("Failed to delete credential {}: {}", credential_id, e);

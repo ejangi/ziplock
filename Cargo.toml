@@ -41,6 +41,9 @@ config = "0.14"
 clap = { version = "4.4", features = ["derive"] }
 image = "0.24"
 
+# Testing dependencies
+tempfile = "3.8"
+
 # IPC and communication
 tonic = "0.10"
 prost = "0.12"
