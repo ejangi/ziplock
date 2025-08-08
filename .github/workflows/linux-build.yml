@@ -2,10 +2,10 @@ name: Linux Build and Release
 
 on:
   push:
-    branches: [ main, develop ]
-    tags: [ 'v*' ]
+    branches: [main, develop]
+    tags: ["v*"]
   pull_request:
-    branches: [ main ]
+    branches: [main]
 
 env:
   CARGO_TERM_COLOR: always
@@ -20,69 +20,71 @@ jobs:
         rust: [stable, beta]
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Install Rust toolchain
-      uses: dtolnay/rust-toolchain@master
-      with:
-        toolchain: ${{ matrix.rust }}
-        components: rustfmt, clippy
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ matrix.rust }}
+          components: rustfmt, clippy
 
-    - name: Cache cargo registry
-      uses: actions/cache@v3
-      with:
-        path: |
-          ~/.cargo/registry
-          ~/.cargo/git
-          target
-        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-        restore-keys: |
-          ${{ runner.os }}-cargo-
+      - name: Cache cargo registry
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
 
-    - name: Install system dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y \
-          libfontconfig1-dev \
-          libfreetype6-dev \
-          libx11-dev \
-          libxft-dev \
-          liblzma-dev \
-          pkg-config \
-          libgtk-4-dev \
-          libadwaita-1-dev
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libfontconfig1-dev \
+            libfreetype6-dev \
+            libx11-dev \
+            libxft-dev \
+            liblzma-dev \
+            pkg-config \
+            libgtk-4-dev \
+            libadwaita-1-dev \
+            libatk1.0-dev \
+            libatk-bridge2.0-dev
 
-    - name: Check formatting
-      run: cargo fmt --all -- --check
+      - name: Check formatting
+        run: cargo fmt --all -- --check
 
-    - name: Run clippy
-      run: cargo clippy --all-targets --all-features -- -D warnings
+      - name: Run clippy
+        run: cargo clippy --all-targets --all-features -- -D warnings
 
-    - name: Run tests
-      run: cargo test --verbose --workspace
+      - name: Run tests
+        run: cargo test --verbose --workspace
 
-    - name: Run backend tests
-      run: cargo test --verbose -p ziplock-backend
+      - name: Run backend tests
+        run: cargo test --verbose -p ziplock-backend
 
-    - name: Run shared library tests
-      run: cargo test --verbose -p ziplock-shared
+      - name: Run shared library tests
+        run: cargo test --verbose -p ziplock-shared
 
   security-audit:
     name: Security Audit
     runs-on: ubuntu-latest
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Install Rust toolchain
-      uses: dtolnay/rust-toolchain@stable
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
 
-    - name: Install cargo-audit
-      run: cargo install cargo-audit
+      - name: Install cargo-audit
+        run: cargo install cargo-audit
 
-    - name: Run security audit
-      run: cargo audit
+      - name: Run security audit
+        run: cargo audit
 
   build-linux:
     name: Build Linux Packages
@@ -99,90 +101,92 @@ jobs:
             deb_arch: arm64
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Install Rust toolchain
-      uses: dtolnay/rust-toolchain@stable
-      with:
-        targets: ${{ matrix.target.rust_target }}
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target.rust_target }}
 
-    - name: Cache cargo registry
-      uses: actions/cache@v3
-      with:
-        path: |
-          ~/.cargo/registry
-          ~/.cargo/git
-          target
-        key: ${{ runner.os }}-${{ matrix.target.arch }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-        restore-keys: |
-          ${{ runner.os }}-${{ matrix.target.arch }}-cargo-
+      - name: Cache cargo registry
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-${{ matrix.target.arch }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ matrix.target.arch }}-cargo-
 
-    - name: Install system dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y \
-          libfontconfig1-dev \
-          libfreetype6-dev \
-          libx11-dev \
-          libxft-dev \
-          liblzma-dev \
-          pkg-config \
-          libgtk-4-dev \
-          libadwaita-1-dev \
-          dpkg-dev \
-          fakeroot
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libfontconfig1-dev \
+            libfreetype6-dev \
+            libx11-dev \
+            libxft-dev \
+            liblzma-dev \
+            pkg-config \
+            libgtk-4-dev \
+            libadwaita-1-dev \
+            libatk1.0-dev \
+            libatk-bridge2.0-dev \
+            dpkg-dev \
+            fakeroot
 
-    - name: Install cross-compilation dependencies (ARM64)
-      if: matrix.target.arch == 'aarch64'
-      run: |
-        sudo apt-get install -y gcc-aarch64-linux-gnu
-        export CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc
-        export AR_aarch64_unknown_linux_gnu=aarch64-linux-gnu-ar
+      - name: Install cross-compilation dependencies (ARM64)
+        if: matrix.target.arch == 'aarch64'
+        run: |
+          sudo apt-get install -y gcc-aarch64-linux-gnu
+          export CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc
+          export AR_aarch64_unknown_linux_gnu=aarch64-linux-gnu-ar
 
-    - name: Make build scripts executable
-      run: |
-        chmod +x scripts/build-linux.sh
-        chmod +x scripts/package-deb.sh
+      - name: Make build scripts executable
+        run: |
+          chmod +x scripts/build-linux.sh
+          chmod +x scripts/package-deb.sh
 
-    - name: Build binaries
-      env:
-        TARGET_ARCH: ${{ matrix.target.rust_target }}
-        CC: ${{ matrix.target.arch == 'aarch64' && 'aarch64-linux-gnu-gcc' || 'gcc' }}
-        AR: ${{ matrix.target.arch == 'aarch64' && 'aarch64-linux-gnu-ar' || 'ar' }}
-      run: |
-        ./scripts/build-linux.sh \
-          --target ${{ matrix.target.rust_target }} \
-          --profile release
+      - name: Build binaries
+        env:
+          TARGET_ARCH: ${{ matrix.target.rust_target }}
+          CC: ${{ matrix.target.arch == 'aarch64' && 'aarch64-linux-gnu-gcc' || 'gcc' }}
+          AR: ${{ matrix.target.arch == 'aarch64' && 'aarch64-linux-gnu-ar' || 'ar' }}
+        run: |
+          ./scripts/build-linux.sh \
+            --target ${{ matrix.target.rust_target }} \
+            --profile release
 
-    - name: Create Debian package
-      env:
-        PACKAGE_ARCH: ${{ matrix.target.deb_arch }}
-      run: |
-        ./scripts/package-deb.sh \
-          --arch ${{ matrix.target.deb_arch }}
+      - name: Create Debian package
+        env:
+          PACKAGE_ARCH: ${{ matrix.target.deb_arch }}
+        run: |
+          ./scripts/package-deb.sh \
+            --arch ${{ matrix.target.deb_arch }}
 
-    - name: Test package installation (x86_64 only)
-      if: matrix.target.arch == 'x86_64'
-      run: |
-        # Test package in Docker container
-        docker run --rm -v $PWD:/workspace ubuntu:22.04 bash -c "
-          cd /workspace &&
-          apt-get update &&
-          apt-get install -y ./target/ziplock_*_${{ matrix.target.deb_arch }}.deb &&
-          ziplock --version &&
-          ziplock-backend --version
-        "
+      - name: Test package installation (x86_64 only)
+        if: matrix.target.arch == 'x86_64'
+        run: |
+          # Test package in Docker container
+          docker run --rm -v $PWD:/workspace ubuntu:22.04 bash -c "
+            cd /workspace &&
+            apt-get update &&
+            apt-get install -y ./target/ziplock_*_${{ matrix.target.deb_arch }}.deb &&
+            ziplock --version &&
+            ziplock-backend --version
+          "
 
-    - name: Upload build artifacts
-      uses: actions/upload-artifact@v3
-      with:
-        name: ziplock-linux-${{ matrix.target.deb_arch }}
-        path: |
-          target/ziplock_*_${{ matrix.target.deb_arch }}.deb
-          target/${{ matrix.target.rust_target }}/release/ziplock
-          target/${{ matrix.target.rust_target }}/release/ziplock-backend
-        retention-days: 30
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: ziplock-linux-${{ matrix.target.deb_arch }}
+          path: |
+            target/ziplock_*_${{ matrix.target.deb_arch }}.deb
+            target/${{ matrix.target.rust_target }}/release/ziplock
+            target/${{ matrix.target.rust_target }}/release/ziplock-backend
+          retention-days: 30
 
   release:
     name: Create Release
@@ -191,113 +195,113 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v')
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Download all artifacts
-      uses: actions/download-artifact@v3
-      with:
-        path: artifacts
+      - name: Download all artifacts
+        uses: actions/download-artifact@v3
+        with:
+          path: artifacts
 
-    - name: Prepare release assets
-      run: |
-        mkdir -p release-assets
+      - name: Prepare release assets
+        run: |
+          mkdir -p release-assets
 
-        # Copy .deb packages
-        find artifacts -name "*.deb" -exec cp {} release-assets/ \;
+          # Copy .deb packages
+          find artifacts -name "*.deb" -exec cp {} release-assets/ \;
 
-        # Create checksums
-        cd release-assets
-        sha256sum *.deb > SHA256SUMS
+          # Create checksums
+          cd release-assets
+          sha256sum *.deb > SHA256SUMS
 
-        # List files for verification
-        ls -la
+          # List files for verification
+          ls -la
 
-    - name: Extract version from tag
-      id: version
-      run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+      - name: Extract version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
 
-    - name: Create release notes
-      run: |
-        cat > release-notes.md << EOF
-        # ZipLock v${{ steps.version.outputs.VERSION }}
+      - name: Create release notes
+        run: |
+          cat > release-notes.md << EOF
+          # ZipLock v${{ steps.version.outputs.VERSION }}
 
-        ## 🚀 What's New
+          ## 🚀 What's New
 
-        This release includes:
+          This release includes:
 
-        - **Linux Support**: Native Linux builds with systemd integration
-        - **Debian Packages**: Easy installation via .deb packages
-        - **Security**: AES-256 encryption with Argon2 key derivation
-        - **Modern UI**: Clean interface built with Rust and iced
+          - **Linux Support**: Native Linux builds with systemd integration
+          - **Debian Packages**: Easy installation via .deb packages
+          - **Security**: AES-256 encryption with Argon2 key derivation
+          - **Modern UI**: Clean interface built with Rust and iced
 
-        ## 📦 Installation
+          ## 📦 Installation
 
-        ### Ubuntu/Debian
-        \`\`\`bash
-        wget https://github.com/ejangi/ziplock/releases/download/v${{ steps.version.outputs.VERSION }}/ziplock_${{ steps.version.outputs.VERSION }}_amd64.deb
-        sudo dpkg -i ziplock_${{ steps.version.outputs.VERSION }}_amd64.deb
-        sudo apt-get install -f  # Fix any dependency issues
-        \`\`\`
+          ### Ubuntu/Debian
+          \`\`\`bash
+          wget https://github.com/ejangi/ziplock/releases/download/v${{ steps.version.outputs.VERSION }}/ziplock_${{ steps.version.outputs.VERSION }}_amd64.deb
+          sudo dpkg -i ziplock_${{ steps.version.outputs.VERSION }}_amd64.deb
+          sudo apt-get install -f  # Fix any dependency issues
+          \`\`\`
 
-        ### ARM64 (Raspberry Pi, etc.)
-        \`\`\`bash
-        wget https://github.com/ejangi/ziplock/releases/download/v${{ steps.version.outputs.VERSION }}/ziplock_${{ steps.version.outputs.VERSION }}_arm64.deb
-        sudo dpkg -i ziplock_${{ steps.version.outputs.VERSION }}_arm64.deb
-        sudo apt-get install -f
-        \`\`\`
+          ### ARM64 (Raspberry Pi, etc.)
+          \`\`\`bash
+          wget https://github.com/ejangi/ziplock/releases/download/v${{ steps.version.outputs.VERSION }}/ziplock_${{ steps.version.outputs.VERSION }}_arm64.deb
+          sudo dpkg -i ziplock_${{ steps.version.outputs.VERSION }}_arm64.deb
+          sudo apt-get install -f
+          \`\`\`
 
-        ## 🔧 Usage
+          ## 🔧 Usage
 
-        After installation:
-        1. Launch ZipLock from your applications menu or run \`ziplock\` in terminal
-        2. The backend service will start automatically and run on boot
-        3. Create your first password vault or import from another password manager
+          After installation:
+          1. Launch ZipLock from your applications menu or run \`ziplock\` in terminal
+          2. The backend service will start automatically and run on boot
+          3. Create your first password vault or import from another password manager
 
-        ## 🛡️ Security
+          ## 🛡️ Security
 
-        - All sensitive operations handled by secure backend service
-        - Master key never leaves your device
-        - Zero-knowledge architecture
-        - Automatic security audits via GitHub Actions
+          - All sensitive operations handled by secure backend service
+          - Master key never leaves your device
+          - Zero-knowledge architecture
+          - Automatic security audits via GitHub Actions
 
-        ## 📋 System Requirements
+          ## 📋 System Requirements
 
-        - Ubuntu 20.04+ or Debian 11+
-        - X11 or Wayland display server
-        - 50MB disk space
-        - systemd (for backend service)
+          - Ubuntu 20.04+ or Debian 11+
+          - X11 or Wayland display server
+          - 50MB disk space
+          - systemd (for backend service)
 
-        ## 🐛 Known Issues
+          ## 🐛 Known Issues
 
-        - First launch may take a few seconds to initialize
-        - Wayland support is experimental in this release
+          - First launch may take a few seconds to initialize
+          - Wayland support is experimental in this release
 
-        ## 📝 Full Changelog
+          ## 📝 Full Changelog
 
-        See [CHANGELOG.md](https://github.com/ejangi/ziplock/blob/v${{ steps.version.outputs.VERSION }}/CHANGELOG.md) for detailed changes.
-        EOF
+          See [CHANGELOG.md](https://github.com/ejangi/ziplock/blob/v${{ steps.version.outputs.VERSION }}/CHANGELOG.md) for detailed changes.
+          EOF
 
-    - name: Create GitHub Release
-      uses: softprops/action-gh-release@v1
-      with:
-        name: "ZipLock v${{ steps.version.outputs.VERSION }}"
-        body_path: release-notes.md
-        draft: false
-        prerelease: ${{ contains(steps.version.outputs.VERSION, '-') }}
-        files: |
-          release-assets/*.deb
-          release-assets/SHA256SUMS
-        generate_release_notes: true
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: "ZipLock v${{ steps.version.outputs.VERSION }}"
+          body_path: release-notes.md
+          draft: false
+          prerelease: ${{ contains(steps.version.outputs.VERSION, '-') }}
+          files: |
+            release-assets/*.deb
+            release-assets/SHA256SUMS
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Upload to package repositories
-      if: "!contains(steps.version.outputs.VERSION, '-')"
-      run: |
-        echo "🚀 Release v${{ steps.version.outputs.VERSION }} created successfully!"
-        echo "📦 .deb packages are available for download"
-        echo "🔄 Consider setting up automatic package repository deployment"
+      - name: Upload to package repositories
+        if: "!contains(steps.version.outputs.VERSION, '-')"
+        run: |
+          echo "🚀 Release v${{ steps.version.outputs.VERSION }} created successfully!"
+          echo "📦 .deb packages are available for download"
+          echo "🔄 Consider setting up automatic package repository deployment"
 
   benchmark:
     name: Performance Benchmarks
@@ -306,39 +310,43 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Install Rust toolchain
-      uses: dtolnay/rust-toolchain@stable
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
 
-    - name: Install system dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y \
-          libfontconfig1-dev \
-          libfreetype6-dev \
-          libx11-dev \
-          libxft-dev \
-          liblzma-dev \
-          pkg-config
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libfontconfig1-dev \
+            libfreetype6-dev \
+            libx11-dev \
+            libxft-dev \
+            liblzma-dev \
+            pkg-config \
+            libgtk-4-dev \
+            libadwaita-1-dev \
+            libatk1.0-dev \
+            libatk-bridge2.0-dev
 
-    - name: Run benchmarks
-      run: |
-        # Run any performance benchmarks
-        cargo bench --workspace || true
+      - name: Run benchmarks
+        run: |
+          # Run any performance benchmarks
+          cargo bench --workspace || true
 
-        # Measure binary sizes
-        cargo build --release
-        echo "## Binary Sizes" >> benchmark-results.md
-        echo "| Binary | Size |" >> benchmark-results.md
-        echo "|--------|------|" >> benchmark-results.md
-        echo "| ziplock-backend | $(du -h target/release/ziplock-backend | cut -f1) |" >> benchmark-results.md
-        echo "| ziplock | $(du -h target/release/ziplock | cut -f1) |" >> benchmark-results.md
+          # Measure binary sizes
+          cargo build --release
+          echo "## Binary Sizes" >> benchmark-results.md
+          echo "| Binary | Size |" >> benchmark-results.md
+          echo "|--------|------|" >> benchmark-results.md
+          echo "| ziplock-backend | $(du -h target/release/ziplock-backend | cut -f1) |" >> benchmark-results.md
+          echo "| ziplock | $(du -h target/release/ziplock | cut -f1) |" >> benchmark-results.md
 
-    - name: Upload benchmark results
-      uses: actions/upload-artifact@v3
-      with:
-        name: benchmark-results
-        path: benchmark-results.md
-        retention-days: 30
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v3
+        with:
+          name: benchmark-results
+          path: benchmark-results.md
+          retention-days: 30
