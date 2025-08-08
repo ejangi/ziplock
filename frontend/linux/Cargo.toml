@@ -41,7 +41,7 @@ iced = { workspace = true, features = [
 
 # Alternative GUI framework option
 gtk = { workspace = true, optional = true, features = ["v4_8"] }
-gdk = { version = "0.18", optional = true }
+gdk4 = { workspace = true, optional = true }
 glib = { version = "0.18", optional = true }
 
 # Additional frontend dependencies
@@ -72,7 +72,7 @@ default = ["iced-gui", "wayland-support", "file-dialog"]
 
 # GUI framework selection
 iced-gui = []
-gtk-gui = ["gtk", "gdk", "glib"]
+gtk-gui = ["gtk", "gdk4", "glib"]
 
 # Platform support
 wayland-support = []
