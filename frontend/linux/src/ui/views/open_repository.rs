@@ -281,6 +281,7 @@ impl OpenRepositoryView {
             &self.passphrase,
         )
         .on_input(OpenRepositoryMessage::PassphraseChanged)
+        .on_submit(OpenRepositoryMessage::OpenRepository)
         .secure(!self.show_passphrase)
         .style(self.get_passphrase_style())
         .padding(utils::button_padding())
