@@ -373,11 +373,10 @@ impl MainView {
             refresh_button,
             Space::with_height(Length::Fixed(10.0)),
             add_button,
-            Space::with_height(Length::Fixed(10.0)),
+            Space::with_height(Length::Fill),
             settings_button,
             Space::with_height(Length::Fixed(10.0)),
             lock_button,
-            Space::with_height(Length::Fill),
         ]
         .spacing(0)
         .padding(20)
