@@ -91,10 +91,10 @@ ZipLock follows a client-server architecture with native applications for each p
 
 | Platform | Status | Technology | Features |
 |----------|--------|------------|----------|
-| **Linux** | ✅ Stable | Rust + iced/GTK4 | Full desktop experience, Wayland support |
-| **Windows** | 🚧 In Development | Rust + Tauri | Native Windows integration |
-| **iOS** | 🚧 In Development | Swift + SwiftUI | iOS-native backend service |
-| **Android** | 🚧 In Development | Kotlin + Jetpack Compose | Android-native backend service |
+| **Linux** | 🚧 In Development | Rust + iced/GTK4 | Full desktop experience, Wayland support |
+| **Windows** | 📋 Planned | Rust + Tauri | Native Windows integration |
+| **iOS** | 📋 Planned | Swift + SwiftUI | iOS-native backend service |
+| **Android** | 📋 Planned | Kotlin + Jetpack Compose | Android-native backend service |
 | **macOS** | 📋 Planned | Swift + SwiftUI | Native macOS experience |
 
 ### Architecture Benefits
