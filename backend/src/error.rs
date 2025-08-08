@@ -60,7 +60,7 @@ pub enum ConfigError {
     Invalid { field: String, reason: String },
 
     #[error("Configuration parsing failed: {0}")]
-    Parse(#[from] toml::de::Error),
+    Parse(#[from] serde_yaml::Error),
 
     #[error("Missing required configuration field: {field}")]
     MissingField { field: String },

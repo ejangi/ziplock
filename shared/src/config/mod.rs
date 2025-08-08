@@ -288,7 +288,7 @@ impl ConfigManager {
     /// Create a new configuration manager
     pub fn new() -> Result<Self> {
         let config_dir = paths::get_config_directory()?;
-        let config_file = config_dir.join("config.toml");
+        let config_file = config_dir.join("config.yml");
 
         // Ensure config directory exists
         if !config_dir.exists() {
@@ -321,7 +321,7 @@ impl ConfigManager {
         let content = fs::read_to_string(path)
             .with_context(|| format!("Failed to read config file: {:?}", path))?;
 
-        let mut config: FrontendConfig = toml::from_str(&content)
+        let mut config: FrontendConfig = serde_yaml::from_str(&content)
             .with_context(|| format!("Failed to parse config file: {:?}", path))?;
 
         // Validate and clean up recent repositories
@@ -345,7 +345,7 @@ impl ConfigManager {
     fn save_config(path: &Path, config: &FrontendConfig) -> Result<()> {
         debug!("Saving config to: {:?}", path);
 
-        let content = toml::to_string_pretty(config).context("Failed to serialize config")?;
+        let content = serde_yaml::to_string(config).context("Failed to serialize config")?;
 
         fs::write(path, content)
             .with_context(|| format!("Failed to write config file: {:?}", path))?;
@@ -581,8 +581,8 @@ mod tests {
     #[test]
     fn test_config_serialization() {
         let config = FrontendConfig::default();
-        let serialized = toml::to_string(&config).unwrap();
-        let deserialized: FrontendConfig = toml::from_str(&serialized).unwrap();
+        let serialized = serde_yaml::to_string(&config).unwrap();
+        let deserialized: FrontendConfig = serde_yaml::from_str(&serialized).unwrap();
 
         assert_eq!(config.ui.window_width, deserialized.ui.window_width);
         assert_eq!(

@@ -1,3 +1,4 @@
 # TODO
 
-- Taking in to consideration the spec docs in `docs` directory, can you please ensure that the specification for all config files in the repository and also in the user's directory use yaml format, not toml? Toml should only be used for the rust project configuration, not for the config files used by the frontend and backend apps when running.
+- Taking in to consideration the spec docs in `docs` directory, can you please update the README.md platform support table to show Linux as In Development, and all other platforms as Planned?
+- Taking in to consideration the spec docs in `docs` directory, is it possible for the iOS and Android platforms to work with the shared libraries? If not, do we need to provide C-bindings so that we can include this shared implementation on those platforms? If that also is not possible, then I guess worst case scenario we just need to implement those shared libraries in the iOS and Android platform languages. We won't do that right not, but I just wanted to get your perspective on what is possible?

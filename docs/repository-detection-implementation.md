@@ -130,23 +130,26 @@ Repository Detection
 ## Configuration File Structure
 
 ### Enhanced Repository Configuration
-```toml
-[repository]
-max_recent = 10
-auto_detect = true
-search_directories = ["/home/user/Documents", "/home/user/Backup"]
-
-[[repository.recent_repositories]]
-path = "/home/user/Documents/passwords.7z"
-last_accessed = 2024-01-15T10:30:00Z
-display_name = "Personal Passwords"
-pinned = true
-
-[[repository.recent_repositories]]
-path = "/home/user/work-vault.7z"
-last_accessed = 2024-01-14T15:20:00Z
-display_name = "Work Credentials"
-pinned = false
+```yaml
+repository:
+  max_recent: 10
+  auto_detect: true
+  search_directories:
+    - "/home/user/Documents"
+    - "/home/user/Backup"
+  recent_repositories:
+    - path: "/home/user/Documents/passwords.7z"
+      last_accessed:
+        secs_since_epoch: 1705315800
+        nanos_since_epoch: 0
+      display_name: "Personal Passwords"
+      pinned: true
+    - path: "/home/user/work-vault.7z"
+      last_accessed:
+        secs_since_epoch: 1705248000
+        nanos_since_epoch: 0
+      display_name: "Work Credentials"
+      pinned: false
 ```
 
 ## Integration Points

@@ -155,11 +155,11 @@ async fn main() -> Result<()> {
         .or_else(|| {
             dirs::config_dir().map(|mut p| {
                 p.push("ziplock");
-                p.push("backend.toml");
+                p.push("backend.yml");
                 p
             })
         })
-        .unwrap_or_else(|| PathBuf::from("/etc/ziplock/backend.toml"));
+        .unwrap_or_else(|| PathBuf::from("/etc/ziplock/backend.yml"));
 
     let mut config = Config::load(&config_path).unwrap_or_else(|e| {
         warn!(

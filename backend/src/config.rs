@@ -325,7 +325,7 @@ impl Config {
         let content = fs::read_to_string(path)
             .with_context(|| format!("Failed to read config file: {:?}", path))?;
 
-        let config: Config = toml::from_str(&content)
+        let config: Config = serde_yaml::from_str(&content)
             .with_context(|| format!("Failed to parse config file: {:?}", path))?;
 
         info!("Configuration loaded successfully from: {:?}", path);
@@ -344,7 +344,7 @@ impl Config {
                 .with_context(|| format!("Failed to create config directory: {:?}", parent))?;
         }
 
-        let content = toml::to_string_pretty(self).context("Failed to serialize configuration")?;
+        let content = serde_yaml::to_string(self).context("Failed to serialize configuration")?;
 
         fs::write(path, content)
             .with_context(|| format!("Failed to write config file: {:?}", path))?;
@@ -534,8 +534,8 @@ mod tests {
     #[test]
     fn test_config_serialization() {
         let config = Config::default();
-        let toml_str = toml::to_string(&config).unwrap();
-        let deserialized: Config = toml::from_str(&toml_str).unwrap();
+        let yaml_str = serde_yaml::to_string(&config).unwrap();
+        let deserialized: Config = serde_yaml::from_str(&yaml_str).unwrap();
 
         // Compare a few key fields
         assert_eq!(

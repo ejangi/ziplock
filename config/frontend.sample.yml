@@ -1,0 +1,101 @@
+# ZipLock Frontend Configuration Sample
+#
+# This file demonstrates all available configuration options for the ZipLock
+# frontend clients. Copy this file to your config directory and modify as needed.
+#
+# Default config locations:
+# - Linux: ~/.config/ziplock/config.yml
+# - Windows: %APPDATA%/ZipLock/config.yml
+
+version: "1.0"
+
+# Repository management settings
+repository:
+  # Maximum number of recent repositories to remember
+  max_recent: 10
+
+  # Automatically detect repositories in search directories
+  auto_detect: true
+
+  # Directories to search for repositories
+  search_directories:
+    - "~/Documents"
+    - "~/Desktop"
+    - "~/Downloads"
+
+  # Recently opened repositories (managed automatically)
+  recent_repositories: []
+
+# User interface settings
+ui:
+  # Window dimensions
+  window_width: 1000
+  window_height: 700
+
+  # Theme: "light", "dark", or "system" (follows system preference)
+  theme: "system"
+
+  # Remember window position and size between sessions
+  remember_window_state: true
+
+  # Show setup wizard on startup when no repositories are configured
+  show_wizard_on_startup: true
+
+  # Font size for the interface
+  font_size: 14.0
+
+  # Language for the interface (ISO 639-1 code)
+  language: "en"
+
+# Application behavior settings
+app:
+  # Auto-lock timeout in minutes (0 = never auto-lock)
+  auto_lock_timeout: 15
+
+  # Clipboard clear timeout in seconds (0 = never clear)
+  clipboard_timeout: 30
+
+  # Enable automatic backup creation
+  enable_backup: true
+
+  # Show passwords by default in credential view
+  show_passwords_default: false
+
+  # Show password strength indicators
+  show_password_strength: true
+
+  # Minimize to system tray instead of closing
+  minimize_to_tray: false
+
+  # Start application minimized
+  start_minimized: false
+
+  # Automatically check for updates
+  auto_check_updates: true
+
+# Example configurations for different use cases:
+
+# Minimal security configuration:
+# app:
+#   auto_lock_timeout: 5
+#   clipboard_timeout: 10
+#   show_passwords_default: false
+#   show_password_strength: true
+
+# Maximum convenience configuration:
+# app:
+#   auto_lock_timeout: 0
+#   clipboard_timeout: 0
+#   show_passwords_default: true
+#   minimize_to_tray: true
+
+# Corporate/shared computer configuration:
+# app:
+#   auto_lock_timeout: 2
+#   clipboard_timeout: 15
+#   show_passwords_default: false
+#   minimize_to_tray: false
+#   start_minimized: false
+# ui:
+#   remember_window_state: false
+#   show_wizard_on_startup: false

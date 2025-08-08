@@ -178,6 +178,8 @@ ZipLock can be customized through configuration files:
 **Linux**: `~/.config/ziplock/config.yml`  
 **Windows**: `%APPDATA%/ZipLock/config.yml`
 
+> **⚠️ Configuration Format Change**: Starting with version 0.2.0, ZipLock uses YAML format for all configuration files instead of TOML. If you have existing `.toml` config files, run the migration script: `./scripts/migrate-config.sh`
+
 Example configuration:
 ```yaml
 storage:

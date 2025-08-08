@@ -224,36 +224,36 @@ mod tests {
     fn test_should_show_wizard_logic() {
         // Create a temporary config for testing
         let temp_dir = TempDir::new().unwrap();
-        let config_path = temp_dir.path().join("config.toml");
+        let config_path = temp_dir.path().join("config.yml");
 
         // Create minimal config file
         let config_content = r#"
-version = "1.0"
+version: "1.0"
 
-[repository]
-max_recent = 10
-auto_detect = true
-search_directories = []
-recent_repositories = []
+repository:
+  max_recent: 10
+  auto_detect: true
+  search_directories: []
+  recent_repositories: []
 
-[ui]
-window_width = 1000
-window_height = 700
-theme = "system"
-remember_window_state = true
-show_wizard_on_startup = true
-font_size = 14.0
-language = "en"
+ui:
+  window_width: 1000
+  window_height: 700
+  theme: "system"
+  remember_window_state: true
+  show_wizard_on_startup: true
+  font_size: 14.0
+  language: "en"
 
-[app]
-auto_lock_timeout = 15
-clipboard_timeout = 30
-enable_backup = true
-show_passwords_default = false
-show_password_strength = true
-minimize_to_tray = false
-start_minimized = false
-auto_check_updates = true
+app:
+  auto_lock_timeout: 15
+  clipboard_timeout: 30
+  enable_backup: true
+  show_passwords_default: false
+  show_password_strength: true
+  minimize_to_tray: false
+  start_minimized: false
+  auto_check_updates: true
 "#;
 
         std::fs::write(&config_path, config_content).unwrap();
