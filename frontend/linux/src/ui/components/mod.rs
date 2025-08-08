@@ -3,6 +3,7 @@
 //! This module contains reusable UI components for the ZipLock Linux frontend.
 
 pub mod button;
+pub mod credential_form;
 
 // Future UI components will be added here as needed:
 // - Password strength indicator
@@ -13,3 +14,4 @@ pub mod button;
 
 // Re-export commonly used components
 pub use button::*;
+pub use credential_form::*;

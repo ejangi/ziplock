@@ -801,32 +801,28 @@ impl RepositoryWizard {
         }
 
         // Create IPC client and connect to backend
-        let socket_path = IpcClient::default_socket_path();
-        let mut client = IpcClient::new(socket_path);
+        let mut client = IpcClient::new().map_err(|e| e.to_string())?;
 
         // Connect to backend
-        match client.connect().await {
-            Ok(()) => info!("Connected to ZipLock backend"),
-            Err(e) => {
-                error!("Failed to connect to backend: {}", e);
-                return Err(format!(
-                    "Could not connect to ZipLock backend. Please ensure the backend daemon is running.\n\nError: {}",
-                    e
-                ));
-            }
-        }
+        client.connect().await.map_err(|e| {
+            error!("Failed to connect to backend: {}", e);
+            format!(
+                "Could not connect to ZipLock backend. Please ensure the backend daemon is running.\n\nError: {}",
+                e
+            )
+        })?;
 
         // Create the repository via backend
-        match client.create_archive(repo_path.clone(), passphrase).await {
-            Ok(()) => {
-                info!("Repository created successfully at {:?}", repo_path);
-                Ok(())
-            }
-            Err(e) => {
+        client
+            .create_archive(repo_path.clone(), passphrase)
+            .await
+            .map_err(|e| {
                 error!("Backend failed to create repository: {}", e);
-                Err(format!("Failed to create repository: {}", e))
-            }
-        }
+                format!("Failed to create repository: {}", e)
+            })?;
+
+        info!("Repository created successfully at {:?}", repo_path);
+        Ok(())
     }
 
     /// Get the repository path that will be created

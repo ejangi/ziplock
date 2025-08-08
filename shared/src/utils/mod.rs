@@ -556,6 +556,21 @@ impl PasswordUtils {
 
 // Re-export for convenience (already defined above)
 
+/// Socket utilities for consistent IPC configuration
+pub struct SocketUtils;
+
+impl SocketUtils {
+    /// Get the default socket path for the ZipLock backend
+    /// This uses the same logic as the backend to ensure consistency
+    pub fn default_socket_path() -> std::path::PathBuf {
+        dirs::runtime_dir()
+            .or_else(|| dirs::home_dir().map(|p| p.join(".local/share")))
+            .unwrap_or_else(|| std::path::PathBuf::from("/tmp"))
+            .join("ziplock")
+            .join("backend.sock")
+    }
+}
+
 #[cfg(test)]
 mod password_tests {
     use super::*;

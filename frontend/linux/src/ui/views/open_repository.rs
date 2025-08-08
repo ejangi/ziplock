@@ -524,19 +524,15 @@ impl OpenRepositoryView {
         use crate::ipc::IpcClient;
 
         // Connect to backend
-        let socket_path = IpcClient::default_socket_path();
-        let mut client = IpcClient::new(socket_path);
+        let mut client = IpcClient::new().map_err(|e| e.to_string())?;
 
-        client
-            .connect()
-            .await
-            .map_err(|e| format!("Failed to connect to backend: {}", e))?;
+        client.connect().await?;
+
+        // Create a session first (required for database operations)
+        client.create_session().await?;
 
         // Attempt to open the archive
-        client
-            .open_archive(file_path, passphrase)
-            .await
-            .map_err(|e| format!("Failed to open repository: {}", e))?;
+        client.open_archive(file_path, passphrase).await?;
 
         // Get the session ID for later use
         let session_id = client

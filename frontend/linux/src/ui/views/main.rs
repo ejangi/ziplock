@@ -34,7 +34,6 @@ pub enum MainViewMessage {
     // Navigation
     ShowSettings,
     ShowAbout,
-    Lock,
 
     // Session management
     SessionTimeout,
@@ -113,6 +112,20 @@ impl MainView {
 
     /// Create a command to refresh credentials if we have a session
     pub fn initial_refresh_command(&self) -> Command<MainViewMessage> {
+        if self.session_id.is_some() {
+            Command::perform(
+                Self::load_credentials_async(self.session_id.clone()),
+                MainViewMessage::CredentialsLoaded,
+            )
+        } else {
+            Command::none()
+        }
+    }
+
+    /// Create a command to refresh credentials (public method for external use)
+    pub fn refresh_credentials(&mut self) -> Command<MainViewMessage> {
+        self.is_loading = true;
+        self.current_error = None;
         if self.session_id.is_some() {
             Command::perform(
                 Self::load_credentials_async(self.session_id.clone()),
@@ -272,15 +285,6 @@ impl MainView {
                 Command::none()
             }
 
-            MainViewMessage::Lock => {
-                self.is_loading = true;
-                self.current_error = None;
-                Command::perform(
-                    Self::lock_database_async(self.session_id.clone()),
-                    MainViewMessage::OperationCompleted,
-                )
-            }
-
             MainViewMessage::SessionTimeout => {
                 // This is handled by the helper method and parent application
                 // Just return none as the timeout has already been processed
@@ -312,23 +316,6 @@ impl MainView {
         .width(Length::Fill)
         .center_x();
 
-        let refresh_button = container(
-            button(
-                svg(theme::refresh_icon())
-                    .width(Length::Fixed(20.0))
-                    .height(Length::Fixed(20.0)),
-            )
-            .on_press(MainViewMessage::RefreshCredentials)
-            .padding(12)
-            .style(if self.is_loading {
-                button_styles::disabled()
-            } else {
-                button_styles::secondary()
-            }),
-        )
-        .width(Length::Fill)
-        .center_x();
-
         let add_button = container(
             button(
                 svg(theme::plus_icon())
@@ -355,28 +342,12 @@ impl MainView {
         .width(Length::Fill)
         .center_x();
 
-        let lock_button = container(
-            button(
-                svg(theme::lock_icon())
-                    .width(Length::Fixed(20.0))
-                    .height(Length::Fixed(20.0)),
-            )
-            .on_press(MainViewMessage::Lock)
-            .padding(12)
-            .style(button_styles::destructive()),
-        )
-        .width(Length::Fill)
-        .center_x();
-
         let sidebar_content = column![
             logo,
-            refresh_button,
-            Space::with_height(Length::Fixed(10.0)),
+            Space::with_height(Length::Fixed(30.0)),
             add_button,
             Space::with_height(Length::Fill),
             settings_button,
-            Space::with_height(Length::Fixed(10.0)),
-            lock_button,
         ]
         .spacing(0)
         .padding(20)
@@ -644,8 +615,7 @@ impl MainView {
     async fn load_credentials_async(
         session_id: Option<String>,
     ) -> Result<(Vec<CredentialItem>, Option<String>, bool), String> {
-        let socket_path = IpcClient::default_socket_path();
-        let mut client = IpcClient::new(socket_path);
+        let mut client = IpcClient::new().map_err(|e| e.to_string())?;
 
         // Connect to backend
         client
@@ -673,15 +643,15 @@ impl MainView {
 
         // Try listing credentials with the session
         match client.list_credentials().await {
-            Ok(summaries) => {
-                let credentials = summaries
+            Ok(records) => {
+                let credentials = records
                     .into_iter()
-                    .map(|summary| CredentialItem {
-                        id: summary.id,
-                        title: summary.title,
-                        username: format!("Type: {}", summary.credential_type),
+                    .map(|record| CredentialItem {
+                        id: record.id,
+                        title: record.title,
+                        username: format!("Type: {}", record.credential_type),
                         url: None,
-                        last_modified: summary
+                        last_modified: record
                             .updated_at
                             .duration_since(std::time::UNIX_EPOCH)
                             .unwrap_or_default()
@@ -710,27 +680,6 @@ impl MainView {
     }
 
     /// Async function to lock the database
-    async fn lock_database_async(session_id: Option<String>) -> Result<String, String> {
-        let socket_path = IpcClient::default_socket_path();
-        let mut client = IpcClient::new(socket_path);
-
-        // Connect to backend
-        client
-            .connect()
-            .await
-            .map_err(|e| format!("Could not connect to ZipLock backend: {}", e))?;
-
-        // Set session ID if we have one
-        if let Some(sid) = session_id {
-            client.set_session_id(sid);
-        }
-
-        // Lock the database
-        match client.close_archive().await {
-            Ok(()) => Ok("Database locked successfully".to_string()),
-            Err(e) => Err(format!("Failed to lock database: {}", e)),
-        }
-    }
 
     /// Handle potential session timeout errors
     fn handle_potential_session_timeout(

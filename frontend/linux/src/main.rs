@@ -19,8 +19,8 @@ use config::{ConfigManager, RepositoryInfo};
 use ipc::IpcClient;
 use ui::views::main::{MainView, MainViewMessage};
 use ui::views::{
-    AddCredentialMessage, AddCredentialView, OpenRepositoryMessage, OpenRepositoryView,
-    RepositoryWizard, WizardMessage,
+    AddCredentialMessage, AddCredentialView, EditCredentialMessage, EditCredentialView,
+    OpenRepositoryMessage, OpenRepositoryView, RepositoryWizard, WizardMessage,
 };
 
 /// Main application messages
@@ -57,6 +57,11 @@ pub enum Message {
     ShowAddCredential,
     HideAddCredential,
 
+    // Edit credential messages
+    EditCredential(EditCredentialMessage),
+    ShowEditCredential(String),
+    HideEditCredential,
+
     // Alert management
     ShowAlert(AlertMessage),
     DismissAlert,
@@ -66,6 +71,7 @@ pub enum Message {
 
     // General
     Quit,
+    QuittingWithLogout,
     Error(String),
 }
 
@@ -79,6 +85,7 @@ pub enum AppState {
     WizardActive(RepositoryWizard),
     OpenRepositoryActive(OpenRepositoryView),
     AddCredentialActive(AddCredentialView),
+    EditCredentialActive(EditCredentialView),
     MainInterface(MainView),
     Error(String),
 }
@@ -127,6 +134,7 @@ impl Application for ZipLockApp {
             }
             AppState::OpenRepositoryActive(_) => "ZipLock - Open Repository".to_string(),
             AppState::AddCredentialActive(_) => "ZipLock - Add Credential".to_string(),
+            AppState::EditCredentialActive(_) => "ZipLock - Edit Credential".to_string(),
             AppState::MainInterface(_) => "ZipLock Password Manager".to_string(),
             AppState::Error(_) => "ZipLock - Error".to_string(),
         }
@@ -394,7 +402,7 @@ impl Application for ZipLockApp {
                             if crate::ipc::IpcClient::is_session_timeout_error(&error) {
                                 return Command::perform(async {}, |_| Message::SessionTimeout);
                             }
-                            self.current_alert = Some(AlertMessage::ipc_error(error));
+                            self.current_alert = Some(AlertMessage::error(error));
                             Command::none()
                         }
                         MainViewMessage::SessionTimeout => {
@@ -404,6 +412,13 @@ impl Application for ZipLockApp {
                         MainViewMessage::AddCredential => {
                             // Show add credential view
                             return Command::perform(async {}, |_| Message::ShowAddCredential);
+                        }
+                        MainViewMessage::EditCredential(credential_id) => {
+                            // Show edit credential view
+                            return Command::perform(
+                                async move { credential_id },
+                                Message::ShowEditCredential,
+                            );
                         }
                         _ => main_view.update(main_msg).map(Message::MainView),
                     }
@@ -437,13 +452,63 @@ impl Application for ZipLockApp {
 
             Message::AddCredential(add_msg) => {
                 if let AppState::AddCredentialActive(add_view) = &mut self.state {
-                    let command = add_view.update(add_msg.clone()).map(Message::AddCredential);
+                    if matches!(&add_msg, AddCredentialMessage::Cancel) {
+                        return Command::perform(async {}, |_| Message::HideAddCredential);
+                    }
+                    let command = add_view.update(add_msg).map(Message::AddCredential);
 
-                    // Check if add credential completed or was cancelled
-                    if add_view.is_complete() || add_msg == AddCredentialMessage::Cancel {
+                    // Check if add credential completed
+                    if add_view.is_complete() {
                         return Command::batch([
                             command,
                             Command::perform(async {}, |_| Message::HideAddCredential),
+                        ]);
+                    }
+
+                    return command;
+                }
+                Command::none()
+            }
+
+            Message::ShowEditCredential(credential_id) => {
+                debug!("Showing edit credential view for ID: {}", credential_id);
+                let edit_view =
+                    EditCredentialView::with_session(credential_id, self.session_id.clone());
+                self.state = AppState::EditCredentialActive(edit_view);
+                // Load the credential data
+                Command::perform(async {}, |_| {
+                    Message::EditCredential(EditCredentialMessage::LoadCredential)
+                })
+            }
+
+            Message::HideEditCredential => {
+                debug!("Hiding edit credential view, returning to main interface");
+                if let Some(session_id) = &self.session_id {
+                    let mut main_view = MainView::new();
+                    main_view.set_session_id(Some(session_id.clone()));
+                    self.state = AppState::MainInterface(main_view);
+                    // Trigger refresh to reload credentials
+                    return Command::perform(async {}, |_| {
+                        Message::MainView(MainViewMessage::RefreshCredentials)
+                    });
+                } else {
+                    self.state = AppState::MainInterface(MainView::new());
+                }
+                Command::none()
+            }
+
+            Message::EditCredential(edit_msg) => {
+                if let AppState::EditCredentialActive(edit_view) = &mut self.state {
+                    if matches!(&edit_msg, EditCredentialMessage::Cancel) {
+                        return Command::perform(async {}, |_| Message::HideEditCredential);
+                    }
+                    let command = edit_view.update(edit_msg).map(Message::EditCredential);
+
+                    // Check if edit credential completed
+                    if edit_view.is_complete() {
+                        return Command::batch([
+                            command,
+                            Command::perform(async {}, |_| Message::HideEditCredential),
                         ]);
                     }
 
@@ -484,6 +549,21 @@ impl Application for ZipLockApp {
 
             Message::Quit => {
                 info!("Application quit requested");
+                // If we have an active session, try to logout first
+                if self.session_id.is_some() {
+                    info!("Active session detected, logging out before quit");
+                    return Command::perform(
+                        Self::logout_and_quit_async(self.session_id.clone()),
+                        |_| Message::QuittingWithLogout,
+                    );
+                } else {
+                    // No active session, quit immediately
+                    std::process::exit(0);
+                }
+            }
+
+            Message::QuittingWithLogout => {
+                info!("Logout complete, exiting application");
                 std::process::exit(0);
             }
         }
@@ -502,6 +582,9 @@ impl Application for ZipLockApp {
                 open_view.view().map(Message::OpenRepository)
             }
             AppState::AddCredentialActive(add_view) => add_view.view().map(Message::AddCredential),
+            AppState::EditCredentialActive(edit_view) => {
+                edit_view.view().map(Message::EditCredential)
+            }
             AppState::MainInterface(main_view) => main_view.view().map(Message::MainView),
             AppState::Error(error) => self.view_error(error),
         };
@@ -511,6 +594,13 @@ impl Application for ZipLockApp {
 
     fn theme(&self) -> Theme {
         self.theme.clone()
+    }
+
+    fn subscription(&self) -> iced::Subscription<Message> {
+        iced::event::listen_with(|event, _status| match event {
+            iced::Event::Window(_, iced::window::Event::CloseRequested) => Some(Message::Quit),
+            _ => None,
+        })
     }
 }
 
@@ -749,20 +839,33 @@ impl ZipLockApp {
     }
 
     /// Async function to connect to backend
-    async fn connect_backend_async() -> Result<(), String> {
-        let socket_path = IpcClient::default_socket_path();
-        let mut client = IpcClient::new(socket_path);
+    async fn logout_and_quit_async(session_id: Option<String>) -> Result<(), String> {
+        if let Some(sid) = session_id.clone() {
+            let mut client = crate::ipc::IpcClient::new().map_err(|e| e.to_string())?;
 
-        match client.connect().await {
-            Ok(()) => {
-                // Test the connection with a ping
-                match client.ping().await {
-                    Ok(()) => Ok(()),
-                    Err(e) => Err(format!("Backend ping failed: {}", e)),
+            // Try to connect and logout
+            match client.connect().await {
+                Ok(()) => {
+                    client.set_session_id(sid);
+                    // Try to close/lock the archive
+                    match client.close_archive().await {
+                        Ok(()) => info!("Successfully logged out before quit"),
+                        Err(e) => warn!("Failed to logout cleanly: {}", e),
+                    }
                 }
+                Err(e) => warn!("Could not connect to backend for logout: {}", e),
             }
-            Err(e) => Err(format!("Backend connection failed: {}", e)),
         }
+        Ok(())
+    }
+
+    async fn connect_backend_async() -> Result<(), String> {
+        let mut client = IpcClient::new().map_err(|e| e.to_string())?;
+
+        client.connect().await?;
+        // Test the connection with a ping
+        client.ping().await?;
+        Ok(())
     }
 }
 

@@ -30,7 +30,7 @@ use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
 use crate::config::StorageConfig;
-use crate::error::{BackendResult, StorageError};
+use crate::error::{BackendResult, CryptoError, StorageError};
 use file_lock::FileLock;
 use ziplock_shared::models::CredentialRecord;
 
@@ -943,10 +943,21 @@ impl ArchiveManager {
             }
             Ok(Err(e)) => {
                 error!("Failed to extract 7z archive: {}", e);
-                Err(StorageError::ArchiveExtract {
-                    reason: format!("7z extraction failed: {}", e),
+
+                // Check for password-related errors
+                let error_string = e.to_string();
+                if error_string.contains("MaybeBadPassword")
+                    || error_string.contains("range decoder first byte is 0")
+                    || error_string.contains("Invalid password")
+                    || error_string.contains("Wrong password")
+                {
+                    Err(crate::error::CryptoError::InvalidMasterKey.into())
+                } else {
+                    Err(StorageError::ArchiveExtract {
+                        reason: format!("Archive extraction failed: {}", e),
+                    }
+                    .into())
                 }
-                .into())
             }
             Err(e) => {
                 error!("Task execution failed: {}", e);

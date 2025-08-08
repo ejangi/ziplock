@@ -1,7 +1,6 @@
 # TODO
 
-- Taking into consideration the `ziplock/README.md` and `ziplock/docs/*.md` files, can you now setup the edit credentials view? I think the add credentials view has a nice form for editing the credential record that we could just reuse across both the add_credential and edit_credential views.
-- Taking into consideration the `ziplock/README.md` and `ziplock/docs/*.md` files, I think we remove the lock button from the left hand view. But, can you please check that when someone exist the application, that it takes the time to logout from the backend before closing?
+- Taking into consideration the `ziplock/README.md` and `ziplock/docs/*.md` files, can we ensure that for secure notes we are using a textarea/editor, not just a simple one line text input?
 - The github workflow `Test Suite (beta)` is failing. When it runs the `cargo clippy --all-targets --all-features -- -D warnings` command it is outputting the error info:
 ```
 warning: atk-sys@0.18.2:
@@ -41,3 +40,4 @@ Caused by:
 warning: build failed, waiting for other jobs to finish...
 Error: Process completed with exit code 101.
 ```
+- Taking into consideration the `ziplock/README.md` and `ziplock/docs/*.md` files, should we look at making the IpcClient a shared component with C-bindings for use in other languages?
