@@ -212,7 +212,7 @@ ui:
 - [Architecture Overview](docs/architecture.md) - Detailed system architecture
 - [Design Guidelines](docs/design.md) - UI/UX design principles
 - [API Documentation](docs/api.md) - Backend service API reference
-- [Repository Detection Implementation](docs/repository-detection-implementation.md) - Technical implementation details
+- [Repository Detection Implementation](docs/technical/repository-detection-implementation.md) - Technical implementation details
 
 ### Developer Documentation
 - [Development Guide](docs/development.md) - Setting up the development environment

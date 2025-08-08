@@ -4,6 +4,7 @@
 //! ZipLock application for string manipulation, data processing,
 //! and other helper operations.
 
+use rand::Rng;
 use std::collections::HashMap;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -407,5 +408,208 @@ mod tests {
         let base64 = EncodingUtils::encode_base64(bytes);
         let decoded = EncodingUtils::decode_base64(&base64).unwrap();
         assert_eq!(bytes, decoded.as_slice());
+    }
+}
+
+/// Password generation utilities
+pub struct PasswordUtils;
+
+/// Configuration options for password generation
+#[derive(Debug, Clone)]
+pub struct PasswordOptions {
+    pub length: usize,
+    pub include_uppercase: bool,
+    pub include_lowercase: bool,
+    pub include_numbers: bool,
+    pub include_symbols: bool,
+}
+
+impl Default for PasswordOptions {
+    fn default() -> Self {
+        Self {
+            length: 16,
+            include_uppercase: true,
+            include_lowercase: true,
+            include_numbers: true,
+            include_symbols: true,
+        }
+    }
+}
+
+impl PasswordUtils {
+    /// Generate a secure password with the given options
+    pub fn generate_password(options: PasswordOptions) -> Result<String, String> {
+        if options.length == 0 {
+            return Err("Password length must be greater than 0".to_string());
+        }
+
+        if options.length > 256 {
+            return Err("Password length cannot exceed 256 characters".to_string());
+        }
+
+        if !options.include_uppercase
+            && !options.include_lowercase
+            && !options.include_numbers
+            && !options.include_symbols
+        {
+            return Err("At least one character type must be enabled".to_string());
+        }
+
+        let mut charset = String::new();
+
+        if options.include_lowercase {
+            charset.push_str("abcdefghijklmnopqrstuvwxyz");
+        }
+
+        if options.include_uppercase {
+            charset.push_str("ABCDEFGHIJKLMNOPQRSTUVWXYZ");
+        }
+
+        if options.include_numbers {
+            charset.push_str("0123456789");
+        }
+
+        if options.include_symbols {
+            charset.push_str("!@#$%^&*()_+-=[]{}|;:,.<>?");
+        }
+
+        let charset_chars: Vec<char> = charset.chars().collect();
+        let mut rng = rand::thread_rng();
+        let mut password = String::with_capacity(options.length);
+
+        // Ensure at least one character from each enabled category
+        if options.include_lowercase {
+            let lowercase_chars: Vec<char> = "abcdefghijklmnopqrstuvwxyz".chars().collect();
+            password.push(lowercase_chars[rng.gen_range(0..lowercase_chars.len())]);
+        }
+
+        if options.include_uppercase {
+            let uppercase_chars: Vec<char> = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".chars().collect();
+            password.push(uppercase_chars[rng.gen_range(0..uppercase_chars.len())]);
+        }
+
+        if options.include_numbers {
+            let number_chars: Vec<char> = "0123456789".chars().collect();
+            password.push(number_chars[rng.gen_range(0..number_chars.len())]);
+        }
+
+        if options.include_symbols {
+            let symbol_chars: Vec<char> = "!@#$%^&*()_+-=[]{}|;:,.<>?".chars().collect();
+            password.push(symbol_chars[rng.gen_range(0..symbol_chars.len())]);
+        }
+
+        // Fill the rest randomly
+        while password.len() < options.length {
+            password.push(charset_chars[rng.gen_range(0..charset_chars.len())]);
+        }
+
+        // Shuffle the password to avoid predictable patterns
+        let mut password_chars: Vec<char> = password.chars().collect();
+        for i in (1..password_chars.len()).rev() {
+            let j = rng.gen_range(0..=i);
+            password_chars.swap(i, j);
+        }
+
+        Ok(password_chars.into_iter().collect())
+    }
+
+    /// Check if a password contains common patterns that make it weak
+    pub fn has_common_patterns(password: &str) -> bool {
+        let common_patterns = [
+            "password", "123456", "qwerty", "abc", "admin", "test", "user", "login", "welcome",
+            "123", "321", "111", "000",
+        ];
+
+        let lowercase_password = password.to_lowercase();
+
+        for pattern in &common_patterns {
+            if lowercase_password.contains(pattern) {
+                return true;
+            }
+        }
+
+        // Check for repeated characters (more than 3 in a row)
+        let chars: Vec<char> = password.chars().collect();
+        for window in chars.windows(4) {
+            if window.iter().all(|&c| c == window[0]) {
+                return true;
+            }
+        }
+
+        // Check for simple sequences
+        for window in chars.windows(4) {
+            let mut is_sequence = true;
+            for i in 1..window.len() {
+                if (window[i] as u8).saturating_sub(window[i - 1] as u8) != 1 {
+                    is_sequence = false;
+                    break;
+                }
+            }
+            if is_sequence {
+                return true;
+            }
+        }
+
+        false
+    }
+}
+
+// Re-export for convenience (already defined above)
+
+#[cfg(test)]
+mod password_tests {
+    use super::*;
+
+    #[test]
+    fn test_password_generation() {
+        let options = PasswordOptions::default();
+        let password = PasswordUtils::generate_password(options).unwrap();
+
+        assert_eq!(password.len(), 16);
+        assert!(password.chars().any(|c| c.is_ascii_lowercase()));
+        assert!(password.chars().any(|c| c.is_ascii_uppercase()));
+        assert!(password.chars().any(|c| c.is_ascii_digit()));
+        assert!(password.chars().any(|c| !c.is_alphanumeric()));
+    }
+
+    #[test]
+    fn test_password_generation_with_custom_options() {
+        let options = PasswordOptions {
+            length: 8,
+            include_uppercase: false,
+            include_lowercase: true,
+            include_numbers: true,
+            include_symbols: false,
+        };
+
+        let password = PasswordUtils::generate_password(options).unwrap();
+
+        assert_eq!(password.len(), 8);
+        assert!(password.chars().any(|c| c.is_ascii_lowercase()));
+        assert!(password.chars().any(|c| c.is_ascii_digit()));
+        assert!(!password.chars().any(|c| c.is_ascii_uppercase()));
+        assert!(!password.chars().any(|c| !c.is_alphanumeric()));
+    }
+
+    #[test]
+    fn test_password_generation_errors() {
+        let invalid_options = PasswordOptions {
+            length: 0,
+            include_uppercase: false,
+            include_lowercase: false,
+            include_numbers: false,
+            include_symbols: false,
+        };
+
+        assert!(PasswordUtils::generate_password(invalid_options).is_err());
+    }
+
+    #[test]
+    fn test_common_patterns() {
+        assert!(PasswordUtils::has_common_patterns("password123"));
+        assert!(PasswordUtils::has_common_patterns("qwerty456"));
+        assert!(PasswordUtils::has_common_patterns("aaaa"));
+        assert!(PasswordUtils::has_common_patterns("1234"));
+        assert!(!PasswordUtils::has_common_patterns("ComplexPhrase987$"));
     }
 }

@@ -574,7 +574,7 @@ mod tests {
         assert!(config.repository.path.is_none());
         assert!(config.ui.window_width > 0);
         assert!(config.ui.window_height > 0);
-        assert_eq!(config.app.language, "en");
+        assert_eq!(config.app.auto_lock_timeout, 15);
         assert_eq!(config.version, "1.0");
     }
 

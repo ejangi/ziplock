@@ -37,6 +37,10 @@ pub mod utils;
 pub mod validation;
 pub mod yaml;
 
+// C FFI module for mobile platform integration
+#[cfg(feature = "c-api")]
+pub mod ffi;
+
 // Re-export commonly used types for convenience
 pub use models::{
     CommonTemplates, CredentialField, CredentialRecord, CredentialTemplate, FieldTemplate,

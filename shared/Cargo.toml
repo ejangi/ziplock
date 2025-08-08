@@ -13,6 +13,10 @@ categories.workspace = true
 [lib]
 name = "ziplock_shared"
 path = "src/lib.rs"
+crate-type = [
+    "rlib",
+    "cdylib",
+] # Support both Rust library and C dynamic library
 
 [dependencies]
 # Workspace dependencies
@@ -35,6 +39,9 @@ base64 = "0.21"
 sha2 = "0.10"
 rand = "0.8"
 
+# C FFI dependencies
+libc = "0.2"
+
 # TOTP support
 totp-lite = "2.0"
 
@@ -55,3 +62,6 @@ messagepack = ["dep:rmp-serde"]
 
 # Additional validation features
 strict-validation = []
+
+# C FFI support
+c-api = []

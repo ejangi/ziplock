@@ -2,11 +2,28 @@
 
 This document serves as the central index for all technical documentation in the ZipLock project. Technical documentation is organized into focused topics, each maintained as individual markdown files in the `docs/technical/` directory.
 
+## ⚠️ IMPORTANT: Technical Documentation Location
+
+**ALL TECHNICAL DOCUMENTATION MUST BE PLACED IN THE `docs/technical/` DIRECTORY.**
+
+This includes but is not limited to:
+- Implementation guides and technical specifications
+- Architecture documentation
+- API documentation 
+- Mobile integration guides
+- Platform-specific implementation details
+- Security implementation details
+- Performance optimization guides
+
+Do not place technical documentation in the root `docs/` directory or other locations. The `docs/technical/` directory is the designated location for all technical content to maintain organization and discoverability.
+
 ## Architecture and Design
 
 - [Architecture Overview](architecture.md) - Complete system architecture and component relationships
 - [Design Guidelines](design.md) - UI/UX design principles and visual standards
-- [Repository Detection Implementation](repository-detection-implementation.md) - Technical implementation details for repository detection
+- [Repository Detection Implementation](technical/repository-detection-implementation.md) - Technical implementation details for repository detection
+- [Mobile Integration Guide](technical/mobile-integration.md) - Complete mobile platform integration documentation
+- [Mobile Shared Implementation](technical/mobile-shared-implementation.md) - Shared library integration for mobile platforms
 
 ## Security and Cryptography
 
