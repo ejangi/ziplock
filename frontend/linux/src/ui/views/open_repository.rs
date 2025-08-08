@@ -29,6 +29,8 @@ pub enum OpenRepositoryMessage {
     OpenRepository,
     /// Cancel and return to previous view
     Cancel,
+    /// Try again after error (preserves repository selection)
+    TryAgain,
     /// Opening process completed
     OpenComplete(Result<String, String>), // Now returns session ID on success
 }
@@ -160,6 +162,15 @@ impl OpenRepositoryView {
             OpenRepositoryMessage::Cancel => {
                 debug!("Open repository cancelled");
                 self.state = OpenState::Cancelled;
+                Command::none()
+            }
+
+            OpenRepositoryMessage::TryAgain => {
+                debug!("User clicked try again, returning to input state");
+                self.state = OpenState::Input;
+                self.passphrase.clear();
+                self.show_passphrase = false;
+                self.update_can_open();
                 Command::none()
             }
 
@@ -413,7 +424,7 @@ impl OpenRepositoryView {
                 .padding(utils::alert_padding()),
                 Space::with_height(Length::Fixed(30.0)),
                 button("Try Again")
-                    .on_press(OpenRepositoryMessage::Cancel)
+                    .on_press(OpenRepositoryMessage::TryAgain)
                     .style(button_styles::primary())
                     .padding(utils::button_padding()),
             ]
