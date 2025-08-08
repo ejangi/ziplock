@@ -4,12 +4,13 @@
 //! It demonstrates how to use the shared theme system across different views.
 
 use iced::{
-    widget::{button, column, container, row, scrollable, text, text_input, Space},
+    widget::{button, column, container, row, scrollable, svg, text, text_input, Space},
     Alignment, Command, Element, Length,
 };
 
 use crate::ipc::IpcClient;
 use crate::ui::theme::alerts::AlertMessage;
+use crate::ui::theme::container_styles;
 use crate::ui::{button_styles, theme, utils};
 
 /// Messages for the main application view
@@ -215,12 +216,112 @@ impl MainView {
 
     /// Render the main view
     pub fn view(&self) -> Element<MainViewMessage> {
-        let header = self.view_header();
+        let sidebar = self.view_sidebar();
+        let main_content = self.view_main_content();
+
+        row![sidebar, main_content]
+            .spacing(0)
+            .height(Length::Fill)
+            .width(Length::Fill)
+            .into()
+    }
+
+    /// Render the left sidebar with logo and action buttons
+    fn view_sidebar(&self) -> Element<MainViewMessage> {
+        let logo = container(
+            svg(theme::ziplock_logo())
+                .width(Length::Fixed(48.0))
+                .height(Length::Fixed(48.0)),
+        )
+        .padding([20, 0, 30, 0])
+        .width(Length::Fill)
+        .center_x();
+
+        let refresh_button = container(
+            button(
+                svg(theme::refresh_icon())
+                    .width(Length::Fixed(20.0))
+                    .height(Length::Fixed(20.0)),
+            )
+            .on_press(MainViewMessage::RefreshCredentials)
+            .padding(12)
+            .style(if self.is_loading {
+                button_styles::disabled()
+            } else {
+                button_styles::secondary()
+            }),
+        )
+        .width(Length::Fill)
+        .center_x();
+
+        let add_button = container(
+            button(
+                svg(theme::plus_icon())
+                    .width(Length::Fixed(20.0))
+                    .height(Length::Fixed(20.0)),
+            )
+            .on_press(MainViewMessage::AddCredential)
+            .padding(12)
+            .style(button_styles::primary()),
+        )
+        .width(Length::Fill)
+        .center_x();
+
+        let settings_button = container(
+            button(
+                svg(theme::settings_icon())
+                    .width(Length::Fixed(20.0))
+                    .height(Length::Fixed(20.0)),
+            )
+            .on_press(MainViewMessage::ShowSettings)
+            .padding(12)
+            .style(button_styles::secondary()),
+        )
+        .width(Length::Fill)
+        .center_x();
+
+        let lock_button = container(
+            button(
+                svg(theme::lock_icon())
+                    .width(Length::Fixed(20.0))
+                    .height(Length::Fixed(20.0)),
+            )
+            .on_press(MainViewMessage::Lock)
+            .padding(12)
+            .style(button_styles::destructive()),
+        )
+        .width(Length::Fill)
+        .center_x();
+
+        let sidebar_content = column![
+            logo,
+            refresh_button,
+            Space::with_height(Length::Fixed(10.0)),
+            add_button,
+            Space::with_height(Length::Fixed(10.0)),
+            settings_button,
+            Space::with_height(Length::Fixed(10.0)),
+            lock_button,
+            Space::with_height(Length::Fill),
+        ]
+        .spacing(0)
+        .padding(20)
+        .width(Length::Fixed(120.0))
+        .height(Length::Fill);
+
+        container(sidebar_content)
+            .style(container_styles::sidebar())
+            .width(Length::Fixed(120.0))
+            .height(Length::Fill)
+            .into()
+    }
+
+    /// Render the main content area with search and credentials
+    fn view_main_content(&self) -> Element<MainViewMessage> {
         let search_bar = self.view_search_bar();
 
         let mut content_column = column![
-            header,
-            Space::with_height(Length::Fixed(utils::standard_spacing().into())),
+            Space::with_height(Length::Fixed(20.0)),
             search_bar,
             Space::with_height(Length::Fixed(utils::standard_spacing().into())),
         ];
@@ -237,68 +338,12 @@ impl MainView {
         let credential_list = self.view_credential_list();
         content_column = content_column.push(credential_list);
 
-        let main_content = content_column.padding(30).spacing(10);
+        let main_content = content_column.padding([0, 30, 30, 30]).spacing(10);
 
         container(main_content)
             .width(Length::Fill)
             .height(Length::Fill)
             .into()
-    }
-
-    /// Render the application header with title and action buttons
-    fn view_header(&self) -> Element<MainViewMessage> {
-        row![
-            text("ZipLock Password Manager")
-                .size(24)
-                .style(iced::theme::Text::Color(theme::DARK_TEXT)),
-            Space::with_width(Length::Fill),
-            row![
-                button("Refresh")
-                    .on_press(MainViewMessage::RefreshCredentials)
-                    .padding(utils::button_padding())
-                    .style(if self.is_loading {
-                        button_styles::disabled()
-                    } else {
-                        button_styles::secondary()
-                    }),
-                Space::with_width(Length::Fixed(10.0)),
-                button("Add")
-                    .on_press(MainViewMessage::AddCredential)
-                    .padding(utils::button_padding())
-                    .style(button_styles::primary()),
-                Space::with_width(Length::Fixed(10.0)),
-                button("Settings")
-                    .on_press(MainViewMessage::ShowSettings)
-                    .padding(utils::button_padding())
-                    .style(button_styles::secondary()),
-                Space::with_width(Length::Fixed(10.0)),
-                button("Lock")
-                    .on_press(MainViewMessage::Lock)
-                    .padding(utils::button_padding())
-                    .style(button_styles::destructive()),
-                Space::with_width(Length::Fixed(20.0)),
-                // Error demonstration buttons
-                text("Demo:").size(12),
-                Space::with_width(Length::Fixed(5.0)),
-                button("Connection Error")
-                    .on_press(MainViewMessage::TriggerConnectionError)
-                    .padding(utils::small_button_padding())
-                    .style(button_styles::secondary()),
-                Space::with_width(Length::Fixed(5.0)),
-                button("Auth Error")
-                    .on_press(MainViewMessage::TriggerAuthError)
-                    .padding(utils::small_button_padding())
-                    .style(button_styles::secondary()),
-                Space::with_width(Length::Fixed(5.0)),
-                button("Validation Error")
-                    .on_press(MainViewMessage::TriggerValidationError)
-                    .padding(utils::small_button_padding())
-                    .style(button_styles::secondary()),
-            ]
-            .spacing(5)
-        ]
-        .align_items(Alignment::Center)
-        .into()
     }
 
     /// Render the search bar

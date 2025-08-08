@@ -8,7 +8,10 @@
 //! a beautiful collection of free SVG icons by Luca Burgio and contributors.
 //! Licensed under MIT License.
 
-use iced::{widget::button, widget::progress_bar, widget::svg, Color, Theme};
+use iced::{
+    widget::button, widget::container, widget::progress_bar, widget::svg, Background, Border,
+    Color, Shadow, Theme,
+};
 
 /// Embedded ZipLock logo SVG for use across all views
 pub const ZIPLOCK_LOGO_SVG: &[u8] = include_bytes!("../../resources/icons/ziplock-logo.svg");
@@ -30,6 +33,18 @@ pub const ERROR_ICON_SVG: &[u8] = include_bytes!("../../resources/icons/error.sv
 
 /// Embedded warning icon SVG for warning alerts (from Iconoir)
 pub const WARNING_ICON_SVG: &[u8] = include_bytes!("../../resources/icons/warning.svg");
+
+/// Embedded refresh icon SVG for refresh button (from Iconoir style)
+pub const REFRESH_ICON_SVG: &[u8] = include_bytes!("../../resources/icons/refresh.svg");
+
+/// Embedded plus icon SVG for add button (from Iconoir style)
+pub const PLUS_ICON_SVG: &[u8] = include_bytes!("../../resources/icons/plus.svg");
+
+/// Embedded settings icon SVG for settings button (from Iconoir style)
+pub const SETTINGS_ICON_SVG: &[u8] = include_bytes!("../../resources/icons/settings.svg");
+
+/// Embedded lock icon SVG for lock button (from Iconoir style)
+pub const LOCK_ICON_SVG: &[u8] = include_bytes!("../../resources/icons/lock.svg");
 
 /// Helper function to create an SVG handle from the embedded ZipLock logo
 pub fn ziplock_logo() -> svg::Handle {
@@ -64,6 +79,26 @@ pub fn error_icon() -> svg::Handle {
 /// Helper function to create an SVG handle from the embedded warning icon
 pub fn warning_icon() -> svg::Handle {
     svg::Handle::from_memory(WARNING_ICON_SVG)
+}
+
+/// Helper function to create an SVG handle from the embedded refresh icon
+pub fn refresh_icon() -> svg::Handle {
+    svg::Handle::from_memory(REFRESH_ICON_SVG)
+}
+
+/// Helper function to create an SVG handle from the embedded plus icon
+pub fn plus_icon() -> svg::Handle {
+    svg::Handle::from_memory(PLUS_ICON_SVG)
+}
+
+/// Helper function to create an SVG handle from the embedded settings icon
+pub fn settings_icon() -> svg::Handle {
+    svg::Handle::from_memory(SETTINGS_ICON_SVG)
+}
+
+/// Helper function to create an SVG handle from the embedded lock icon
+pub fn lock_icon() -> svg::Handle {
+    svg::Handle::from_memory(LOCK_ICON_SVG)
 }
 
 /// Logo purple color from design.md (#8338ec)
@@ -469,11 +504,17 @@ pub mod container_styles {
         iced::theme::Container::Custom(Box::new(InfoAlertStyle))
     }
 
+    /// Sidebar container style with light gray background
+    pub fn sidebar() -> iced::theme::Container {
+        iced::theme::Container::Custom(Box::new(SidebarStyle))
+    }
+
     // Style implementations
     struct ErrorAlertStyle;
     struct WarningAlertStyle;
     struct SuccessAlertStyle;
     struct InfoAlertStyle;
+    struct SidebarStyle;
 
     impl container::StyleSheet for ErrorAlertStyle {
         type Style = iced::Theme;
@@ -532,14 +573,31 @@ pub mod container_styles {
 
         fn appearance(&self, _style: &Self::Style) -> container::Appearance {
             container::Appearance {
-                background: Some(iced::Color::from_rgba(0.514, 0.220, 0.925, 0.1).into()),
-                border: iced::Border {
+                background: Some(Background::Color(Color::from_rgb(0.96, 0.9, 1.0))),
+                border: Border {
                     color: LOGO_PURPLE,
                     width: 1.0,
-                    radius: 6.0.into(),
+                    radius: 8.0.into(),
                 },
-                text_color: Some(LOGO_PURPLE),
-                shadow: iced::Shadow::default(),
+                shadow: Shadow::default(),
+                text_color: None,
+            }
+        }
+    }
+
+    impl container::StyleSheet for SidebarStyle {
+        type Style = iced::Theme;
+
+        fn appearance(&self, _style: &Self::Style) -> container::Appearance {
+            container::Appearance {
+                background: Some(Background::Color(Color::from_rgb(0.95, 0.95, 0.95))),
+                border: Border {
+                    color: Color::from_rgb(0.85, 0.85, 0.85),
+                    width: 0.0,
+                    radius: 0.0.into(),
+                },
+                shadow: Shadow::default(),
+                text_color: None,
             }
         }
     }
