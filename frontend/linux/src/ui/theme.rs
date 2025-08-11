@@ -182,7 +182,7 @@ pub mod button_styles {
                 border: iced::Border {
                     color: LOGO_PURPLE,
                     width: 1.0,
-                    radius: 6.0.into(),
+                    radius: 10.0.into(),
                 },
                 shadow: iced::Shadow {
                     color: Color::from_rgba(0.0, 0.0, 0.0, 0.1),
@@ -218,7 +218,7 @@ pub mod button_styles {
                 border: iced::Border {
                     color: Color::from_rgb(0.7, 0.7, 0.7),
                     width: 1.0,
-                    radius: 6.0.into(),
+                    radius: 10.0.into(),
                 },
                 shadow: iced::Shadow::default(),
                 shadow_offset: iced::Vector::new(0.0, 0.0),
@@ -236,7 +236,7 @@ pub mod button_styles {
                 border: iced::Border {
                     color: LOGO_PURPLE,
                     width: 1.0,
-                    radius: 6.0.into(),
+                    radius: 10.0.into(),
                 },
                 shadow: iced::Shadow::default(),
                 shadow_offset: iced::Vector::new(0.0, 0.0),
@@ -266,7 +266,7 @@ pub mod button_styles {
                 border: iced::Border {
                     color: Color::from_rgb(0.7, 0.7, 0.7),
                     width: 1.0,
-                    radius: 6.0.into(),
+                    radius: 10.0.into(),
                 },
                 shadow: iced::Shadow::default(),
                 shadow_offset: iced::Vector::new(0.0, 0.0),
@@ -284,7 +284,7 @@ pub mod button_styles {
                 border: iced::Border {
                     color: ERROR_RED,
                     width: 1.0,
-                    radius: 6.0.into(),
+                    radius: 10.0.into(),
                 },
                 shadow: iced::Shadow {
                     color: Color::from_rgba(0.0, 0.0, 0.0, 0.1),
@@ -320,7 +320,7 @@ pub mod button_styles {
                 border: iced::Border {
                     color: Color::from_rgb(0.7, 0.7, 0.7),
                     width: 1.0,
-                    radius: 6.0.into(),
+                    radius: 10.0.into(),
                 },
                 shadow: iced::Shadow::default(),
                 shadow_offset: iced::Vector::new(0.0, 0.0),
@@ -338,7 +338,7 @@ pub mod button_styles {
                 border: iced::Border {
                     color: LOGO_PURPLE,
                     width: 1.0,
-                    radius: 6.0.into(),
+                    radius: 10.0.into(),
                 },
                 shadow: iced::Shadow::default(),
                 shadow_offset: iced::Vector::new(0.0, 0.0),
@@ -368,7 +368,7 @@ pub mod button_styles {
                 border: iced::Border {
                     color: Color::from_rgb(0.7, 0.7, 0.7),
                     width: 1.0,
-                    radius: 6.0.into(),
+                    radius: 10.0.into(),
                 },
                 shadow: iced::Shadow::default(),
                 shadow_offset: iced::Vector::new(0.0, 0.0),
@@ -386,7 +386,7 @@ pub mod button_styles {
                 border: iced::Border {
                     color: LOGO_PURPLE,
                     width: 1.0,
-                    radius: 6.0.into(),
+                    radius: 10.0.into(),
                 },
                 shadow: iced::Shadow::default(),
                 shadow_offset: iced::Vector::new(0.0, 0.0),
@@ -416,7 +416,7 @@ pub mod button_styles {
                 border: iced::Border {
                     color: Color::from_rgb(0.7, 0.7, 0.7),
                     width: 1.0,
-                    radius: 6.0.into(),
+                    radius: 10.0.into(),
                 },
                 shadow: iced::Shadow::default(),
                 shadow_offset: iced::Vector::new(0.0, 0.0),
@@ -434,7 +434,7 @@ pub mod button_styles {
                 border: iced::Border {
                     color: Color::from_rgb(0.7, 0.7, 0.7),
                     width: 1.0,
-                    radius: 6.0.into(),
+                    radius: 10.0.into(),
                 },
                 shadow: iced::Shadow::default(),
                 shadow_offset: iced::Vector::new(0.0, 0.0),
@@ -473,7 +473,7 @@ pub mod progress_bar_styles {
             progress_bar::Appearance {
                 background: Color::from_rgb(0.9, 0.9, 0.9).into(),
                 bar: LOGO_PURPLE.into(),
-                border_radius: 4.0.into(),
+                border_radius: 10.0.into(),
             }
         }
     }
@@ -525,7 +525,7 @@ pub mod container_styles {
                 border: iced::Border {
                     color: ERROR_RED,
                     width: 1.0,
-                    radius: 6.0.into(),
+                    radius: 10.0.into(),
                 },
                 text_color: Some(ERROR_RED),
                 shadow: iced::Shadow::default(),
@@ -543,7 +543,7 @@ pub mod container_styles {
                 border: iced::Border {
                     color: warning_color,
                     width: 1.0,
-                    radius: 6.0.into(),
+                    radius: 10.0.into(),
                 },
                 text_color: Some(iced::Color::from_rgb(0.8, 0.6, 0.0)),
                 shadow: iced::Shadow::default(),
@@ -560,7 +560,7 @@ pub mod container_styles {
                 border: iced::Border {
                     color: SUCCESS_GREEN,
                     width: 1.0,
-                    radius: 6.0.into(),
+                    radius: 10.0.into(),
                 },
                 text_color: Some(SUCCESS_GREEN),
                 shadow: iced::Shadow::default(),
@@ -612,7 +612,7 @@ pub mod utils {
 
     /// Creates a consistent padding value for buttons
     pub fn button_padding() -> [u16; 2] {
-        [8, 16]
+        [20, 20]
     }
 
     /// Creates a consistent padding value for small buttons
@@ -622,7 +622,7 @@ pub mod utils {
 
     /// Creates a consistent border radius for UI elements
     pub fn border_radius() -> f32 {
-        6.0
+        10.0
     }
 
     /// Creates a consistent padding for alert components

@@ -26,6 +26,8 @@ pub enum CredentialFormMessage {
     Save,
     /// The cancel button was pressed
     Cancel,
+    /// The delete button was pressed
+    Delete,
 }
 
 /// Configuration for the credential form component
@@ -35,6 +37,8 @@ pub struct CredentialFormConfig {
     pub save_button_text: String,
     /// Whether to show the cancel button
     pub show_cancel_button: bool,
+    /// Whether to show the delete button
+    pub show_delete_button: bool,
     /// Whether the form is in a loading state
     pub is_loading: bool,
     /// Optional error message to display
@@ -46,6 +50,7 @@ impl Default for CredentialFormConfig {
         Self {
             save_button_text: "Save".to_string(),
             show_cancel_button: true,
+            show_delete_button: false,
             is_loading: false,
             error_message: None,
         }
@@ -161,6 +166,10 @@ impl CredentialForm {
                 tracing::debug!("Cancel button clicked in credential form");
                 // This is handled by the parent component
             }
+            CredentialFormMessage::Delete => {
+                tracing::debug!("Delete button clicked in credential form");
+                // This is handled by the parent component
+            }
         }
     }
 
@@ -242,6 +251,21 @@ impl CredentialForm {
                     .into(),
             );
             button_row.push(Space::with_width(Length::Fill).into());
+        }
+
+        // Add delete button if enabled (left of save button)
+        if self.config.show_delete_button {
+            if !self.config.show_cancel_button {
+                button_row.push(Space::with_width(Length::Fill).into());
+            }
+
+            button_row.push(
+                button("Delete")
+                    .on_press(CredentialFormMessage::Delete)
+                    .style(button_styles::destructive())
+                    .into(),
+            );
+            button_row.push(Space::with_width(Length::Fixed(10.0)).into());
         }
 
         let save_button = if self.config.is_loading {

@@ -33,6 +33,10 @@ pub enum EditCredentialMessage {
     UpdateCredential,
     /// Credential was updated
     CredentialUpdated(Result<(), String>),
+    /// Delete the credential
+    DeleteCredential,
+    /// Credential was deleted
+    CredentialDeleted(Result<(), String>),
 }
 
 /// States for the edit credential view
@@ -72,12 +76,18 @@ pub struct EditCredentialView {
 impl EditCredentialView {
     /// Create a new edit credential view for the specified credential ID
     pub fn new(credential_id: String) -> Self {
+        let mut form = CredentialForm::new();
+        let mut config = CredentialFormConfig::default();
+        config.show_delete_button = true;
+        config.save_button_text = "Save".to_string();
+        form.set_config(config);
+
         Self {
             state: EditCredentialState::Loading,
-            available_types: Vec::new(),
+            available_types: Self::get_builtin_templates(),
             credential: None,
             credential_id,
-            form: CredentialForm::new(),
+            form,
             current_error: None,
             session_id: None,
         }
@@ -151,6 +161,12 @@ impl EditCredentialView {
                         }
                         self.form.set_field_values(field_values);
 
+                        // Configure form to show delete button
+                        let mut config = CredentialFormConfig::default();
+                        config.show_delete_button = true;
+                        config.save_button_text = "Save".to_string();
+                        self.form.set_config(config);
+
                         self.credential = Some(credential);
                         self.state = EditCredentialState::Editing;
                         self.current_error = None;
@@ -197,6 +213,12 @@ impl EditCredentialView {
                     CredentialFormMessage::Cancel => {
                         tracing::debug!("Cancel button clicked in edit credential view");
                         return Command::perform(async {}, |_| EditCredentialMessage::Cancel);
+                    }
+                    CredentialFormMessage::Delete => {
+                        tracing::debug!("Delete button clicked in edit credential view");
+                        return Command::perform(async {}, |_| {
+                            EditCredentialMessage::DeleteCredential
+                        });
                     }
                     _ => {
                         self.form.update(form_msg);
@@ -250,6 +272,46 @@ impl EditCredentialView {
                             EditCredentialState::Error("Failed to update credential".to_string());
                         // Reset form to not loading state
                         let mut config = CredentialFormConfig::default();
+                        config.error_message =
+                            self.current_error.as_ref().map(|a| a.message.clone());
+                        self.form.set_config(config);
+                    }
+                }
+                Command::none()
+            }
+
+            EditCredentialMessage::DeleteCredential => {
+                tracing::debug!("Processing DeleteCredential message");
+                self.state = EditCredentialState::Saving;
+                let mut config = CredentialFormConfig::default();
+                config.is_loading = true;
+                config.show_delete_button = true;
+                self.form.set_config(config);
+
+                Command::perform(
+                    Self::delete_credential_async(
+                        self.session_id.clone(),
+                        self.credential_id.clone(),
+                    ),
+                    EditCredentialMessage::CredentialDeleted,
+                )
+            }
+
+            EditCredentialMessage::CredentialDeleted(result) => {
+                match result {
+                    Ok(()) => {
+                        tracing::info!("Credential deleted successfully");
+                        self.state = EditCredentialState::Complete;
+                        self.current_error = None;
+                    }
+                    Err(e) => {
+                        tracing::error!("Failed to delete credential: {}", e);
+                        self.current_error = Some(AlertMessage::ipc_error(e));
+                        self.state =
+                            EditCredentialState::Error("Failed to delete credential".to_string());
+                        // Reset form to not loading state
+                        let mut config = CredentialFormConfig::default();
+                        config.show_delete_button = true;
                         config.error_message =
                             self.current_error.as_ref().map(|a| a.message.clone());
                         self.form.set_config(config);
@@ -413,6 +475,23 @@ impl EditCredentialView {
     }
 
     /// Update a credential asynchronously
+    /// Delete a credential asynchronously
+    async fn delete_credential_async(
+        session_id: Option<String>,
+        credential_id: String,
+    ) -> Result<(), String> {
+        tracing::debug!("Starting credential deletion for ID: {}", credential_id);
+
+        let mut client = IpcClient::new().map_err(|e| e.to_string())?;
+
+        tracing::debug!(
+            "Calling IPC client to delete credential with ID: {}",
+            credential_id
+        );
+
+        client.delete_credential(session_id, credential_id).await
+    }
+
     async fn update_credential_async(
         session_id: Option<String>,
         id: String,

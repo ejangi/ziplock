@@ -558,7 +558,7 @@ impl iced::widget::text_input::StyleSheet for PassphraseTextInputStyle {
             border: iced::Border {
                 color: theme::LOGO_PURPLE,
                 width: 2.0,
-                radius: 4.0.into(),
+                radius: 10.0.into(),
             },
             icon_color: Color::from_rgb(0.5, 0.5, 0.5),
         }
@@ -570,7 +570,7 @@ impl iced::widget::text_input::StyleSheet for PassphraseTextInputStyle {
             border: iced::Border {
                 color: theme::LOGO_PURPLE,
                 width: 3.0,
-                radius: 4.0.into(),
+                radius: 10.0.into(),
             },
             icon_color: Color::from_rgb(0.5, 0.5, 0.5),
         }
@@ -598,7 +598,7 @@ impl iced::widget::text_input::StyleSheet for PassphraseTextInputStyle {
             border: iced::Border {
                 color: Color::from_rgb(0.8, 0.8, 0.8),
                 width: 1.0,
-                radius: 4.0.into(),
+                radius: 10.0.into(),
             },
             icon_color: Color::from_rgb(0.5, 0.5, 0.5),
         }

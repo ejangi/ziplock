@@ -401,6 +401,21 @@ impl IpcClient {
         }
     }
 
+    /// Delete a credential by ID
+    pub async fn delete_credential(
+        &mut self,
+        session_id: Option<String>,
+        credential_id: String,
+    ) -> Result<(), String> {
+        self.session_id = session_id;
+        let request = Request::DeleteCredential { credential_id };
+        let response = self.send_request(request).await?;
+        match response {
+            ResponseData::CredentialDeleted => Ok(()),
+            _ => Err("Unexpected response for DeleteCredential".to_string()),
+        }
+    }
+
     /// Close the current archive
     pub async fn close_archive(&mut self) -> Result<(), String> {
         let request = Request::LockDatabase;

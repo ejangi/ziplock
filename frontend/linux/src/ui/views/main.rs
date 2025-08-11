@@ -17,28 +17,29 @@ use crate::ui::{button_styles, theme, utils};
 /// Messages for the main application view
 #[derive(Debug, Clone)]
 pub enum MainViewMessage {
-    // Search functionality
+    /// Search query changed
     SearchChanged(String),
     ClearSearch,
 
     // Credential management
     AddCredential,
     EditCredential(String),
+    CredentialClicked(String),
     DeleteCredential(String),
     RefreshCredentials,
 
-    // IPC operations
+    // Async results
     CredentialsLoaded(Result<(Vec<CredentialItem>, Option<String>, bool), String>),
     OperationCompleted(Result<String, String>),
 
-    // Navigation
+    // UI navigation
     ShowSettings,
     ShowAbout,
 
     // Session management
     SessionTimeout,
 
-    // Error handling and demonstration
+    // Error handling
     ShowError(String),
     DismissError,
     TriggerConnectionError,
@@ -155,6 +156,12 @@ impl MainView {
             }
 
             MainViewMessage::EditCredential(id) => {
+                self.selected_credential = Some(id);
+                // TODO: Show edit credential dialog
+                Command::none()
+            }
+
+            MainViewMessage::CredentialClicked(id) => {
                 self.selected_credential = Some(id);
                 // TODO: Show edit credential dialog
                 Command::none()
@@ -556,7 +563,7 @@ impl MainView {
             iced::Color::from_rgb(0.9, 0.9, 0.9)
         };
 
-        container(
+        button(
             row![
                 column![
                     text(&credential.title)
@@ -578,32 +585,21 @@ impl MainView {
                 .width(Length::Fill)
                 .spacing(4),
                 column![
-                    text(&credential.last_modified)
-                        .size(10)
-                        .style(iced::theme::Text::Color(iced::Color::from_rgb(
-                            0.7, 0.7, 0.7
-                        ))),
                     Space::with_height(Length::Fixed(10.0)),
-                    row![
-                        button("Edit")
-                            .on_press(MainViewMessage::EditCredential(credential.id.clone()))
-                            .padding(utils::small_button_padding())
-                            .style(button_styles::secondary()),
-                        Space::with_width(Length::Fixed(5.0)),
-                        button("Delete")
-                            .on_press(MainViewMessage::DeleteCredential(credential.id.clone()))
-                            .padding(utils::small_button_padding())
-                            .style(button_styles::destructive()),
-                    ]
+                    row![button("Edit")
+                        .on_press(MainViewMessage::EditCredential(credential.id.clone()))
+                        .padding(utils::small_button_padding())
+                        .style(button_styles::secondary()),]
                 ]
                 .align_items(Alignment::End)
             ]
             .padding(15)
             .align_items(Alignment::Center),
         )
+        .on_press(MainViewMessage::CredentialClicked(credential.id.clone()))
         .width(Length::Fill)
-        .style(iced::theme::Container::Custom(Box::new(
-            CredentialItemStyle {
+        .style(iced::theme::Button::Custom(Box::new(
+            CredentialItemButtonStyle {
                 background_color,
                 border_color,
             },
@@ -716,24 +712,58 @@ impl MainView {
 }
 
 /// Custom container style for credential items
-struct CredentialItemStyle {
+struct CredentialItemButtonStyle {
     background_color: iced::Color,
     border_color: iced::Color,
 }
 
-impl container::StyleSheet for CredentialItemStyle {
+impl button::StyleSheet for CredentialItemButtonStyle {
     type Style = iced::Theme;
 
-    fn appearance(&self, _style: &Self::Style) -> container::Appearance {
-        container::Appearance {
-            background: Some(self.background_color.into()),
+    fn active(&self, _style: &Self::Style) -> button::Appearance {
+        button::Appearance {
+            background: Some(iced::Background::Color(self.background_color)),
             border: iced::Border {
                 color: self.border_color,
                 width: 1.0,
-                radius: utils::border_radius().into(),
+                radius: iced::border::Radius::from(8.0),
             },
-            text_color: None,
-            shadow: iced::Shadow::default(),
+            text_color: theme::DARK_TEXT,
+            ..Default::default()
+        }
+    }
+
+    fn hovered(&self, _style: &Self::Style) -> button::Appearance {
+        button::Appearance {
+            background: Some(iced::Background::Color(iced::Color::from_rgba(
+                0.514, 0.220, 0.925, 0.05,
+            ))),
+            border: iced::Border {
+                color: theme::LOGO_PURPLE,
+                width: 1.0,
+                radius: iced::border::Radius::from(8.0),
+            },
+            text_color: theme::DARK_TEXT,
+            ..Default::default()
+        }
+    }
+
+    fn pressed(&self, style: &Self::Style) -> button::Appearance {
+        self.hovered(style)
+    }
+
+    fn disabled(&self, _style: &Self::Style) -> button::Appearance {
+        button::Appearance {
+            background: Some(iced::Background::Color(iced::Color::from_rgb(
+                0.95, 0.95, 0.95,
+            ))),
+            border: iced::Border {
+                color: iced::Color::from_rgb(0.9, 0.9, 0.9),
+                width: 1.0,
+                radius: iced::border::Radius::from(8.0),
+            },
+            text_color: iced::Color::from_rgb(0.6, 0.6, 0.6),
+            ..Default::default()
         }
     }
 }
