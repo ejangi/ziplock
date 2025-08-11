@@ -144,14 +144,10 @@ impl EditCredentialView {
                         self.form.set_template(template);
                         self.form.set_title(credential.title.clone());
 
-                        // Convert credential fields to form field values
+                        // Convert credential fields to form field values using field names
                         let mut field_values = HashMap::new();
                         for (field_name, field) in &credential.fields {
-                            if let Some(label) = &field.label {
-                                field_values.insert(label.clone(), field.value.clone());
-                            } else {
-                                field_values.insert(field_name.clone(), field.value.clone());
-                            }
+                            field_values.insert(field_name.clone(), field.value.clone());
                         }
                         self.form.set_field_values(field_values);
 

@@ -460,18 +460,30 @@ impl ArchiveManager {
             if archive.modified {
                 info!("Saving modified archive: {:?}", archive.path);
 
+                // Create a temporary directory for the save operation
+                let temp_dir = TempDir::new()
+                    .context("Failed to create temp dir")
+                    .map_err(|e| StorageError::ArchiveCreation {
+                        reason: e.to_string(),
+                    })?;
+
+                // Create a dummy file for the lock during save operation
+                // We can't lock the archive file itself since it's already locked
+                let dummy_lock_file = temp_dir.path().join("save_lock");
+                fs::write(&dummy_lock_file, b"dummy").map_err(|e| {
+                    StorageError::ArchiveCreation {
+                        reason: format!("Failed to create dummy lock file: {}", e),
+                    }
+                })?;
+
                 // Clone the archive data for async operation
                 let archive_data = OpenArchive {
                     path: archive.path.clone(),
                     master_password: archive.master_password.clone(),
-                    temp_dir: TempDir::new()
-                        .context("Failed to create temp dir")
-                        .map_err(|e| StorageError::ArchiveCreation {
-                            reason: e.to_string(),
-                        })?,
-                    file_lock: FileLock::new(&archive.path, self.config.file_lock_timeout)
+                    temp_dir,
+                    file_lock: FileLock::new(&dummy_lock_file, self.config.file_lock_timeout)
                         .map_err(|_e| StorageError::FileLock {
-                            path: archive.path.to_string_lossy().to_string(),
+                            path: dummy_lock_file.to_string_lossy().to_string(),
                         })?,
                     credentials: archive.credentials.clone(),
                     modified: archive.modified,

@@ -10,6 +10,10 @@ description = "Backend service for ZipLock password manager"
 keywords.workspace = true
 categories.workspace = true
 
+[lib]
+name = "ziplock_backend"
+path = "src/lib.rs"
+
 [[bin]]
 name = "ziplock-backend"
 path = "src/main.rs"

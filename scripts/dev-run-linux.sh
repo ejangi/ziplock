@@ -12,6 +12,23 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
+# Parse command line arguments
+NO_BUILD=false
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --no-build|-n)
+            NO_BUILD=true
+            shift
+            ;;
+        *)
+            echo -e "${RED}❌ Unknown option: $1${NC}"
+            echo "Usage: $0 [--no-build|-n]"
+            echo "  --no-build, -n    Skip building and run with existing binaries"
+            exit 1
+            ;;
+    esac
+done
+
 # Get script directory and project root (one level up from scripts)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -38,24 +55,43 @@ trap cleanup SIGINT SIGTERM EXIT
 BACKEND_BIN="$PROJECT_ROOT/target/release/ziplock-backend"
 FRONTEND_BIN="$PROJECT_ROOT/target/release/ziplock"
 
-echo -e "${YELLOW}⚙️  Building backend...${NC}"
-cd "$PROJECT_ROOT"
-cargo build --release --bin ziplock-backend
-echo -e "${GREEN}✅ Backend built successfully${NC}"
+if [[ "$NO_BUILD" == "true" ]]; then
+    echo -e "${YELLOW}⏭️  Skipping build (--no-build specified)${NC}"
 
-echo -e "${YELLOW}⚙️  Building frontend...${NC}"
-cd "$PROJECT_ROOT"
-echo -e "${BLUE}   Current directory: $(pwd)${NC}"
-echo -e "${BLUE}   Looking for: frontend/linux/Cargo.toml${NC}"
-if [[ -f "frontend/linux/Cargo.toml" ]]; then
-    echo -e "${BLUE}   Cargo.toml found, building...${NC}"
-    cargo build --release --bin ziplock --manifest-path frontend/linux/Cargo.toml
-    echo -e "${GREEN}✅ Frontend built successfully${NC}"
+    # Check if binaries exist
+    if [[ ! -f "$BACKEND_BIN" ]]; then
+        echo -e "${RED}❌ Backend binary not found: $BACKEND_BIN${NC}"
+        echo -e "${RED}   Run without --no-build to build first${NC}"
+        exit 1
+    fi
+
+    if [[ ! -f "$FRONTEND_BIN" ]]; then
+        echo -e "${RED}❌ Frontend binary not found: $FRONTEND_BIN${NC}"
+        echo -e "${RED}   Run without --no-build to build first${NC}"
+        exit 1
+    fi
+
+    echo -e "${GREEN}✅ Using existing binaries${NC}"
 else
-    echo -e "${RED}❌ frontend/linux/Cargo.toml not found!${NC}"
-    echo -e "${RED}   Contents of current directory:${NC}"
-    ls -la
-    exit 1
+    echo -e "${YELLOW}⚙️  Building backend...${NC}"
+    cd "$PROJECT_ROOT"
+    cargo build --release --bin ziplock-backend
+    echo -e "${GREEN}✅ Backend built successfully${NC}"
+
+    echo -e "${YELLOW}⚙️  Building frontend...${NC}"
+    cd "$PROJECT_ROOT"
+    echo -e "${BLUE}   Current directory: $(pwd)${NC}"
+    echo -e "${BLUE}   Looking for: frontend/linux/Cargo.toml${NC}"
+    if [[ -f "frontend/linux/Cargo.toml" ]]; then
+        echo -e "${BLUE}   Cargo.toml found, building...${NC}"
+        cargo build --release --bin ziplock --manifest-path frontend/linux/Cargo.toml
+        echo -e "${GREEN}✅ Frontend built successfully${NC}"
+    else
+        echo -e "${RED}❌ frontend/linux/Cargo.toml not found!${NC}"
+        echo -e "${RED}   Contents of current directory:${NC}"
+        ls -la
+        exit 1
+    fi
 fi
 
 # Start backend in background with debug logging
