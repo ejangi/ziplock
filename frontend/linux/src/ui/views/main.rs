@@ -564,39 +564,29 @@ impl MainView {
         };
 
         button(
-            row![
-                column![
-                    text(&credential.title)
-                        .size(16)
-                        .style(iced::theme::Text::Color(theme::DARK_TEXT)),
-                    text(&credential.username)
-                        .size(12)
-                        .style(iced::theme::Text::Color(iced::Color::from_rgb(
-                            0.6, 0.6, 0.6
-                        ))),
-                    if let Some(url) = &credential.url {
-                        text(url)
-                            .size(10)
-                            .style(iced::theme::Text::Color(theme::LOGO_PURPLE))
-                    } else {
-                        text("")
-                    }
-                ]
-                .width(Length::Fill)
-                .spacing(4),
-                column![
-                    Space::with_height(Length::Fixed(10.0)),
-                    row![button("Edit")
-                        .on_press(MainViewMessage::EditCredential(credential.id.clone()))
-                        .padding(utils::small_button_padding())
-                        .style(button_styles::secondary()),]
-                ]
-                .align_items(Alignment::End)
+            row![column![
+                text(&credential.title)
+                    .size(16)
+                    .style(iced::theme::Text::Color(theme::DARK_TEXT)),
+                text(&credential.username)
+                    .size(12)
+                    .style(iced::theme::Text::Color(iced::Color::from_rgb(
+                        0.6, 0.6, 0.6
+                    ))),
+                if let Some(url) = &credential.url {
+                    text(url)
+                        .size(10)
+                        .style(iced::theme::Text::Color(theme::LOGO_PURPLE))
+                } else {
+                    text("")
+                }
             ]
+            .width(Length::Fill)
+            .align_items(Alignment::Start)]
             .padding(15)
             .align_items(Alignment::Center),
         )
-        .on_press(MainViewMessage::CredentialClicked(credential.id.clone()))
+        .on_press(MainViewMessage::EditCredential(credential.id.clone()))
         .width(Length::Fill)
         .style(iced::theme::Button::Custom(Box::new(
             CredentialItemButtonStyle {

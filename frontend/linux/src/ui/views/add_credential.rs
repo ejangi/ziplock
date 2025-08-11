@@ -16,7 +16,7 @@ use ziplock_shared::models::{CommonTemplates, CredentialField, CredentialTemplat
 use crate::ipc::IpcClient;
 use crate::ui::components::{CredentialForm, CredentialFormConfig, CredentialFormMessage};
 use crate::ui::theme::alerts::AlertMessage;
-use crate::ui::theme::{button_styles, container_styles};
+use crate::ui::theme::{button_styles, container_styles, utils};
 
 /// Messages for the add credential view
 #[derive(Debug, Clone)]
@@ -304,7 +304,7 @@ impl AddCredentialView {
                 .on_press(AddCredentialMessage::TypeSelected(template.name.clone()))
                 .style(button_styles::primary())
                 .width(Length::Fill)
-                .padding(15);
+                .padding(utils::button_padding());
 
             type_buttons.push(button_element.into());
             type_buttons.push(Space::with_height(Length::Fixed(10.0)).into());
@@ -316,6 +316,7 @@ impl AddCredentialView {
             button("Cancel")
                 .on_press(AddCredentialMessage::Cancel)
                 .style(button_styles::secondary())
+                .padding(utils::button_padding())
                 .into(),
         );
 

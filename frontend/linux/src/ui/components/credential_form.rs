@@ -10,7 +10,7 @@ use iced::{
 };
 use std::collections::HashMap;
 
-use crate::ui::theme::button_styles;
+use crate::ui::theme::{button_styles, utils};
 use ziplock_shared::models::{CredentialTemplate, FieldType};
 
 /// Messages that can be sent from the credential form
@@ -248,6 +248,7 @@ impl CredentialForm {
                 button("Cancel")
                     .on_press(CredentialFormMessage::Cancel)
                     .style(button_styles::secondary())
+                    .padding(utils::button_padding())
                     .into(),
             );
             button_row.push(Space::with_width(Length::Fill).into());
@@ -263,17 +264,21 @@ impl CredentialForm {
                 button("Delete")
                     .on_press(CredentialFormMessage::Delete)
                     .style(button_styles::destructive())
+                    .padding(utils::button_padding())
                     .into(),
             );
             button_row.push(Space::with_width(Length::Fixed(10.0)).into());
         }
 
         let save_button = if self.config.is_loading {
-            button(text(&self.config.save_button_text)).style(button_styles::primary())
+            button(text(&self.config.save_button_text))
+                .style(button_styles::primary())
+                .padding(utils::button_padding())
         } else {
             button(text(&self.config.save_button_text))
                 .on_press(CredentialFormMessage::Save)
                 .style(button_styles::primary())
+                .padding(utils::button_padding())
         };
 
         button_row.push(save_button.into());
@@ -336,7 +341,8 @@ impl CredentialForm {
                         .on_press(CredentialFormMessage::ToggleFieldSensitivity(
                             field_name.to_string()
                         ))
-                        .style(button_styles::secondary()),
+                        .style(button_styles::secondary())
+                        .padding(utils::small_button_padding()),
                 ]
                 .spacing(5)
                 .align_items(Alignment::Center)
