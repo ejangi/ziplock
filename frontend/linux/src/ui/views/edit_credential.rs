@@ -55,7 +55,7 @@ pub enum EditCredentialState {
 }
 
 /// The edit credential view
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct EditCredentialView {
     /// Current state of the view
     state: EditCredentialState,

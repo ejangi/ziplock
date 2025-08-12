@@ -215,6 +215,35 @@ mod tests {
     }
 
     #[test]
+    fn test_secure_note_uses_textarea() {
+        let secure_note_template = CommonTemplates::secure_note();
+
+        // Verify it has the correct name
+        assert_eq!(secure_note_template.name, "secure_note");
+
+        // Verify it has at least one field
+        assert!(!secure_note_template.fields.is_empty());
+
+        // Find the content field and verify it's a TextArea
+        let content_field = secure_note_template
+            .fields
+            .iter()
+            .find(|field| field.name == "content")
+            .expect("Secure note template should have a 'content' field");
+
+        assert_eq!(
+            content_field.field_type,
+            FieldType::TextArea,
+            "Secure note content field should use TextArea type for multi-line input"
+        );
+        assert_eq!(content_field.label, "Content");
+        assert!(
+            content_field.sensitive,
+            "Secure note content should be marked as sensitive"
+        );
+    }
+
+    #[test]
     fn test_passphrase_validation() {
         let validator = PassphraseValidator::default();
         let result = validator.validate("MySecurePassphrase123!");

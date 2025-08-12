@@ -5,7 +5,7 @@
 
 use iced::{
     alignment::Alignment,
-    widget::{button, column, row, scrollable, text, text_input, Space},
+    widget::{button, column, row, scrollable, text, text_editor, text_input, Space},
     Element, Length,
 };
 use std::collections::HashMap;
@@ -20,6 +20,8 @@ pub enum CredentialFormMessage {
     TitleChanged(String),
     /// A specific field value was changed
     FieldChanged(String, String),
+    /// A text editor action for TextArea fields
+    TextEditorAction(String, text_editor::Action),
     /// Toggle the sensitivity (show/hide) of a field
     ToggleFieldSensitivity(String),
     /// The save button was pressed
@@ -58,7 +60,7 @@ impl Default for CredentialFormConfig {
 }
 
 /// The credential form component
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct CredentialForm {
     /// The credential template to render
     template: Option<CredentialTemplate>,
@@ -66,6 +68,8 @@ pub struct CredentialForm {
     title: String,
     /// Current field values
     field_values: HashMap<String, String>,
+    /// Text editor content for TextArea fields
+    text_editor_content: HashMap<String, text_editor::Content>,
     /// Field sensitivity state (whether to show or hide sensitive fields)
     field_sensitivity: HashMap<String, bool>,
     /// Form configuration
@@ -85,6 +89,7 @@ impl CredentialForm {
             template: None,
             title: String::new(),
             field_values: HashMap::new(),
+            text_editor_content: HashMap::new(),
             field_sensitivity: HashMap::new(),
             config: CredentialFormConfig::default(),
         }
@@ -99,10 +104,21 @@ impl CredentialForm {
 
     /// Set the credential template for the form
     pub fn set_template(&mut self, template: CredentialTemplate) {
-        // Initialize field sensitivity based on template defaults
+        // Initialize field sensitivity and text editor content based on template defaults
         for field_template in &template.fields {
             self.field_sensitivity
                 .insert(field_template.name.clone(), field_template.sensitive);
+
+            // Initialize text editor content for TextArea fields
+            if field_template.field_type == FieldType::TextArea {
+                let content = text_editor::Content::with_text(
+                    self.field_values
+                        .get(&field_template.name)
+                        .unwrap_or(&String::new()),
+                );
+                self.text_editor_content
+                    .insert(field_template.name.clone(), content);
+            }
         }
         self.template = Some(template);
     }
@@ -119,12 +135,19 @@ impl CredentialForm {
 
     /// Set a field value
     pub fn set_field_value(&mut self, field_name: String, value: String) {
-        self.field_values.insert(field_name, value);
+        self.field_values.insert(field_name.clone(), value.clone());
+
+        // Update text editor content if this is a TextArea field
+        if let Some(content) = self.text_editor_content.get_mut(&field_name) {
+            *content = text_editor::Content::with_text(&value);
+        }
     }
 
     /// Set multiple field values at once
     pub fn set_field_values(&mut self, values: HashMap<String, String>) {
-        self.field_values = values;
+        for (field_name, value) in values {
+            self.set_field_value(field_name, value);
+        }
     }
 
     /// Get the current title
@@ -146,7 +169,22 @@ impl CredentialForm {
             }
             CredentialFormMessage::FieldChanged(field_name, value) => {
                 tracing::debug!("Field '{}' changed to: '{}'", field_name, value);
-                self.field_values.insert(field_name, value);
+                self.field_values.insert(field_name.clone(), value.clone());
+
+                // Update text editor content if this is a TextArea field
+                if let Some(content) = self.text_editor_content.get_mut(&field_name) {
+                    *content = text_editor::Content::with_text(&value);
+                }
+            }
+            CredentialFormMessage::TextEditorAction(field_name, action) => {
+                tracing::debug!("TextEditor action for field '{}': {:?}", field_name, action);
+
+                if let Some(content) = self.text_editor_content.get_mut(&field_name) {
+                    content.perform(action);
+                    // Update the field value from the text editor content
+                    let text = content.text();
+                    self.field_values.insert(field_name, text);
+                }
             }
             CredentialFormMessage::ToggleFieldSensitivity(field_name) => {
                 if let Some(sensitive) = self.field_sensitivity.get(&field_name).copied() {
@@ -316,14 +354,29 @@ impl CredentialForm {
 
         match field_type {
             FieldType::TextArea => {
-                // Multi-line text input
-                text_input(placeholder, value)
-                    .on_input({
-                        let field_name = field_name.to_string();
-                        move |input| CredentialFormMessage::FieldChanged(field_name.clone(), input)
-                    })
-                    .padding(10)
-                    .into()
+                // Multi-line text editor
+                if let Some(content) = self.text_editor_content.get(field_name) {
+                    text_editor(content)
+                        .on_action({
+                            let field_name = field_name.to_string();
+                            move |action| {
+                                CredentialFormMessage::TextEditorAction(field_name.clone(), action)
+                            }
+                        })
+                        .height(Length::Fixed(100.0))
+                        .into()
+                } else {
+                    // Fallback to regular text input if no content state available
+                    text_input(placeholder, value)
+                        .on_input({
+                            let field_name = field_name.to_string();
+                            move |input| {
+                                CredentialFormMessage::FieldChanged(field_name.clone(), input)
+                            }
+                        })
+                        .padding(10)
+                        .into()
+                }
             }
             FieldType::Password | _ if is_sensitive => {
                 // Password input with toggle
