@@ -302,7 +302,7 @@ impl AddCredentialView {
     }
 
     /// Render the add credential view
-    pub fn view(&self) -> Element<AddCredentialMessage> {
+    pub fn view(&self) -> Element<'_, AddCredentialMessage> {
         match &self.state {
             AddCredentialState::SelectingType => self.view_type_selection(),
             AddCredentialState::FillingForm => self.view_credential_form(),
@@ -313,12 +313,12 @@ impl AddCredentialView {
     }
 
     /// Render the view header
-    fn view_header(&self) -> Element<AddCredentialMessage> {
+    fn view_header(&self) -> Element<'_, AddCredentialMessage> {
         text("Add New Credential").size(24).into()
     }
 
     /// Render the type selection state
-    fn view_type_selection(&self) -> Element<AddCredentialMessage> {
+    fn view_type_selection(&self) -> Element<'_, AddCredentialMessage> {
         let mut type_buttons = vec![];
 
         for template in &self.available_types {
@@ -362,7 +362,7 @@ impl AddCredentialView {
     }
 
     /// Render the credential form state
-    fn view_credential_form(&self) -> Element<AddCredentialMessage> {
+    fn view_credential_form(&self) -> Element<'_, AddCredentialMessage> {
         container(
             column![
                 self.view_header(),
@@ -378,7 +378,7 @@ impl AddCredentialView {
     }
 
     /// Render the creating state
-    fn view_creating(&self) -> Element<AddCredentialMessage> {
+    fn view_creating(&self) -> Element<'_, AddCredentialMessage> {
         container(
             column![
                 self.view_header(),
@@ -396,7 +396,7 @@ impl AddCredentialView {
     }
 
     /// Render the completion state
-    fn view_complete(&self) -> Element<AddCredentialMessage> {
+    fn view_complete(&self) -> Element<'_, AddCredentialMessage> {
         container(
             column![
                 self.view_header(),
@@ -419,7 +419,7 @@ impl AddCredentialView {
     }
 
     /// Render the error state
-    fn view_error(&self) -> Element<AddCredentialMessage> {
+    fn view_error(&self) -> Element<'_, AddCredentialMessage> {
         let error_message = "Failed to create credential";
 
         container(

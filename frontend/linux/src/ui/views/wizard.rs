@@ -276,7 +276,7 @@ impl RepositoryWizard {
     }
 
     /// Render the wizard UI
-    pub fn view(&self) -> Element<WizardMessage> {
+    pub fn view(&self) -> Element<'_, WizardMessage> {
         let content = match &self.current_step {
             WizardStep::Welcome => self.view_welcome(),
             WizardStep::DirectorySelection => self.view_directory_selection(),
@@ -310,7 +310,7 @@ impl RepositoryWizard {
     }
 
     /// View the wizard header with step indicator
-    fn view_header(&self) -> Element<WizardMessage> {
+    fn view_header(&self) -> Element<'_, WizardMessage> {
         let step_number = match self.current_step {
             WizardStep::Welcome => 0,
             WizardStep::DirectorySelection => 1,
@@ -345,7 +345,7 @@ impl RepositoryWizard {
     }
 
     /// View welcome step
-    fn view_welcome(&self) -> Element<WizardMessage> {
+    fn view_welcome(&self) -> Element<'_, WizardMessage> {
         column![
             // Large ZipLock logo for welcome screen
             svg(theme::ziplock_logo())
@@ -368,7 +368,7 @@ impl RepositoryWizard {
     }
 
     /// View directory selection step
-    fn view_directory_selection(&self) -> Element<WizardMessage> {
+    fn view_directory_selection(&self) -> Element<'_, WizardMessage> {
         column![
             text("Choose Repository Location").size(20),
             Space::with_height(Length::Fixed(15.0)),
@@ -415,7 +415,7 @@ impl RepositoryWizard {
     }
 
     /// View repository details step
-    fn view_repository_details(&self) -> Element<WizardMessage> {
+    fn view_repository_details(&self) -> Element<'_, WizardMessage> {
         column![
             text("Repository Details").size(20),
             Space::with_height(Length::Fixed(15.0)),
@@ -445,7 +445,7 @@ impl RepositoryWizard {
     }
 
     /// View passphrase setup step
-    fn view_passphrase_setup(&self) -> Element<WizardMessage> {
+    fn view_passphrase_setup(&self) -> Element<'_, WizardMessage> {
         let passphrase_strength = self.passphrase_validator.validate(&self.passphrase);
         let passphrases_match =
             !self.confirm_passphrase.is_empty() && self.passphrase == self.confirm_passphrase;
@@ -583,7 +583,7 @@ impl RepositoryWizard {
     }
 
     /// View creation progress step
-    fn view_creating(&self) -> Element<WizardMessage> {
+    fn view_creating(&self) -> Element<'_, WizardMessage> {
         if let Some(error) = &self.creation_error {
             column![
                 text("Repository Creation Failed").size(20),
@@ -629,7 +629,7 @@ impl RepositoryWizard {
     }
 
     /// View completion step
-    fn view_complete(&self) -> Element<WizardMessage> {
+    fn view_complete(&self) -> Element<'_, WizardMessage> {
         column![
             text("✓ Repository Created Successfully!").size(24),
             Space::with_height(Length::Fixed(30.0)),
@@ -662,7 +662,7 @@ impl RepositoryWizard {
     }
 
     /// View navigation buttons
-    fn view_navigation(&self) -> Element<WizardMessage> {
+    fn view_navigation(&self) -> Element<'_, WizardMessage> {
         let can_go_back = match self.current_step {
             WizardStep::Welcome | WizardStep::Creating | WizardStep::Complete => false,
             _ => true,

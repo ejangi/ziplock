@@ -212,7 +212,7 @@ impl CredentialForm {
     }
 
     /// Render the credential form
-    pub fn view(&self) -> Element<CredentialFormMessage> {
+    pub fn view(&self) -> Element<'_, CredentialFormMessage> {
         let template = match &self.template {
             Some(t) => t,
             None => return text("No template selected").into(),
@@ -335,7 +335,7 @@ impl CredentialForm {
         field_type: &FieldType,
         value: &str,
         is_sensitive: bool,
-    ) -> Element<CredentialFormMessage> {
+    ) -> Element<'_, CredentialFormMessage> {
         let placeholder = match field_type {
             FieldType::Password => "Enter password...",
             FieldType::Email => "Enter email address...",

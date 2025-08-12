@@ -762,7 +762,7 @@ pub mod alerts {
     pub fn render_alert<Message: Clone + 'static>(
         alert: &AlertMessage,
         on_dismiss: Option<Message>,
-    ) -> Element<Message> {
+    ) -> Element<'_, Message> {
         let container_style = match alert.level {
             AlertLevel::Error => container_styles::error_alert(),
             AlertLevel::Warning => container_styles::warning_alert(),

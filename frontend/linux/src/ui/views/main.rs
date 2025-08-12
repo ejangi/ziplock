@@ -282,7 +282,7 @@ impl MainView {
     }
 
     /// Render the main view
-    pub fn view(&self) -> Element<MainViewMessage> {
+    pub fn view(&self) -> Element<'_, MainViewMessage> {
         let sidebar = self.view_sidebar();
         let main_content = self.view_main_content();
 
@@ -294,7 +294,7 @@ impl MainView {
     }
 
     /// Render the left sidebar with logo and action buttons
-    fn view_sidebar(&self) -> Element<MainViewMessage> {
+    fn view_sidebar(&self) -> Element<'_, MainViewMessage> {
         let logo = container(
             svg(theme::ziplock_logo())
                 .width(Length::Fixed(48.0))
@@ -350,7 +350,7 @@ impl MainView {
     }
 
     /// Render the main content area with search and credentials
-    fn view_main_content(&self) -> Element<MainViewMessage> {
+    fn view_main_content(&self) -> Element<'_, MainViewMessage> {
         let search_bar = self.view_search_bar();
 
         let mut content_column = column![
@@ -371,7 +371,7 @@ impl MainView {
     }
 
     /// Render the search bar
-    fn view_search_bar(&self) -> Element<MainViewMessage> {
+    fn view_search_bar(&self) -> Element<'_, MainViewMessage> {
         row![
             text_input("Search credentials...", &self.search_query)
                 .on_input(MainViewMessage::SearchChanged)
@@ -394,7 +394,7 @@ impl MainView {
     }
 
     /// Render the list of credentials
-    fn view_credential_list(&self) -> Element<MainViewMessage> {
+    fn view_credential_list(&self) -> Element<'_, MainViewMessage> {
         if self.is_loading {
             return column![
                 Space::with_height(Length::Fixed(50.0)),
@@ -517,7 +517,7 @@ impl MainView {
     }
 
     /// Render a single credential item
-    fn view_credential_item(&self, credential: &CredentialItem) -> Element<MainViewMessage> {
+    fn view_credential_item(&self, credential: &CredentialItem) -> Element<'_, MainViewMessage> {
         let is_selected = self
             .selected_credential
             .as_ref()

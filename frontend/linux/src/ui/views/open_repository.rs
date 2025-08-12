@@ -192,7 +192,7 @@ impl OpenRepositoryView {
     }
 
     /// Render the view
-    pub fn view(&self) -> Element<OpenRepositoryMessage> {
+    pub fn view(&self) -> Element<'_, OpenRepositoryMessage> {
         match &self.state {
             OpenState::Input => self.view_input(),
             OpenState::Opening => self.view_opening(),
@@ -203,7 +203,7 @@ impl OpenRepositoryView {
     }
 
     /// Render the input form
-    fn view_input(&self) -> Element<OpenRepositoryMessage> {
+    fn view_input(&self) -> Element<'_, OpenRepositoryMessage> {
         let header = self.view_header();
 
         let file_selection = self.view_file_selection();
@@ -235,7 +235,7 @@ impl OpenRepositoryView {
     }
 
     /// Render the header
-    fn view_header(&self) -> Element<OpenRepositoryMessage> {
+    fn view_header(&self) -> Element<'_, OpenRepositoryMessage> {
         column![
             iced::widget::svg(theme::ziplock_logo())
                 .width(Length::Fixed(64.0))
@@ -254,7 +254,7 @@ impl OpenRepositoryView {
     }
 
     /// Render the file selection section
-    fn view_file_selection(&self) -> Element<OpenRepositoryMessage> {
+    fn view_file_selection(&self) -> Element<'_, OpenRepositoryMessage> {
         let file_display = if let Some(ref path) = self.selected_file {
             text(format!(
                 "Selected: {}",
@@ -287,7 +287,7 @@ impl OpenRepositoryView {
     }
 
     /// Render the passphrase input section
-    fn view_passphrase_input(&self) -> Element<OpenRepositoryMessage> {
+    fn view_passphrase_input(&self) -> Element<'_, OpenRepositoryMessage> {
         let passphrase_input = text_input(
             if self.show_passphrase {
                 "Enter your passphrase"
@@ -325,7 +325,7 @@ impl OpenRepositoryView {
     }
 
     /// Render navigation buttons
-    fn view_navigation(&self) -> Element<OpenRepositoryMessage> {
+    fn view_navigation(&self) -> Element<'_, OpenRepositoryMessage> {
         let open_button = if self.can_open {
             button("Open Repository")
                 .on_press(OpenRepositoryMessage::OpenRepository)
@@ -352,7 +352,7 @@ impl OpenRepositoryView {
     }
 
     /// Render the opening progress view
-    fn view_opening(&self) -> Element<OpenRepositoryMessage> {
+    fn view_opening(&self) -> Element<'_, OpenRepositoryMessage> {
         container(
             column![
                 iced::widget::svg(theme::ziplock_logo())
@@ -378,7 +378,7 @@ impl OpenRepositoryView {
     }
 
     /// Render the completion view
-    fn view_complete(&self) -> Element<OpenRepositoryMessage> {
+    fn view_complete(&self) -> Element<'_, OpenRepositoryMessage> {
         container(
             column![
                 text("✅")
@@ -404,7 +404,7 @@ impl OpenRepositoryView {
     }
 
     /// Render the error view
-    fn view_error(&self, error: &str) -> Element<OpenRepositoryMessage> {
+    fn view_error(&self, error: &str) -> Element<'_, OpenRepositoryMessage> {
         container(
             column![
                 text("❌")

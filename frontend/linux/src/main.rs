@@ -677,7 +677,7 @@ impl Application for ZipLockApp {
         }
     }
 
-    fn view(&self) -> Element<Message> {
+    fn view(&self) -> Element<'_, Message> {
         let main_content = match &self.state {
             AppState::Loading => self.view_loading(),
             AppState::DetectingRepositories => self.view_detecting_repositories(),
@@ -747,7 +747,7 @@ impl ZipLockApp {
         }
     }
     /// View loading screen
-    fn view_loading(&self) -> Element<Message> {
+    fn view_loading(&self) -> Element<'_, Message> {
         use iced::widget::{container, text, Space};
         use iced::{Alignment, Length};
 
@@ -773,7 +773,7 @@ impl ZipLockApp {
     }
 
     /// View detecting repositories screen
-    fn view_detecting_repositories(&self) -> Element<Message> {
+    fn view_detecting_repositories(&self) -> Element<'_, Message> {
         use iced::widget::{container, text, Space};
         use iced::{Alignment, Length};
 
@@ -799,7 +799,7 @@ impl ZipLockApp {
     }
 
     /// View repository selection screen
-    fn view_repository_selection(&self, repositories: &[RepositoryInfo]) -> Element<Message> {
+    fn view_repository_selection(&self, repositories: &[RepositoryInfo]) -> Element<'_, Message> {
         use iced::widget::{button, column, container, row, text, Space};
         use iced::{Alignment, Length};
 
@@ -883,7 +883,7 @@ impl ZipLockApp {
     }
 
     /// View wizard required screen
-    fn view_wizard_required(&self) -> Element<Message> {
+    fn view_wizard_required(&self) -> Element<'_, Message> {
         use iced::widget::{button, column, container, text, Space};
         use iced::{Alignment, Length};
 
@@ -922,7 +922,7 @@ impl ZipLockApp {
     }
 
     /// View error screen
-    fn view_error(&self, error: &str) -> Element<Message> {
+    fn view_error(&self, error: &str) -> Element<'_, Message> {
         use iced::widget::{button, column, container, text, Space};
         use iced::{Alignment, Length};
 

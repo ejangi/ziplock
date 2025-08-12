@@ -489,7 +489,7 @@ impl CommonPatterns {
 
         for common in &common_passwords {
             if lower_passphrase.contains(common) {
-                patterns.push(format!("Contains common pattern: {}", common));
+                patterns.push(format!("Contains common pattern: {common}"));
             }
         }
 
@@ -509,7 +509,7 @@ impl CommonPatterns {
 
         for pattern in &keyboard_patterns {
             if lower_passphrase.contains(pattern) {
-                patterns.push(format!("Contains keyboard pattern: {}", pattern));
+                patterns.push(format!("Contains keyboard pattern: {pattern}"));
             }
         }
 
@@ -622,7 +622,7 @@ pub fn validate_credential(credential: &CredentialRecord) -> SharedResult<()> {
     for tag in &credential.tags {
         if tag.len() > MAX_TAG_LENGTH {
             return Err(SharedError::Validation {
-                message: format!("Tag too long: '{}' > {}", tag, MAX_TAG_LENGTH),
+                message: format!("Tag too long: '{tag}' > {MAX_TAG_LENGTH}"),
             });
         }
     }

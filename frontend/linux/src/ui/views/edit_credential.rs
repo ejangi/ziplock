@@ -349,7 +349,7 @@ impl EditCredentialView {
     }
 
     /// Render the edit credential view
-    pub fn view(&self) -> Element<EditCredentialMessage> {
+    pub fn view(&self) -> Element<'_, EditCredentialMessage> {
         match &self.state {
             EditCredentialState::Loading => self.view_loading(),
             EditCredentialState::Editing => self.view_editing(),
@@ -360,7 +360,7 @@ impl EditCredentialView {
     }
 
     /// Render the header for the view
-    fn view_header(&self) -> Element<EditCredentialMessage> {
+    fn view_header(&self) -> Element<'_, EditCredentialMessage> {
         let title = if let Some(credential) = &self.credential {
             format!("Edit: {}", credential.title)
         } else {
@@ -371,7 +371,7 @@ impl EditCredentialView {
     }
 
     /// Render the loading state
-    fn view_loading(&self) -> Element<EditCredentialMessage> {
+    fn view_loading(&self) -> Element<'_, EditCredentialMessage> {
         container(
             column![
                 self.view_header(),
@@ -390,7 +390,7 @@ impl EditCredentialView {
     }
 
     /// Render the editing state
-    fn view_editing(&self) -> Element<EditCredentialMessage> {
+    fn view_editing(&self) -> Element<'_, EditCredentialMessage> {
         container(
             column![
                 self.view_header(),
@@ -406,7 +406,7 @@ impl EditCredentialView {
     }
 
     /// Render the saving state
-    fn view_saving(&self) -> Element<EditCredentialMessage> {
+    fn view_saving(&self) -> Element<'_, EditCredentialMessage> {
         container(
             column![
                 self.view_header(),
@@ -423,7 +423,7 @@ impl EditCredentialView {
     }
 
     /// Render the completion state
-    fn view_complete(&self) -> Element<EditCredentialMessage> {
+    fn view_complete(&self) -> Element<'_, EditCredentialMessage> {
         container(
             column![
                 self.view_header(),
@@ -446,7 +446,7 @@ impl EditCredentialView {
     }
 
     /// Render the error state
-    fn view_error(&self) -> Element<EditCredentialMessage> {
+    fn view_error(&self) -> Element<'_, EditCredentialMessage> {
         let error_message = "Failed to edit credential";
 
         container(

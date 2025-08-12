@@ -23,7 +23,7 @@ impl YamlUtils {
         let yaml_cred = YamlCredential::from_credential(credential);
 
         serde_yaml::to_string(&yaml_cred).map_err(|e| SharedError::Serialization {
-            message: format!("Failed to serialize credential to YAML: {}", e),
+            message: format!("Failed to serialize credential to YAML: {e}"),
         })
     }
 
@@ -31,7 +31,7 @@ impl YamlUtils {
     pub fn deserialize_credential(yaml_content: &str) -> SharedResult<CredentialRecord> {
         let yaml_cred: YamlCredential =
             serde_yaml::from_str(yaml_content).map_err(|e| SharedError::Serialization {
-                message: format!("Failed to deserialize credential from YAML: {}", e),
+                message: format!("Failed to deserialize credential from YAML: {e}"),
             })?;
 
         yaml_cred.into_credential()
@@ -68,7 +68,7 @@ impl YamlUtils {
             .collect();
 
         serde_yaml::to_string(&yaml_creds).map_err(|e| SharedError::Serialization {
-            message: format!("Failed to serialize credentials to YAML: {}", e),
+            message: format!("Failed to serialize credentials to YAML: {e}"),
         })
     }
 
@@ -76,7 +76,7 @@ impl YamlUtils {
     pub fn deserialize_credentials(yaml_content: &str) -> SharedResult<Vec<CredentialRecord>> {
         let yaml_creds: Vec<YamlCredential> =
             serde_yaml::from_str(yaml_content).map_err(|e| SharedError::Serialization {
-                message: format!("Failed to deserialize credentials from YAML: {}", e),
+                message: format!("Failed to deserialize credentials from YAML: {e}"),
             })?;
 
         yaml_creds
@@ -89,7 +89,7 @@ impl YamlUtils {
     pub fn validate_yaml_syntax(yaml_content: &str) -> SharedResult<()> {
         serde_yaml::from_str::<serde_yaml::Value>(yaml_content).map_err(|e| {
             SharedError::InvalidFormat {
-                message: format!("Invalid YAML syntax: {}", e),
+                message: format!("Invalid YAML syntax: {e}"),
             }
         })?;
 
@@ -100,11 +100,11 @@ impl YamlUtils {
     pub fn format_yaml(yaml_content: &str) -> SharedResult<String> {
         let value: serde_yaml::Value =
             serde_yaml::from_str(yaml_content).map_err(|e| SharedError::InvalidFormat {
-                message: format!("Invalid YAML for formatting: {}", e),
+                message: format!("Invalid YAML for formatting: {e}"),
             })?;
 
         serde_yaml::to_string(&value).map_err(|e| SharedError::Serialization {
-            message: format!("Failed to format YAML: {}", e),
+            message: format!("Failed to format YAML: {e}"),
         })
     }
 }
@@ -240,7 +240,7 @@ impl YamlField {
             FieldType::TextArea => "text_area".to_string(),
             FieldType::Number => "number".to_string(),
             FieldType::Date => "date".to_string(),
-            FieldType::Custom(name) => format!("custom:{}", name),
+            FieldType::Custom(name) => format!("custom:{name}"),
         }
     }
 
@@ -265,7 +265,7 @@ impl YamlField {
                 Ok(FieldType::Custom(name.to_string()))
             }
             _ => Err(SharedError::InvalidFormat {
-                message: format!("Unknown field type: {}", type_str),
+                message: format!("Unknown field type: {type_str}"),
             }),
         }
     }
@@ -311,14 +311,14 @@ impl YamlArchiveMetadata {
     /// Serialize to YAML string
     pub fn to_yaml(&self) -> SharedResult<String> {
         serde_yaml::to_string(self).map_err(|e| SharedError::Serialization {
-            message: format!("Failed to serialize archive metadata: {}", e),
+            message: format!("Failed to serialize archive metadata: {e}"),
         })
     }
 
     /// Deserialize from YAML string
     pub fn from_yaml(yaml_content: &str) -> SharedResult<Self> {
         serde_yaml::from_str(yaml_content).map_err(|e| SharedError::Serialization {
-            message: format!("Failed to deserialize archive metadata: {}", e),
+            message: format!("Failed to deserialize archive metadata: {e}"),
         })
     }
 }
