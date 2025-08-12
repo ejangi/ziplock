@@ -37,6 +37,11 @@ pub enum EditCredentialMessage {
     DeleteCredential,
     /// Credential was deleted
     CredentialDeleted(Result<(), String>),
+
+    // Error and success handling (for toast notifications)
+    ShowError(String),
+    ShowSuccess(String),
+    ShowValidationError(String),
 }
 
 /// States for the edit credential view
@@ -67,8 +72,6 @@ pub struct EditCredentialView {
     credential_id: String,
     /// The credential form component
     form: CredentialForm,
-    /// Current error message
-    current_error: Option<AlertMessage>,
     /// Session ID for backend communication
     session_id: Option<String>,
 }
@@ -88,7 +91,6 @@ impl EditCredentialView {
             credential: None,
             credential_id,
             form,
-            current_error: None,
             session_id: None,
         }
     }
@@ -120,7 +122,6 @@ impl EditCredentialView {
 
             EditCredentialMessage::LoadCredential => {
                 self.state = EditCredentialState::Loading;
-                self.current_error = None;
                 Command::batch([
                     Command::perform(
                         Self::load_credential_async(
@@ -169,12 +170,14 @@ impl EditCredentialView {
 
                         self.credential = Some(credential);
                         self.state = EditCredentialState::Editing;
-                        self.current_error = None;
                     }
                     Err(e) => {
-                        self.current_error = Some(AlertMessage::error(e));
                         self.state =
                             EditCredentialState::Error("Failed to load credential".to_string());
+                        return Command::perform(
+                            async move { e },
+                            EditCredentialMessage::ShowError,
+                        );
                     }
                 }
                 Command::none()
@@ -231,10 +234,10 @@ impl EditCredentialView {
                 tracing::debug!("Processing UpdateCredential message");
                 if !self.form.is_valid() {
                     tracing::warn!("Form validation failed in edit credential");
-                    self.current_error = Some(AlertMessage::warning(
-                        "Please fill in all required fields".to_string(),
-                    ));
-                    return Command::none();
+                    return Command::perform(
+                        async { "Please fill in all required fields".to_string() },
+                        EditCredentialMessage::ShowValidationError,
+                    );
                 }
 
                 tracing::debug!("Form validation passed, proceeding with credential update");
@@ -263,21 +266,25 @@ impl EditCredentialView {
                     Ok(()) => {
                         tracing::info!("Credential updated successfully");
                         self.state = EditCredentialState::Complete;
-                        self.current_error = None;
+                        return Command::perform(
+                            async { "Credential updated successfully".to_string() },
+                            EditCredentialMessage::ShowSuccess,
+                        );
                     }
                     Err(e) => {
                         tracing::error!("Failed to update credential: {}", e);
-                        self.current_error = Some(AlertMessage::ipc_error(e));
                         self.state =
                             EditCredentialState::Error("Failed to update credential".to_string());
                         // Reset form to not loading state
-                        let mut config = CredentialFormConfig::default();
-                        config.error_message =
-                            self.current_error.as_ref().map(|a| a.message.clone());
+                        let config = CredentialFormConfig::default();
                         self.form.set_config(config);
+
+                        return Command::perform(
+                            async move { e },
+                            EditCredentialMessage::ShowError,
+                        );
                     }
                 }
-                Command::none()
             }
 
             EditCredentialMessage::DeleteCredential => {
@@ -302,21 +309,40 @@ impl EditCredentialView {
                     Ok(()) => {
                         tracing::info!("Credential deleted successfully");
                         self.state = EditCredentialState::Complete;
-                        self.current_error = None;
+                        return Command::perform(
+                            async { "Credential deleted successfully".to_string() },
+                            EditCredentialMessage::ShowSuccess,
+                        );
                     }
                     Err(e) => {
                         tracing::error!("Failed to delete credential: {}", e);
-                        self.current_error = Some(AlertMessage::ipc_error(e));
                         self.state =
                             EditCredentialState::Error("Failed to delete credential".to_string());
                         // Reset form to not loading state
                         let mut config = CredentialFormConfig::default();
                         config.show_delete_button = true;
-                        config.error_message =
-                            self.current_error.as_ref().map(|a| a.message.clone());
                         self.form.set_config(config);
+
+                        return Command::perform(
+                            async move { e },
+                            EditCredentialMessage::ShowError,
+                        );
                     }
                 }
+            }
+
+            EditCredentialMessage::ShowError(_) => {
+                // Error handling is now done at the application level via toast system
+                Command::none()
+            }
+
+            EditCredentialMessage::ShowSuccess(_) => {
+                // Success handling is now done at the application level via toast system
+                Command::none()
+            }
+
+            EditCredentialMessage::ShowValidationError(_) => {
+                // Validation error handling is now done at the application level via toast system
                 Command::none()
             }
         }
@@ -421,11 +447,7 @@ impl EditCredentialView {
 
     /// Render the error state
     fn view_error(&self) -> Element<EditCredentialMessage> {
-        let error_message = self
-            .current_error
-            .as_ref()
-            .map(|e| e.message.as_str())
-            .unwrap_or("An unknown error occurred");
+        let error_message = "Failed to edit credential";
 
         container(
             column![

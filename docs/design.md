@@ -120,10 +120,10 @@ The system automatically converts technical backend error messages to user-reada
 
 ### **4.3 Cross-View Integration**
 
-- Alert system integrated into main application wrapper
-- Individual view-level error handling
+- Centralized toast notification system for all user messages (see Section 9)
+- Global toast manager handles error, warning, success, and info notifications
+- Views send messages to parent application for unified toast display
 - Consistent error display across wizard, main interface, and other views
-- Global alert state management with message handling for showing/dismissing alerts
 
 ### **4.4 Design Principles for Error Display**
 
@@ -138,8 +138,9 @@ The system automatically converts technical backend error messages to user-reada
 - Clear distinction between different types of issues through color coding
 
 #### **Non-Intrusive**
-- Alerts appear without blocking the interface
-- Dismissible alerts allow users to continue working
+- Toast notifications appear as overlays without blocking the interface
+- Auto-dismissing toasts (5-second default) reduce UI clutter
+- Dismissible design allows users to continue working
 - Loading states provide feedback without interrupting workflow
 
 #### **Accessibility**
@@ -261,18 +262,56 @@ Incorporate brand-appropriate playful elements:
 - **Text Scaling:** Respect system text size preferences
 - **Spacing Adaptation:** Maintain proportional spacing across densities
 
-## **9. Future Design Enhancements**
+## **9. Toast Notification System**
 
-### **9.1 Advanced Error Handling**
+The application implements a centralized toast notification system that provides non-intrusive user feedback across all views.
+
+### **9.1 Toast Architecture**
+
+#### **Core Components**
+- **Toast Manager:** Centralized management of multiple notifications with auto-dismiss and positioning
+- **Toast Types:** Error, Warning, Success, and Info notifications using existing theme colors
+- **Positioning:** Configurable placement (default: bottom-right corner)
+- **Auto-Dismiss:** 5-second default duration with manual dismiss option
+
+#### **Design Integration**
+- **Error Toasts:** Use `ERROR_RED` (#ef476f) with error icon
+- **Warning Toasts:** Use `WARNING_YELLOW` (#fcbf49) with warning icon  
+- **Success Toasts:** Use `SUCCESS_GREEN` (#06d6a0) with check icon
+- **Info Toasts:** Use `LOGO_PURPLE` (#8338ec) with alert icon
+
+#### **User Experience**
+- **Non-Intrusive:** Appears in bottom-right corner without disrupting main interface layout
+- **Auto-Cleanup:** Maximum 3 visible toasts with automatic expiration
+- **Consistent Styling:** Reuses existing alert container styles and iconography
+- **Accessibility:** High contrast colors, dismissible design, keyboard navigation support
+
+### **9.2 Implementation Benefits**
+
+#### **Centralized Messaging**
+All user-facing messages are managed through a single toast system, ensuring:
+- Consistent appearance and behavior across views
+- Unified message handling and routing
+- Simplified view code without local error state management
+
+#### **Migration from Inline Alerts**
+The toast system replaces previous inline alert implementations:
+- **Before:** Each view managed `current_error: Option<AlertMessage>` with layout-disrupting inline alerts
+- **After:** Views send messages to parent application for centralized toast display
+- **Result:** Cleaner view code and better user experience
+
+## **10. Future Design Enhancements**
+
+### **10.1 Advanced Error Handling**
 
 Potential improvements to the error and feedback systems:
 
-- **Toast Notifications:** Non-blocking temporary notifications for minor issues
 - **Error Categories:** Grouping related errors with contextual help
 - **Error Recovery Actions:** Specific user actions suggested for resolution
 - **Progressive Disclosure:** Advanced error details available on demand
+- **Enhanced Toast Features:** Rich content support, priority queuing, persistent storage
 
-### **9.2 Enhanced Interactions**
+### **10.2 Enhanced Interactions**
 
 - **Keyboard Shortcuts:** Comprehensive keyboard navigation support
 - **Gesture Support:** Touch and trackpad gesture integration where appropriate

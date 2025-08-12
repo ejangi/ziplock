@@ -4,6 +4,7 @@
 
 pub mod button;
 pub mod credential_form;
+pub mod toast;
 
 // Future UI components will be added here as needed:
 // - Password strength indicator
@@ -15,3 +16,4 @@ pub mod credential_form;
 // Re-export commonly used components
 pub use button::*;
 pub use credential_form::*;
+pub use toast::*;

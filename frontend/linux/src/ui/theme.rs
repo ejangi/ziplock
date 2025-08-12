@@ -110,6 +110,9 @@ pub const SUCCESS_GREEN: Color = Color::from_rgb(0.024, 0.839, 0.627);
 /// Error/Invalid color from design.md (#ef476f)
 pub const ERROR_RED: Color = Color::from_rgb(0.937, 0.278, 0.435);
 
+/// Warning color from design.md (#fcbf49)
+pub const WARNING_YELLOW: Color = Color::from_rgb(0.988, 0.749, 0.286);
+
 /// Light background color from design.md (#F8F9FA)
 pub const LIGHT_BACKGROUND: Color = Color::from_rgb(0.97, 0.976, 0.98);
 

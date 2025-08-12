@@ -35,6 +35,11 @@ pub enum AddCredentialMessage {
     // Actions
     CreateCredential,
     CredentialCreated(Result<String, String>),
+
+    // Error and success handling (for toast notifications)
+    ShowError(String),
+    ShowSuccess(String),
+    ShowValidationError(String),
 }
 
 impl PartialEq for AddCredentialMessage {
@@ -48,6 +53,12 @@ impl PartialEq for AddCredentialMessage {
             (AddCredentialMessage::CreateCredential, AddCredentialMessage::CreateCredential) => {
                 true
             }
+            (AddCredentialMessage::ShowError(_), AddCredentialMessage::ShowError(_)) => true,
+            (AddCredentialMessage::ShowSuccess(_), AddCredentialMessage::ShowSuccess(_)) => true,
+            (
+                AddCredentialMessage::ShowValidationError(_),
+                AddCredentialMessage::ShowValidationError(_),
+            ) => true,
             (AddCredentialMessage::FormMessage(a), AddCredentialMessage::FormMessage(b)) => a == b,
             (
                 AddCredentialMessage::TypesLoaded(Ok(_)),
@@ -95,9 +106,6 @@ pub struct AddCredentialView {
     /// The credential form component
     form: CredentialForm,
 
-    /// Current error message if any
-    current_error: Option<AlertMessage>,
-
     /// Loading state
     is_loading: bool,
 
@@ -119,7 +127,6 @@ impl AddCredentialView {
             available_types: Self::get_builtin_templates(),
             selected_type: None,
             form: CredentialForm::new(),
-            current_error: None,
             is_loading: false,
             session_id: None,
         }
@@ -169,7 +176,6 @@ impl AddCredentialView {
                     self.form.set_config(config);
 
                     self.state = AddCredentialState::FillingForm;
-                    self.current_error = None;
                 }
                 Command::none()
             }
@@ -219,10 +225,10 @@ impl AddCredentialView {
                 tracing::debug!("Processing CreateCredential message");
                 if !self.form.is_valid() {
                     tracing::warn!("Form validation failed in add credential");
-                    self.current_error = Some(AlertMessage::warning(
-                        "Please fill in all required fields".to_string(),
-                    ));
-                    return Command::none();
+                    return Command::perform(
+                        async { "Please fill in all required fields".to_string() },
+                        AddCredentialMessage::ShowValidationError,
+                    );
                 }
 
                 tracing::debug!("Form validation passed, proceeding with credential creation");
@@ -256,11 +262,13 @@ impl AddCredentialView {
                     Ok(_id) => {
                         tracing::info!("Credential created successfully");
                         self.state = AddCredentialState::Complete;
-                        self.current_error = None;
+                        return Command::perform(
+                            async { "Credential created successfully".to_string() },
+                            AddCredentialMessage::ShowSuccess,
+                        );
                     }
                     Err(e) => {
                         tracing::error!("Failed to create credential: {}", e);
-                        self.current_error = Some(AlertMessage::error(e));
                         self.state =
                             AddCredentialState::Error("Failed to create credential".to_string());
 
@@ -269,11 +277,25 @@ impl AddCredentialView {
                         config.save_button_text = "Save".to_string();
                         config.show_cancel_button = true;
                         config.is_loading = false;
-                        config.error_message =
-                            self.current_error.as_ref().map(|a| a.message.clone());
                         self.form.set_config(config);
+
+                        return Command::perform(async move { e }, AddCredentialMessage::ShowError);
                     }
                 }
+            }
+
+            AddCredentialMessage::ShowError(_) => {
+                // Error handling is now done at the application level via toast system
+                Command::none()
+            }
+
+            AddCredentialMessage::ShowSuccess(_) => {
+                // Success handling is now done at the application level via toast system
+                Command::none()
+            }
+
+            AddCredentialMessage::ShowValidationError(_) => {
+                // Validation error handling is now done at the application level via toast system
                 Command::none()
             }
         }
@@ -398,11 +420,7 @@ impl AddCredentialView {
 
     /// Render the error state
     fn view_error(&self) -> Element<AddCredentialMessage> {
-        let error_message = self
-            .current_error
-            .as_ref()
-            .map(|e| e.message.as_str())
-            .unwrap_or("An unknown error occurred");
+        let error_message = "Failed to create credential";
 
         container(
             column![

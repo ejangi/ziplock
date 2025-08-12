@@ -17,7 +17,7 @@ use crate::ui::{button_styles, theme, utils};
 /// Messages for the main application view
 #[derive(Debug, Clone)]
 pub enum MainViewMessage {
-    /// Search query changed
+    // Search functionality
     SearchChanged(String),
     ClearSearch,
 
@@ -28,20 +28,19 @@ pub enum MainViewMessage {
     DeleteCredential(String),
     RefreshCredentials,
 
-    // Async results
+    // Data operations
     CredentialsLoaded(Result<(Vec<CredentialItem>, Option<String>, bool), String>),
     OperationCompleted(Result<String, String>),
 
-    // UI navigation
+    // UI actions
     ShowSettings,
     ShowAbout,
 
     // Session management
     SessionTimeout,
 
-    // Error handling
+    // Error handling (now uses global toast system)
     ShowError(String),
-    DismissError,
     TriggerConnectionError,
     TriggerAuthError,
     TriggerValidationError,
@@ -56,7 +55,6 @@ pub struct MainView {
     is_authenticated: bool,
     selected_credential: Option<String>,
     is_loading: bool,
-    current_error: Option<AlertMessage>,
 }
 
 /// Represents a credential item in the list
@@ -93,7 +91,6 @@ impl Default for MainView {
             is_authenticated: false,
             selected_credential: None,
             is_loading: false,
-            current_error: None,
         }
     }
 }
@@ -126,7 +123,6 @@ impl MainView {
     /// Create a command to refresh credentials (public method for external use)
     pub fn refresh_credentials(&mut self) -> Command<MainViewMessage> {
         self.is_loading = true;
-        self.current_error = None;
         if self.session_id.is_some() {
             Command::perform(
                 Self::load_credentials_async(self.session_id.clone()),
@@ -174,7 +170,6 @@ impl MainView {
 
             MainViewMessage::RefreshCredentials => {
                 self.is_loading = true;
-                self.current_error = None;
                 Command::perform(
                     Self::load_credentials_async(self.session_id.clone()),
                     MainViewMessage::CredentialsLoaded,
@@ -191,7 +186,6 @@ impl MainView {
                             self.session_id = Some(sid);
                         }
                         self.is_authenticated = authenticated;
-                        self.current_error = None;
                         // Log for debugging
                         if authenticated {
                             tracing::debug!(
@@ -210,7 +204,7 @@ impl MainView {
                         if let Some(timeout_command) = self.handle_potential_session_timeout(&e) {
                             return timeout_command;
                         }
-                        self.current_error = Some(AlertMessage::error(e));
+                        // Error handling is now done at the application level
                         self.is_authenticated = false;
                     }
                 }
@@ -226,10 +220,8 @@ impl MainView {
                             self.session_id = None;
                             self.is_authenticated = false;
                             self.credentials.clear();
-                            self.current_error = Some(AlertMessage::success(success_msg));
                             Command::none()
                         } else {
-                            self.current_error = Some(AlertMessage::success(success_msg));
                             // Auto-refresh credentials after successful operation
                             Command::perform(
                                 Self::load_credentials_async(self.session_id.clone()),
@@ -244,41 +236,30 @@ impl MainView {
                         {
                             return timeout_command;
                         }
-                        self.current_error = Some(AlertMessage::error(error_msg));
+                        // Error handling is now done at the application level
                         Command::none()
                     }
                 }
             }
 
-            MainViewMessage::ShowError(error) => {
-                self.current_error = Some(AlertMessage::error(error));
+            MainViewMessage::ShowError(_error) => {
+                // Error is now handled at the application level via toast system
                 Command::none()
             }
 
-            MainViewMessage::DismissError => {
-                self.current_error = None;
-                Command::none()
-            }
-
-            // Error demonstration handlers
+            // Error demonstration handlers - these are for testing
             MainViewMessage::TriggerConnectionError => {
-                self.current_error = Some(AlertMessage::ipc_error(
-                    "Unable to connect to the ZipLock backend service. Please ensure the daemon is running."
-                ));
+                // These would be handled at the application level
                 Command::none()
             }
 
             MainViewMessage::TriggerAuthError => {
-                self.current_error = Some(AlertMessage::ipc_error(
-                    "Authentication failed. Please check your passphrase and try again.",
-                ));
+                // These would be handled at the application level
                 Command::none()
             }
 
             MainViewMessage::TriggerValidationError => {
-                self.current_error = Some(AlertMessage::error(
-                    "Invalid data provided. Please check your input and try again.",
-                ));
+                // These would be handled at the application level
                 Command::none()
             }
 
@@ -377,15 +358,6 @@ impl MainView {
             search_bar,
             Space::with_height(Length::Fixed(utils::standard_spacing().into())),
         ];
-
-        // Add error alert if present
-        if let Some(error_alert) = &self.current_error {
-            content_column = content_column.push(crate::ui::theme::alerts::render_alert(
-                error_alert,
-                Some(MainViewMessage::DismissError),
-            ));
-            content_column = content_column.push(Space::with_height(Length::Fixed(10.0)));
-        }
 
         let credential_list = self.view_credential_list();
         content_column = content_column.push(credential_list);
@@ -677,10 +649,7 @@ impl MainView {
             self.session_id = None;
             self.is_authenticated = false;
             self.credentials.clear();
-            self.current_error = Some(AlertMessage::warning(
-                "Your session has expired. You will be redirected to unlock your repository."
-                    .to_string(),
-            ));
+            // Session timeout handling is now done at the application level
             // Return command to trigger session timeout handling
             Some(Command::perform(async {}, |_| {
                 MainViewMessage::SessionTimeout
@@ -690,15 +659,7 @@ impl MainView {
         }
     }
 
-    /// Dismiss the current error alert
-    pub fn dismiss_error(&mut self) {
-        self.current_error = None;
-    }
-
-    /// Check if there's currently an error to display
-    pub fn has_error(&self) -> bool {
-        self.current_error.is_some()
-    }
+    // Error handling methods removed since we're using global toast system
 }
 
 /// Custom container style for credential items

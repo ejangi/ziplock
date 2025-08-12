@@ -11,6 +11,7 @@ mod config;
 mod ipc;
 mod ui;
 
+use ui::components::toast::{ToastManager, ToastPosition};
 use ui::theme::alerts::AlertMessage;
 
 use ui::{create_ziplock_theme, theme};
@@ -66,6 +67,14 @@ pub enum Message {
     ShowAlert(AlertMessage),
     DismissAlert,
 
+    // Toast management
+    ShowToast(AlertMessage),
+    DismissToast(usize),
+    UpdateToasts,
+
+    // Operation results from views
+    OperationResult(Result<String, String>),
+
     // Session management
     SessionTimeout,
 
@@ -98,6 +107,7 @@ pub struct ZipLockApp {
     theme: Theme,
     current_alert: Option<AlertMessage>,
     session_id: Option<String>,
+    toast_manager: ToastManager,
 }
 
 impl Application for ZipLockApp {
@@ -116,6 +126,7 @@ impl Application for ZipLockApp {
             theme: create_ziplock_theme(),
             current_alert: None,
             session_id: None,
+            toast_manager: ToastManager::with_position(ToastPosition::BottomRight),
         };
 
         let load_config_command =
@@ -211,10 +222,8 @@ impl Application for ZipLockApp {
                     }
                     Err(error) => {
                         warn!("Repository validation failed: {}", error);
-                        self.current_alert = Some(AlertMessage::warning(format!(
-                            "Repository Validation Failed: {}",
-                            error
-                        )));
+                        self.toast_manager
+                            .warning(format!("Repository Validation Failed: {}", error));
                         self.state = AppState::WizardRequired;
                     }
                 }
@@ -394,6 +403,37 @@ impl Application for ZipLockApp {
                 Command::none()
             }
 
+            Message::ShowToast(alert) => {
+                self.toast_manager.add_toast(alert);
+                Command::none()
+            }
+
+            Message::DismissToast(toast_id) => {
+                self.toast_manager.remove_toast(toast_id);
+                Command::none()
+            }
+
+            Message::UpdateToasts => {
+                self.toast_manager.remove_expired_toasts();
+                Command::none()
+            }
+
+            Message::OperationResult(result) => {
+                match result {
+                    Ok(success_msg) => {
+                        self.toast_manager.success(success_msg);
+                    }
+                    Err(error_msg) => {
+                        // Check if this is a session timeout error
+                        if crate::ipc::IpcClient::is_session_timeout_error(&error_msg) {
+                            return Command::perform(async {}, |_| Message::SessionTimeout);
+                        }
+                        self.toast_manager.error(error_msg);
+                    }
+                }
+                Command::none()
+            }
+
             Message::MainView(main_msg) => {
                 if let AppState::MainInterface(main_view) = &mut self.state {
                     match main_msg {
@@ -402,7 +442,7 @@ impl Application for ZipLockApp {
                             if crate::ipc::IpcClient::is_session_timeout_error(&error) {
                                 return Command::perform(async {}, |_| Message::SessionTimeout);
                             }
-                            self.current_alert = Some(AlertMessage::error(error));
+                            self.toast_manager.error(error);
                             Command::none()
                         }
                         MainViewMessage::SessionTimeout => {
@@ -418,6 +458,31 @@ impl Application for ZipLockApp {
                             return Command::perform(
                                 async move { credential_id },
                                 Message::ShowEditCredential,
+                            );
+                        }
+                        MainViewMessage::TriggerConnectionError => {
+                            self.toast_manager.ipc_error(
+                                "Unable to connect to the ZipLock backend service. Please ensure the daemon is running."
+                            );
+                            Command::none()
+                        }
+                        MainViewMessage::TriggerAuthError => {
+                            self.toast_manager.ipc_error(
+                                "Authentication failed. Please check your passphrase and try again."
+                            );
+                            Command::none()
+                        }
+                        MainViewMessage::TriggerValidationError => {
+                            self.toast_manager.error(
+                                "Invalid data provided. Please check your input and try again.",
+                            );
+                            Command::none()
+                        }
+                        MainViewMessage::OperationCompleted(result) => {
+                            // Forward operation results to main app for toast handling
+                            return Command::perform(
+                                async move { result },
+                                Message::OperationResult,
                             );
                         }
                         _ => main_view.update(main_msg).map(Message::MainView),
@@ -452,20 +517,42 @@ impl Application for ZipLockApp {
 
             Message::AddCredential(add_msg) => {
                 if let AppState::AddCredentialActive(add_view) = &mut self.state {
-                    if matches!(&add_msg, AddCredentialMessage::Cancel) {
-                        return Command::perform(async {}, |_| Message::HideAddCredential);
-                    }
-                    let command = add_view.update(add_msg).map(Message::AddCredential);
+                    match &add_msg {
+                        AddCredentialMessage::Cancel => {
+                            return Command::perform(async {}, |_| Message::HideAddCredential);
+                        }
+                        AddCredentialMessage::ShowError(error) => {
+                            self.toast_manager.error(error.clone());
+                            let command = add_view.update(add_msg).map(Message::AddCredential);
+                            return command;
+                        }
+                        AddCredentialMessage::ShowSuccess(success) => {
+                            self.toast_manager.success(success.clone());
+                            let command = add_view.update(add_msg).map(Message::AddCredential);
+                            return Command::batch([
+                                command,
+                                Command::perform(async {}, |_| Message::HideAddCredential),
+                            ]);
+                        }
+                        AddCredentialMessage::ShowValidationError(error) => {
+                            self.toast_manager.warning(error.clone());
+                            let command = add_view.update(add_msg).map(Message::AddCredential);
+                            return command;
+                        }
+                        _ => {
+                            let command = add_view.update(add_msg).map(Message::AddCredential);
 
-                    // Check if add credential completed
-                    if add_view.is_complete() {
-                        return Command::batch([
-                            command,
-                            Command::perform(async {}, |_| Message::HideAddCredential),
-                        ]);
-                    }
+                            // Check if add credential completed
+                            if add_view.is_complete() {
+                                return Command::batch([
+                                    command,
+                                    Command::perform(async {}, |_| Message::HideAddCredential),
+                                ]);
+                            }
 
-                    return command;
+                            return command;
+                        }
+                    }
                 }
                 Command::none()
             }
@@ -499,20 +586,42 @@ impl Application for ZipLockApp {
 
             Message::EditCredential(edit_msg) => {
                 if let AppState::EditCredentialActive(edit_view) = &mut self.state {
-                    if matches!(&edit_msg, EditCredentialMessage::Cancel) {
-                        return Command::perform(async {}, |_| Message::HideEditCredential);
-                    }
-                    let command = edit_view.update(edit_msg).map(Message::EditCredential);
+                    match &edit_msg {
+                        EditCredentialMessage::Cancel => {
+                            return Command::perform(async {}, |_| Message::HideEditCredential);
+                        }
+                        EditCredentialMessage::ShowError(error) => {
+                            self.toast_manager.error(error.clone());
+                            let command = edit_view.update(edit_msg).map(Message::EditCredential);
+                            return command;
+                        }
+                        EditCredentialMessage::ShowSuccess(success) => {
+                            self.toast_manager.success(success.clone());
+                            let command = edit_view.update(edit_msg).map(Message::EditCredential);
+                            return Command::batch([
+                                command,
+                                Command::perform(async {}, |_| Message::HideEditCredential),
+                            ]);
+                        }
+                        EditCredentialMessage::ShowValidationError(error) => {
+                            self.toast_manager.warning(error.clone());
+                            let command = edit_view.update(edit_msg).map(Message::EditCredential);
+                            return command;
+                        }
+                        _ => {
+                            let command = edit_view.update(edit_msg).map(Message::EditCredential);
 
-                    // Check if edit credential completed
-                    if edit_view.is_complete() {
-                        return Command::batch([
-                            command,
-                            Command::perform(async {}, |_| Message::HideEditCredential),
-                        ]);
-                    }
+                            // Check if edit credential completed
+                            if edit_view.is_complete() {
+                                return Command::batch([
+                                    command,
+                                    Command::perform(async {}, |_| Message::HideEditCredential),
+                                ]);
+                            }
 
-                    return command;
+                            return command;
+                        }
+                    }
                 }
                 Command::none()
             }
@@ -541,9 +650,8 @@ impl Application for ZipLockApp {
                     self.state = AppState::WizardRequired;
                 }
                 // Show timeout notification
-                self.current_alert = Some(AlertMessage::warning(
-                    "Your session has expired. Please unlock your repository again.".to_string(),
-                ));
+                self.toast_manager
+                    .warning("Your session has expired. Please unlock your repository again.");
                 Command::none()
             }
 
@@ -589,7 +697,7 @@ impl Application for ZipLockApp {
             AppState::Error(error) => self.view_error(error),
         };
 
-        self.wrap_with_alert(main_content)
+        self.wrap_with_toasts(main_content)
     }
 
     fn theme(&self) -> Theme {
@@ -597,29 +705,45 @@ impl Application for ZipLockApp {
     }
 
     fn subscription(&self) -> iced::Subscription<Message> {
-        iced::event::listen_with(|event, _status| match event {
+        use iced::time;
+
+        let close_subscription = iced::event::listen_with(|event, _status| match event {
             iced::Event::Window(_, iced::window::Event::CloseRequested) => Some(Message::Quit),
             _ => None,
-        })
+        });
+
+        let toast_subscription = if self.toast_manager.has_toasts() {
+            time::every(std::time::Duration::from_millis(100)).map(|_| Message::UpdateToasts)
+        } else {
+            iced::Subscription::none()
+        };
+
+        iced::Subscription::batch([close_subscription, toast_subscription])
     }
 }
 
 impl ZipLockApp {
-    /// Wraps any view content with alert display if an alert is present
-    fn wrap_with_alert<'a>(&'a self, content: Element<'a, Message>) -> Element<'a, Message> {
+    /// Wraps any view content with toast overlay and optional alert display
+    fn wrap_with_toasts<'a>(&'a self, content: Element<'a, Message>) -> Element<'a, Message> {
         use iced::widget::{column, Space};
         use iced::Length;
+        use ui::components::toast::render_toast_overlay;
         use ui::theme::alerts;
 
+        // First wrap with toasts
+        let content_with_toasts =
+            render_toast_overlay(&self.toast_manager, content, Message::DismissToast);
+
+        // Then wrap with alert if present (for backwards compatibility)
         if let Some(alert) = &self.current_alert {
             column![
                 alerts::render_alert(alert, Some(Message::DismissAlert)),
                 Space::with_height(Length::Fixed(10.0)),
-                content,
+                content_with_toasts,
             ]
             .into()
         } else {
-            content
+            content_with_toasts
         }
     }
     /// View loading screen
