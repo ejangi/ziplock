@@ -117,7 +117,7 @@ impl Toast {
         } else {
             let fade_progress = (self.duration.saturating_sub(elapsed)).as_millis() as f32
                 / fade_duration.as_millis() as f32;
-            fade_progress.max(0.0).min(1.0)
+            fade_progress.clamp(0.0, 1.0)
         }
     }
 }
@@ -276,7 +276,7 @@ impl ToastManager {
 pub fn render_toast<Message: Clone + 'static>(
     toast: &Toast,
     on_dismiss: Option<Message>,
-) -> Element<Message> {
+) -> Element<'_, Message> {
     let container_style = match toast.message.level {
         AlertLevel::Error => container_styles::error_alert(),
         AlertLevel::Warning => container_styles::warning_alert(),
@@ -354,7 +354,7 @@ pub fn render_toast<Message: Clone + 'static>(
 pub fn render_toasts<Message: Clone + 'static>(
     toast_manager: &ToastManager,
     on_dismiss: impl Fn(usize) -> Message,
-) -> Element<Message> {
+) -> Element<'_, Message> {
     if !toast_manager.has_toasts() {
         return Space::new(Length::Shrink, Length::Shrink).into();
     }
