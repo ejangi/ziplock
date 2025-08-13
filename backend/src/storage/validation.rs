@@ -280,10 +280,22 @@ impl RepositoryValidator {
             stats,
         };
 
-        info!(
-            "Repository validation completed: valid={}, can_repair={}",
-            report.is_valid, report.can_auto_repair
-        );
+        if !report.is_valid {
+            warn!(
+                "Repository validation completed with {} issues: valid={}, can_repair={}",
+                report.issues.len(),
+                report.is_valid,
+                report.can_auto_repair
+            );
+            for (i, issue) in report.issues.iter().enumerate() {
+                warn!("Validation issue {}: {:?}", i + 1, issue);
+            }
+        } else {
+            info!(
+                "Repository validation completed successfully: valid={}, can_repair={}",
+                report.is_valid, report.can_auto_repair
+            );
+        }
         Ok(report)
     }
 
@@ -332,7 +344,21 @@ impl RepositoryValidator {
         info!("Auto-repair completed: {} repairs made", repairs_made);
 
         // Re-validate after repairs
-        self.validate(repository_path)
+        let final_report = self.validate(repository_path)?;
+
+        if !final_report.is_valid {
+            warn!(
+                "Auto-repair completed but {} issues remain",
+                final_report.issues.len()
+            );
+            for (i, issue) in final_report.issues.iter().enumerate() {
+                warn!("Remaining issue {}: {:?}", i + 1, issue);
+            }
+        } else {
+            info!("Auto-repair successfully resolved all validation issues");
+        }
+
+        Ok(final_report)
     }
 
     /// Validate basic repository structure
@@ -414,19 +440,36 @@ impl RepositoryValidator {
         let version = if let Some(version_str) = metadata.get("version").and_then(|v| v.as_str()) {
             match RepositoryVersion::parse(version_str) {
                 Ok(version) => {
-                    // Check compatibility
-                    if !version.is_compatible_with(&RepositoryVersion::CURRENT) {
+                    // Check version compatibility
+                    if version.is_newer_than(&RepositoryVersion::CURRENT) {
+                        // Future versions are critical - we don't know how to handle them
+                        warn!(
+                            "Repository uses future version {}, current version is {}",
+                            version,
+                            RepositoryVersion::CURRENT
+                        );
                         issues.push(ValidationIssue::VersionIssue {
                             found: version.to_string(),
                             expected: RepositoryVersion::CURRENT.to_string(),
                             severity: ValidationSeverity::Critical,
                         });
-                    } else if version.is_newer_than(&RepositoryVersion::CURRENT) {
-                        issues.push(ValidationIssue::VersionIssue {
-                            found: version.to_string(),
-                            expected: RepositoryVersion::CURRENT.to_string(),
-                            severity: ValidationSeverity::Warning,
+                    } else if !version.is_compatible_with(&RepositoryVersion::CURRENT) {
+                        // Older versions should be auto-upgraded, not blocked
+                        info!(
+                            "Repository version {} will be upgraded to {}",
+                            version,
+                            RepositoryVersion::CURRENT
+                        );
+                        issues.push(ValidationIssue::LegacyFormat {
+                            description: format!(
+                                "Repository version {} will be upgraded to {}",
+                                version,
+                                RepositoryVersion::CURRENT
+                            ),
+                            migration_needed: true,
                         });
+                    } else {
+                        info!("Repository version {} is current", version);
                     }
                     Some(version)
                 }
@@ -700,6 +743,50 @@ impl RepositoryValidator {
                 info!("Repaired: Created missing types directory");
                 Ok(true)
             }
+            "metadata.yml" => {
+                let metadata_path = repository_path.join("metadata.yml");
+
+                // Count existing credentials to set accurate metadata
+                let credentials_dir = repository_path.join("credentials");
+                let credential_count = if credentials_dir.exists() {
+                    fs::read_dir(&credentials_dir)
+                        .map(|entries| {
+                            entries
+                                .filter_map(|entry| entry.ok())
+                                .filter(|entry| {
+                                    if let Ok(file_type) = entry.file_type() {
+                                        file_type.is_dir()
+                                            || (file_type.is_file()
+                                                && entry
+                                                    .path()
+                                                    .extension()
+                                                    .and_then(|s| s.to_str())
+                                                    == Some("yml")
+                                                && entry.file_name() != ".gitkeep")
+                                    } else {
+                                        false
+                                    }
+                                })
+                                .count()
+                        })
+                        .unwrap_or(0)
+                } else {
+                    0
+                };
+
+                let metadata_content = format!(
+                    "version: \"1.0.0\"\ncreated_at: !Timestamp\n  secs_since_epoch: {}\n  nanos_since_epoch: 0\ncredential_count: {}\n",
+                    std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap_or_default()
+                        .as_secs(),
+                    credential_count
+                );
+
+                fs::write(&metadata_path, metadata_content)?;
+                info!("Repaired: Created missing metadata.yml file");
+                Ok(true)
+            }
             _ => {
                 warn!("Cannot auto-repair missing: {}", missing_path);
                 Ok(false)
@@ -720,7 +807,46 @@ impl RepositoryValidator {
 
     /// Migrate legacy format to current format
     fn migrate_legacy_format(&self, repository_path: &Path) -> BackendResult<bool> {
-        info!("Migrating legacy format to repository format v1.0");
+        info!("Performing legacy format migration to repository format v1.0");
+        let mut migration_performed = false;
+
+        // Check if we need to update the version in metadata.yml
+        let metadata_path = repository_path.join("metadata.yml");
+        if metadata_path.exists() {
+            let content = fs::read_to_string(&metadata_path)?;
+            let mut metadata: serde_yaml::Value =
+                serde_yaml::from_str(&content).map_err(|e| StorageError::InvalidRecord {
+                    reason: format!("Failed to parse metadata for migration: {}", e),
+                })?;
+
+            // Update version to current
+            if let Some(version_field) = metadata.get("version") {
+                let current_version = version_field.as_str().unwrap_or("unknown");
+                if current_version != RepositoryVersion::CURRENT.to_string() {
+                    info!(
+                        "Upgrading repository version from {} to {}",
+                        current_version,
+                        RepositoryVersion::CURRENT
+                    );
+
+                    metadata["version"] =
+                        serde_yaml::Value::String(RepositoryVersion::CURRENT.to_string());
+
+                    let updated_content = serde_yaml::to_string(&metadata).map_err(|e| {
+                        StorageError::InvalidRecord {
+                            reason: format!("Failed to serialize updated metadata: {}", e),
+                        }
+                    })?;
+
+                    fs::write(&metadata_path, updated_content)?;
+                    info!(
+                        "Repository version successfully upgraded to {}",
+                        RepositoryVersion::CURRENT
+                    );
+                    migration_performed = true;
+                }
+            }
+        }
 
         let credentials_dir = repository_path.join("credentials");
         if !credentials_dir.exists() {
@@ -761,6 +887,11 @@ impl RepositoryValidator {
                 "Legacy format migration completed: {} credentials migrated",
                 migrations_performed
             );
+            migration_performed = true;
+        }
+
+        if migration_performed {
+            info!("Legacy format migration completed successfully");
             Ok(true)
         } else {
             Ok(false)

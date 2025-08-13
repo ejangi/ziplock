@@ -49,6 +49,14 @@ pub enum Request {
     ValidateRepository {
         archive_path: PathBuf,
     },
+    ValidateArchiveComprehensive {
+        archive_path: PathBuf,
+        master_password: String,
+    },
+    RepairArchive {
+        archive_path: PathBuf,
+        master_password: String,
+    },
 
     // Credential operations
     ListCredentials {
@@ -146,6 +154,36 @@ pub enum ResponseData {
         credential_count: usize,
         created_at: SystemTime,
         last_modified: SystemTime,
+    },
+
+    // Repository validation
+    RepositoryValidated {
+        path: PathBuf,
+        size: u64,
+        last_modified: SystemTime,
+        is_valid_format: bool,
+        display_name: String,
+    },
+
+    // Comprehensive validation report
+    ValidationReport {
+        // Note: In real implementation, this would include the full validation report
+        // For now, we'll use basic fields that the frontend can display
+        is_valid: bool,
+        issues_count: usize,
+        can_auto_repair: bool,
+        credential_count: usize,
+        custom_type_count: usize,
+        total_size_bytes: u64,
+    },
+
+    // Archive repair completed
+    ArchiveRepaired {
+        is_valid: bool,
+        remaining_issues: usize,
+        credential_count: usize,
+        custom_type_count: usize,
+        total_size_bytes: u64,
     },
 }
 
@@ -411,6 +449,61 @@ impl IpcClient {
         match response {
             ResponseData::DatabaseLocked => Ok(()),
             _ => Err("Unexpected response for LockDatabase".to_string()),
+        }
+    }
+
+    /// Validate repository format without requiring master password
+    pub async fn validate_repository(&mut self, archive_path: PathBuf) -> Result<bool, String> {
+        let request = Request::ValidateRepository { archive_path };
+        let response = self.send_request(request).await?;
+        match response {
+            ResponseData::RepositoryValidated {
+                is_valid_format, ..
+            } => Ok(is_valid_format),
+            _ => Err("Unexpected response for ValidateRepository".to_string()),
+        }
+    }
+
+    /// Perform comprehensive validation of an archive file
+    pub async fn validate_archive_comprehensive(
+        &mut self,
+        archive_path: PathBuf,
+        master_password: String,
+    ) -> Result<(bool, usize, bool), String> {
+        let request = Request::ValidateArchiveComprehensive {
+            archive_path,
+            master_password,
+        };
+        let response = self.send_request(request).await?;
+        match response {
+            ResponseData::ValidationReport {
+                is_valid,
+                issues_count,
+                can_auto_repair,
+                ..
+            } => Ok((is_valid, issues_count, can_auto_repair)),
+            _ => Err("Unexpected response for ValidateArchiveComprehensive".to_string()),
+        }
+    }
+
+    /// Repair an archive file by fixing validation issues
+    pub async fn repair_archive(
+        &mut self,
+        archive_path: PathBuf,
+        master_password: String,
+    ) -> Result<(bool, usize), String> {
+        let request = Request::RepairArchive {
+            archive_path,
+            master_password,
+        };
+        let response = self.send_request(request).await?;
+        match response {
+            ResponseData::ArchiveRepaired {
+                is_valid,
+                remaining_issues,
+                ..
+            } => Ok((is_valid, remaining_issues)),
+            _ => Err("Unexpected response for RepairArchive".to_string()),
         }
     }
 

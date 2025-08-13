@@ -286,20 +286,234 @@ impl ArchiveManager {
             .await
             .context("Failed to extract archive")?;
 
-        // Validate repository format and auto-repair if needed
-        let was_repaired = self
-            .validate_repository_format(temp_dir.path())
-            .context("Repository format validation failed")?;
+        // Perform comprehensive repository validation based on configuration
+        let mut archive_needs_saving = false;
 
-        // Verify archive integrity after potential repairs
+        if self.config.validation.enable_comprehensive_validation {
+            info!("Performing comprehensive repository validation");
+
+            // Create validator with configuration settings
+            let validator = validation::RepositoryValidator::with_options(
+                self.config.validation.deep_validation,
+                self.config.validation.check_legacy_formats,
+                self.config.validation.validate_schemas,
+            );
+
+            let validation_report = validator
+                .validate(temp_dir.path())
+                .context("Repository format validation failed")?;
+
+            // Log validation details if enabled
+            if self.config.validation.log_validation_details {
+                info!(
+                    "Validation report: {} issues found, valid: {}, can_repair: {}",
+                    validation_report.issues.len(),
+                    validation_report.is_valid,
+                    validation_report.can_auto_repair
+                );
+                for issue in &validation_report.issues {
+                    info!("Validation issue: {:?}", issue);
+                }
+            }
+
+            // Handle validation results based on configuration
+            // Check validation results and attempt auto-repair if needed
+            if !validation_report.is_valid {
+                // Always log validation issues for debugging
+                error!(
+                    "Repository validation found {} issues:",
+                    validation_report.issues.len()
+                );
+                for (i, issue) in validation_report.issues.iter().enumerate() {
+                    error!("  {}. {:?}", i + 1, issue);
+                }
+
+                if validation_report.can_auto_repair && self.config.validation.auto_repair {
+                    info!(
+                        "Repository validation found {} issues, attempting auto-repair",
+                        validation_report.issues.len()
+                    );
+
+                    let repair_report = validator
+                        .auto_repair(temp_dir.path())
+                        .context("Repository auto-repair failed")?;
+
+                    if repair_report.is_valid {
+                        info!("Repository auto-repair completed successfully");
+                        archive_needs_saving = true;
+                    } else {
+                        warn!(
+                            "Repository auto-repair partially successful: {} remaining issues",
+                            repair_report.issues.len()
+                        );
+
+                        // Always log remaining issues after repair attempt
+                        for (i, issue) in repair_report.issues.iter().enumerate() {
+                            warn!("  Remaining issue {}: {:?}", i + 1, issue);
+                        }
+
+                        archive_needs_saving = true;
+
+                        // Check if we should fail on remaining critical issues
+                        if self.config.validation.fail_on_critical_issues {
+                            let critical_issues: Vec<_> = repair_report.issues.iter()
+                                .filter(|issue| {
+                                    matches!(
+                                        issue,
+                                        validation::ValidationIssue::MissingRequired { .. }
+                                            | validation::ValidationIssue::InvalidFormat { .. }
+                                            | validation::ValidationIssue::CorruptedCredential { .. }
+                                            | validation::ValidationIssue::VersionIssue {
+                                                severity: validation::ValidationSeverity::Critical,
+                                                ..
+                                            }
+                                    )
+                                })
+                                .collect();
+
+                            if !critical_issues.is_empty() {
+                                let issue_descriptions: Vec<String> = critical_issues
+                                    .iter()
+                                    .map(|issue| match issue {
+                                        validation::ValidationIssue::MissingRequired {
+                                            path,
+                                            description,
+                                        } => {
+                                            format!(
+                                                "Missing required file/directory: {} ({})",
+                                                path, description
+                                            )
+                                        }
+                                        validation::ValidationIssue::InvalidFormat {
+                                            path,
+                                            reason,
+                                        } => {
+                                            format!("Invalid format in {}: {}", path, reason)
+                                        }
+                                        validation::ValidationIssue::CorruptedCredential {
+                                            credential_id,
+                                            reason,
+                                        } => {
+                                            format!(
+                                                "Corrupted credential '{}': {}",
+                                                credential_id, reason
+                                            )
+                                        }
+                                        validation::ValidationIssue::VersionIssue {
+                                            found,
+                                            expected,
+                                            ..
+                                        } => {
+                                            format!(
+                                                "Version incompatibility: found {}, expected {}",
+                                                found, expected
+                                            )
+                                        }
+                                        _ => format!("{:?}", issue),
+                                    })
+                                    .collect();
+
+                                return Err(StorageError::CorruptedArchive {
+                                    reason: format!(
+                                        "Repository has {} critical validation issues that could not be auto-repaired:\n{}",
+                                        critical_issues.len(),
+                                        issue_descriptions.join("\n")
+                                    ),
+                                }
+                                .into());
+                            }
+                        }
+                    }
+                } else if self.config.validation.fail_on_critical_issues {
+                    // Cannot auto-repair and configured to fail on critical issues
+                    let issue_descriptions: Vec<String> = validation_report
+                        .issues
+                        .iter()
+                        .map(|issue| match issue {
+                            validation::ValidationIssue::MissingRequired { path, description } => {
+                                format!(
+                                    "Missing required file/directory: {} ({})",
+                                    path, description
+                                )
+                            }
+                            validation::ValidationIssue::InvalidFormat { path, reason } => {
+                                format!("Invalid format in {}: {}", path, reason)
+                            }
+                            validation::ValidationIssue::CorruptedCredential {
+                                credential_id,
+                                reason,
+                            } => {
+                                format!("Corrupted credential '{}': {}", credential_id, reason)
+                            }
+                            validation::ValidationIssue::VersionIssue {
+                                found,
+                                expected,
+                                severity,
+                            } => {
+                                format!(
+                                    "Version issue ({:?}): found {}, expected {}",
+                                    severity, found, expected
+                                )
+                            }
+                            validation::ValidationIssue::LegacyFormat { description, .. } => {
+                                format!("Legacy format: {}", description)
+                            }
+                            validation::ValidationIssue::StructuralIssue {
+                                description, ..
+                            } => {
+                                format!("Structural issue: {}", description)
+                            }
+                        })
+                        .collect();
+
+                    return Err(StorageError::CorruptedArchive {
+                        reason: format!(
+                            "Repository validation failed with {} issues. Auto-repair is {}:\n{}",
+                            validation_report.issues.len(),
+                            if self.config.validation.auto_repair {
+                                "enabled but issues cannot be repaired"
+                            } else {
+                                "disabled"
+                            },
+                            issue_descriptions.join("\n")
+                        ),
+                    }
+                    .into());
+                } else {
+                    warn!(
+                        "Repository validation found {} issues but continuing due to configuration",
+                        validation_report.issues.len()
+                    );
+                }
+            } else {
+                info!("Repository validation passed successfully");
+            }
+
+            // Log repository statistics for monitoring
+            info!(
+                "Repository statistics: {} credentials, {} custom types, {} bytes total",
+                validation_report.stats.credential_count,
+                validation_report.stats.custom_type_count,
+                validation_report.stats.total_size_bytes
+            );
+        } else {
+            // Fall back to basic validation when comprehensive validation is disabled
+            info!("Comprehensive validation disabled, performing basic validation");
+            let was_repaired = self
+                .validate_repository_format(temp_dir.path())
+                .context("Basic repository format validation failed")?;
+            archive_needs_saving = was_repaired;
+        }
+
+        // Verify archive integrity if enabled
         if self.config.verify_integrity {
             self.verify_archive_integrity(temp_dir.path())
                 .context("Archive integrity check failed")?;
         }
 
-        // If repairs were made, save the repaired archive
-        if was_repaired {
-            info!("Repository format was repaired, saving updated archive");
+        // Save the archive if repairs were made
+        if archive_needs_saving {
+            info!("Saving repaired archive with validation fixes");
             self.create_encrypted_archive(&path, temp_dir.path(), master_password)
                 .await
                 .context("Failed to save repaired archive")?;
@@ -1286,6 +1500,7 @@ mod tests {
                 dictionary_size_mb: 32,
                 block_size_mb: 0,
             },
+            validation: crate::config::ValidationConfig::default(),
         }
     }
 
@@ -1332,7 +1547,7 @@ mod tests {
             file_lock_timeout: 5,
             temp_dir: None,
             verify_integrity: true,
-            min_password_length: Some(12), // Production setting
+            min_password_length: Some(8),
             compression: crate::config::CompressionConfig {
                 level: 6,
                 solid: false,
@@ -1340,6 +1555,7 @@ mod tests {
                 dictionary_size_mb: 32,
                 block_size_mb: 0,
             },
+            validation: crate::config::ValidationConfig::default(),
         };
         let manager = ArchiveManager::new(config).unwrap();
         let archive_path = manager.config.default_archive_dir.join("test.7z");
@@ -1383,6 +1599,7 @@ mod tests {
                 dictionary_size_mb: 32,
                 block_size_mb: 0,
             },
+            validation: crate::config::ValidationConfig::default(),
         };
         let manager = ArchiveManager::new(config).unwrap();
 
@@ -1801,5 +2018,124 @@ mod tests {
                 .map(|v| v.to_string())
                 .unwrap_or_else(|| "unknown".to_string())
         );
+    }
+
+    #[tokio::test]
+    async fn test_comprehensive_validation_during_opening() {
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        let archive_path = temp_dir.path().join("test_validation.7z");
+        let password = "test_validation_password_123";
+
+        // Create config with comprehensive validation enabled
+        let mut config = crate::config::StorageConfig::default();
+        config.validation.enable_comprehensive_validation = true;
+        config.validation.deep_validation = true;
+        config.validation.check_legacy_formats = true;
+        config.validation.validate_schemas = true;
+        config.validation.auto_repair = true;
+        config.validation.fail_on_critical_issues = true;
+        config.validation.log_validation_details = true;
+
+        let manager = ArchiveManager::new(config).unwrap();
+
+        // Create a new archive
+        manager
+            .create_archive(&archive_path, password)
+            .await
+            .unwrap();
+
+        // Close any open archive first
+        let _ = manager.close_archive().await;
+
+        // Now open the archive - this should trigger comprehensive validation
+        println!("Testing comprehensive validation during archive opening...");
+
+        let result = manager.open_archive(&archive_path, password).await;
+
+        assert!(
+            result.is_ok(),
+            "Archive opening with comprehensive validation should succeed: {:?}",
+            result.err()
+        );
+
+        // Verify the archive is properly opened
+        assert!(
+            manager.is_open().await,
+            "Archive should be open after validation"
+        );
+
+        // Verify we can perform operations on the validated archive
+        let credentials = manager.list_credentials().await.unwrap();
+        assert_eq!(
+            credentials.len(),
+            0,
+            "New archive should have no credentials"
+        );
+
+        println!("Comprehensive validation during opening test passed!");
+    }
+
+    #[tokio::test]
+    async fn test_validation_with_auto_repair() {
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        let archive_path = temp_dir.path().join("test_repair.7z");
+        let password = "test_repair_password_123";
+
+        // Create config with auto-repair enabled
+        let mut config = crate::config::StorageConfig::default();
+        config.validation.enable_comprehensive_validation = true;
+        config.validation.auto_repair = true;
+        config.validation.fail_on_critical_issues = false; // Allow opening even with issues
+        config.validation.log_validation_details = true;
+
+        let manager = ArchiveManager::new(config).unwrap();
+
+        // Create an archive
+        manager
+            .create_archive(&archive_path, password)
+            .await
+            .unwrap();
+
+        // Close the archive
+        manager.close_archive().await.unwrap();
+
+        // Manually corrupt the archive by removing the types directory
+        // First extract it
+        let extract_dir = temp_dir.path().join("corrupt_test");
+        manager
+            .extract_archive(&archive_path, &extract_dir, password)
+            .await
+            .unwrap();
+
+        // Remove the types directory to create a validation issue
+        let types_dir = extract_dir.join("types");
+        if types_dir.exists() {
+            std::fs::remove_dir_all(&types_dir).unwrap();
+        }
+
+        // Recreate the archive with the corruption
+        manager
+            .create_encrypted_archive(&archive_path, &extract_dir, password)
+            .await
+            .unwrap();
+
+        // Now try to open it - auto-repair should fix the missing types directory
+        println!("Testing auto-repair functionality...");
+
+        let result = manager.open_archive(&archive_path, password).await;
+
+        assert!(
+            result.is_ok(),
+            "Archive opening with auto-repair should succeed even with corruption: {:?}",
+            result.err()
+        );
+
+        // Verify the archive is now properly structured
+        assert!(
+            manager.is_open().await,
+            "Archive should be open after auto-repair"
+        );
+
+        println!("Auto-repair functionality test passed!");
     }
 }

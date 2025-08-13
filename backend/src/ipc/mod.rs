@@ -85,6 +85,14 @@ pub enum Request {
     ValidateRepository {
         archive_path: PathBuf,
     },
+    ValidateArchiveComprehensive {
+        archive_path: PathBuf,
+        master_password: String,
+    },
+    RepairArchive {
+        archive_path: PathBuf,
+        master_password: String,
+    },
 
     // Credential operations
     ListCredentials {
@@ -184,6 +192,16 @@ pub enum ResponseData {
         last_modified: std::time::SystemTime,
         is_valid_format: bool,
         display_name: String,
+    },
+
+    // Comprehensive validation report
+    ValidationReport {
+        report: crate::storage::validation::ValidationReport,
+    },
+
+    // Archive repair completed
+    ArchiveRepaired {
+        report: crate::storage::validation::ValidationReport,
     },
 }
 
@@ -531,6 +549,27 @@ impl IpcServer {
                 Self::handle_validate_repository(archive_path, archive_manager).await
             }
 
+            Request::ValidateArchiveComprehensive {
+                archive_path,
+                master_password,
+            } => {
+                Self::handle_validate_archive_comprehensive(
+                    archive_path,
+                    master_password,
+                    archive_manager,
+                    config,
+                )
+                .await
+            }
+
+            Request::RepairArchive {
+                archive_path,
+                master_password,
+            } => {
+                Self::handle_repair_archive(archive_path, master_password, archive_manager, config)
+                    .await
+            }
+
             // Credential operations (require authentication)
             Request::ListCredentials { include_sensitive } => {
                 if is_authenticated {
@@ -733,10 +772,29 @@ impl IpcServer {
             }
             Err(e) => {
                 warn!("Failed to unlock database: {}", e);
+
+                // Check if this is a validation error and extract meaningful details
+                let error_string = e.to_string();
+                let (error_type, message) = if error_string.contains("validation") {
+                    ("ValidationFailed".to_string(), error_string.clone())
+                } else if error_string.contains("corrupted") || error_string.contains("invalid") {
+                    ("CorruptedArchive".to_string(), error_string.clone())
+                } else if error_string.contains("password") || error_string.contains("decrypt") {
+                    (
+                        "InvalidPassword".to_string(),
+                        "Invalid master password or corrupted archive".to_string(),
+                    )
+                } else {
+                    (
+                        "UnlockFailed".to_string(),
+                        "Failed to unlock database".to_string(),
+                    )
+                };
+
                 Ok(RequestResult::Error {
-                    error_type: "UnlockFailed".to_string(),
-                    message: "Failed to unlock database".to_string(),
-                    details: Some(e.to_string()),
+                    error_type,
+                    message,
+                    details: Some(error_string),
                 })
             }
         }
@@ -853,6 +911,76 @@ impl IpcServer {
                 Ok(RequestResult::Error {
                     error_type: "ValidationFailed".to_string(),
                     message: "Repository validation failed".to_string(),
+                    details: Some(e.to_string()),
+                })
+            }
+        }
+    }
+
+    /// Handle comprehensive archive validation request
+    async fn handle_validate_archive_comprehensive(
+        archive_path: PathBuf,
+        master_password: String,
+        archive_manager: &Arc<ArchiveManager>,
+        config: &crate::config::Config,
+    ) -> Result<RequestResult> {
+        // Use the API handlers to perform comprehensive validation
+        let api_handlers = crate::api::ApiHandlers::new(archive_manager.clone(), config.clone());
+
+        match api_handlers
+            .validate_archive_comprehensive(archive_path, master_password)
+            .await
+        {
+            Ok(validation_report) => {
+                info!(
+                    "Comprehensive archive validation completed: valid={}, issues={}",
+                    validation_report.is_valid,
+                    validation_report.issues.len()
+                );
+                Ok(RequestResult::Success(ResponseData::ValidationReport {
+                    report: validation_report,
+                }))
+            }
+            Err(e) => {
+                warn!("Comprehensive archive validation failed: {}", e);
+                Ok(RequestResult::Error {
+                    error_type: "ValidationFailed".to_string(),
+                    message: "Comprehensive archive validation failed".to_string(),
+                    details: Some(e.to_string()),
+                })
+            }
+        }
+    }
+
+    /// Handle archive repair request
+    async fn handle_repair_archive(
+        archive_path: PathBuf,
+        master_password: String,
+        archive_manager: &Arc<ArchiveManager>,
+        config: &crate::config::Config,
+    ) -> Result<RequestResult> {
+        // Use the API handlers to perform archive repair
+        let api_handlers = crate::api::ApiHandlers::new(archive_manager.clone(), config.clone());
+
+        match api_handlers
+            .repair_archive(archive_path, master_password)
+            .await
+        {
+            Ok(repair_report) => {
+                info!(
+                    "Archive repair completed: valid={}, remaining_issues={}",
+                    repair_report.is_valid,
+                    repair_report.issues.len()
+                );
+                Ok(RequestResult::Success(ResponseData::ArchiveRepaired {
+                    report: repair_report,
+                }))
+            }
+            Err(e) => {
+                warn!("Archive repair failed: {}", e);
+                Ok(RequestResult::Error {
+                    error_type: "RepairFailed".to_string(),
+                    message: "Archive repair failed".to_string(),
                     details: Some(e.to_string()),
                 })
             }
@@ -1249,6 +1377,7 @@ mod tests {
                 dictionary_size_mb: 32,
                 block_size_mb: 0,
             },
+            validation: crate::config::ValidationConfig::default(),
         };
 
         let config = Config {

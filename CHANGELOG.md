@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.4] - 2025-08-13
+
+### Fixed
+- Added repository validation to the backend when the archive file is first opened
+
 ## [0.1.3] - 2025-08-13
 
 ### Fixed

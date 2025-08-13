@@ -246,6 +246,7 @@ ui:
 - [Design Guidelines](docs/design.md) - UI/UX design principles
 - [API Documentation](docs/api.md) - Backend service API reference
 - [Repository Detection Implementation](docs/technical/repository-detection-implementation.md) - Technical implementation details
+- [Validation Implementation](docs/technical/validation-implementation.md) - Comprehensive validation system details
 
 ### Developer Documentation
 - [Development Guide](docs/development.md) - Setting up the development environment

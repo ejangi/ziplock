@@ -87,6 +87,34 @@ pub struct StorageConfig {
 
     /// 7z compression configuration
     pub compression: CompressionConfig,
+
+    /// Repository validation configuration
+    pub validation: ValidationConfig,
+}
+
+/// Repository validation configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ValidationConfig {
+    /// Enable comprehensive repository validation on open
+    pub enable_comprehensive_validation: bool,
+
+    /// Enable deep validation (checks all credential files)
+    pub deep_validation: bool,
+
+    /// Check for legacy format repositories and migrate
+    pub check_legacy_formats: bool,
+
+    /// Validate YAML schema compliance
+    pub validate_schemas: bool,
+
+    /// Automatically attempt to repair validation issues
+    pub auto_repair: bool,
+
+    /// Fail repository opening if critical validation issues are found
+    pub fail_on_critical_issues: bool,
+
+    /// Log detailed validation reports
+    pub log_validation_details: bool,
 }
 
 /// 7z compression configuration
@@ -222,6 +250,21 @@ impl Default for StorageConfig {
             verify_integrity: true,
             min_password_length: Some(12),
             compression: CompressionConfig::default(),
+            validation: ValidationConfig::default(),
+        }
+    }
+}
+
+impl Default for ValidationConfig {
+    fn default() -> Self {
+        Self {
+            enable_comprehensive_validation: true,
+            deep_validation: true,
+            check_legacy_formats: true,
+            validate_schemas: true,
+            auto_repair: true,
+            fail_on_critical_issues: true,
+            log_validation_details: false,
         }
     }
 }

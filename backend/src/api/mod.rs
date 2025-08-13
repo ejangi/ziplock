@@ -285,6 +285,78 @@ impl ApiHandlers {
         Ok(repo_info)
     }
 
+    /// Perform comprehensive validation of an archive file with master password
+    ///
+    /// This extracts and validates the entire repository structure and contents,
+    /// providing detailed validation reports and optional auto-repair.
+    pub async fn validate_archive_comprehensive(
+        &self,
+        archive_path: PathBuf,
+        master_password: String,
+    ) -> BackendResult<crate::storage::validation::ValidationReport> {
+        info!(
+            "API: Performing comprehensive archive validation at {:?}",
+            archive_path
+        );
+
+        // Validate inputs
+        Self::validate_archive_path(&archive_path)
+            .context("Archive path validation failed")
+            .map_err(|e| BackendError::Validation(e.to_string()))?;
+
+        self.validate_master_passphrase(&master_password)?;
+
+        // Use the archive manager's validation method
+        let validation_report = self
+            .archive_manager
+            .validate_archive_file(&archive_path, &master_password)
+            .await
+            .context("Archive validation failed")?;
+
+        info!(
+            "API: Comprehensive validation complete - valid: {}, issues: {}, can_repair: {}",
+            validation_report.is_valid,
+            validation_report.issues.len(),
+            validation_report.can_auto_repair
+        );
+
+        Ok(validation_report)
+    }
+
+    /// Repair an archive file by fixing validation issues
+    ///
+    /// This attempts to automatically repair validation issues found in an archive.
+    /// Returns the updated validation report after repair attempts.
+    pub async fn repair_archive(
+        &self,
+        archive_path: PathBuf,
+        master_password: String,
+    ) -> BackendResult<crate::storage::validation::ValidationReport> {
+        info!("API: Attempting to repair archive at {:?}", archive_path);
+
+        // Validate inputs
+        Self::validate_archive_path(&archive_path)
+            .context("Archive path validation failed")
+            .map_err(|e| BackendError::Validation(e.to_string()))?;
+
+        self.validate_master_passphrase(&master_password)?;
+
+        // Use the archive manager's repair method
+        let repair_report = self
+            .archive_manager
+            .repair_archive_file(&archive_path, &master_password)
+            .await
+            .context("Archive repair failed")?;
+
+        info!(
+            "API: Archive repair complete - valid: {}, remaining_issues: {}",
+            repair_report.is_valid,
+            repair_report.issues.len()
+        );
+
+        Ok(repair_report)
+    }
+
     /// Close the current archive
     pub async fn close_archive(&self) -> BackendResult<()> {
         info!("API: Closing current archive");
