@@ -12,6 +12,7 @@ use tracing::debug;
 use crate::ipc::IpcClient;
 use crate::ui::theme::alerts::AlertMessage;
 use crate::ui::theme::container_styles;
+use crate::ui::theme::{EXTRA_LIGHT_GRAY, LIGHT_GRAY_TEXT, VERY_LIGHT_GRAY};
 use crate::ui::{button_styles, theme, utils};
 
 /// Messages for the main application view
@@ -308,7 +309,7 @@ impl MainView {
                 .width(Length::Fixed(48.0))
                 .height(Length::Fixed(48.0)),
         )
-        .padding([20, 0, 30, 0])
+        .padding(utils::logo_container_padding())
         .width(Length::Fill)
         .center_x();
 
@@ -370,7 +371,9 @@ impl MainView {
         let credential_list = self.view_credential_list();
         content_column = content_column.push(credential_list);
 
-        let main_content = content_column.padding([0, 30, 30, 30]).spacing(10);
+        let main_content = content_column
+            .padding(utils::main_content_padding())
+            .spacing(10);
 
         container(main_content)
             .width(Length::Fill)
@@ -385,7 +388,7 @@ impl MainView {
                 .on_input(MainViewMessage::SearchChanged)
                 .on_submit(MainViewMessage::SearchSubmitted)
                 .width(Length::FillPortion(3))
-                .padding([8, 12])
+                .padding(utils::search_bar_padding())
                 .style(theme::text_input_styles::standard()),
             Space::with_width(Length::Fixed(10.0)),
             if !self.search_query.is_empty() {
@@ -469,7 +472,7 @@ impl MainView {
                             .align_items(Alignment::Center)
                         )
                         .on_press(MainViewMessage::AddCredential)
-                        .padding([12, 24])
+                        .padding(utils::add_credential_button_padding())
                         .style(button_styles::primary()),
                         Space::with_height(Length::Fixed(20.0)),
                         text("or click 'Refresh' to reload from backend")
@@ -521,9 +524,13 @@ impl MainView {
             .map(|credential| self.view_credential_item(credential))
             .collect();
 
-        scrollable(column(credential_items).spacing(10).padding([10, 0]))
-            .height(Length::Fill)
-            .into()
+        scrollable(
+            column(credential_items)
+                .spacing(10)
+                .padding(utils::list_padding()),
+        )
+        .height(Length::Fill)
+        .into()
     }
 
     /// Render a single credential item
@@ -539,7 +546,7 @@ impl MainView {
         let border_color = if is_selected {
             theme::LOGO_PURPLE
         } else {
-            iced::Color::from_rgb(0.9, 0.9, 0.9)
+            EXTRA_LIGHT_GRAY
         };
 
         button(
@@ -549,9 +556,7 @@ impl MainView {
                     .style(iced::theme::Text::Color(theme::DARK_TEXT)),
                 text(&credential.username)
                     .size(12)
-                    .style(iced::theme::Text::Color(iced::Color::from_rgb(
-                        0.6, 0.6, 0.6
-                    ))),
+                    .style(iced::theme::Text::Color(LIGHT_GRAY_TEXT)),
                 if let Some(url) = &credential.url {
                     text(url)
                         .size(10)
@@ -711,15 +716,13 @@ impl button::StyleSheet for CredentialItemButtonStyle {
 
     fn disabled(&self, _style: &Self::Style) -> button::Appearance {
         button::Appearance {
-            background: Some(iced::Background::Color(iced::Color::from_rgb(
-                0.95, 0.95, 0.95,
-            ))),
+            background: Some(iced::Background::Color(VERY_LIGHT_GRAY)),
             border: iced::Border {
-                color: iced::Color::from_rgb(0.9, 0.9, 0.9),
+                color: EXTRA_LIGHT_GRAY,
                 width: 1.0,
                 radius: iced::border::Radius::from(theme::utils::border_radius()),
             },
-            text_color: iced::Color::from_rgb(0.6, 0.6, 0.6),
+            text_color: LIGHT_GRAY_TEXT,
             ..Default::default()
         }
     }

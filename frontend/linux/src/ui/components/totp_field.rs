@@ -28,10 +28,11 @@ use iced::widget::{button, column, container, row, text, text_input, Space};
 use iced::{Alignment, Element, Length, Subscription};
 use std::time::{Duration, Instant};
 
+use crate::ui::theme::{button_styles, utils, LIGHT_GRAY_TEXT};
+
 use ziplock_shared::utils::totp;
 
 use crate::ui::theme;
-use crate::ui::theme::{button_styles, utils};
 
 /// Messages for the TOTP field component
 #[derive(Debug, Clone, PartialEq)]
@@ -305,13 +306,13 @@ impl TotpField {
             button(text(&display_value).size(14))
                 .on_press(TotpFieldMessage::CopyCode)
                 .style(button_styles::text_field_like())
-                .padding(10)
+                .padding(utils::text_input_padding())
                 .width(Length::Fill)
                 .into()
         } else {
             text_input(placeholder, input_value)
                 .on_input(TotpFieldMessage::SecretChanged)
-                .padding(10)
+                .padding(utils::text_input_padding())
                 .style(crate::ui::theme::text_input_styles::standard())
                 .into()
         };
@@ -362,7 +363,7 @@ impl TotpField {
                     .size(12)
                     .style(iced::theme::Text::Color(color)),
             )
-            .padding([0, 5])
+            .padding(utils::small_element_padding())
             .center_y();
 
             row_elements.push(refresh_indicator.into());
@@ -375,7 +376,7 @@ impl TotpField {
                     .size(12)
                     .style(iced::theme::Text::Color(theme::ERROR_RED)),
             )
-            .padding([0, 5])
+            .padding(utils::small_element_padding())
             .center_y();
 
             row_elements.push(error_indicator.into());
@@ -404,9 +405,7 @@ impl TotpField {
                 Space::with_height(Length::Fixed(5.0)),
                 text(help)
                     .size(11)
-                    .style(iced::theme::Text::Color(iced::Color::from_rgb(
-                        0.6, 0.6, 0.6
-                    )))
+                    .style(iced::theme::Text::Color(LIGHT_GRAY_TEXT))
             ]
             .into()
         } else {
@@ -483,7 +482,7 @@ impl TotpField {
                     .size(12)
                     .style(iced::theme::Text::Color(color)),
             )
-            .padding([0, 5])
+            .padding(utils::small_element_padding())
             .center_y();
 
             row_elements.push(refresh_indicator.into());

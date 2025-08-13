@@ -15,7 +15,8 @@ use tracing::{debug, error, info, warn};
 
 use crate::ipc::IpcClient;
 
-use crate::ui::{button_styles, progress_bar_styles, theme, utils};
+use crate::ui::theme::{utils, LIGHT_GRAY_TEXT, MEDIUM_GRAY, WARNING_YELLOW};
+use crate::ui::{button_styles, progress_bar_styles, theme};
 use ziplock_shared::{PassphraseValidator, ValidationPresets};
 
 /// Helper function to get theme color for strength level
@@ -23,7 +24,7 @@ fn get_strength_color(level: &ziplock_shared::StrengthLevel) -> Color {
     match level {
         ziplock_shared::StrengthLevel::VeryWeak => theme::ERROR_RED,
         ziplock_shared::StrengthLevel::Weak => theme::ERROR_RED,
-        ziplock_shared::StrengthLevel::Fair => Color::from_rgb(0.988, 0.749, 0.286), // Yellow
+        ziplock_shared::StrengthLevel::Fair => WARNING_YELLOW,
         ziplock_shared::StrengthLevel::Good => theme::SUCCESS_GREEN,
         ziplock_shared::StrengthLevel::Strong => theme::SUCCESS_GREEN,
         ziplock_shared::StrengthLevel::VeryStrong => theme::LOGO_PURPLE,
@@ -523,7 +524,7 @@ impl RepositoryWizard {
             // Passphrase requirements and validation feedback
             if !self.passphrase.is_empty() {
                 column![
-                    text("Passphrase Requirements:").size(12).style(iced::theme::Text::Color(Color::from_rgb(0.5, 0.5, 0.5))),
+                    text("Passphrase Requirements:").size(12).style(iced::theme::Text::Color(MEDIUM_GRAY)),
                     Space::with_height(Length::Fixed(5.0)),
 
                     // Show violations if any
@@ -565,13 +566,13 @@ impl RepositoryWizard {
                 .spacing(8)
             } else {
                 column![
-                    text("Passphrase Requirements:").size(12).style(iced::theme::Text::Color(Color::from_rgb(0.5, 0.5, 0.5))),
+                    text("Passphrase Requirements:").size(12).style(iced::theme::Text::Color(MEDIUM_GRAY)),
                     Space::with_height(Length::Fixed(5.0)),
-                    text("• At least 12 characters long").size(11).style(iced::theme::Text::Color(Color::from_rgb(0.7, 0.7, 0.7))),
-                    text("• Contains uppercase letters").size(11).style(iced::theme::Text::Color(Color::from_rgb(0.7, 0.7, 0.7))),
-                    text("• Contains lowercase letters").size(11).style(iced::theme::Text::Color(Color::from_rgb(0.7, 0.7, 0.7))),
-                    text("• Contains numbers").size(11).style(iced::theme::Text::Color(Color::from_rgb(0.7, 0.7, 0.7))),
-                    text("• Contains special characters").size(11).style(iced::theme::Text::Color(Color::from_rgb(0.7, 0.7, 0.7))),
+                    text("• At least 12 characters long").size(11).style(iced::theme::Text::Color(LIGHT_GRAY_TEXT)),
+                    text("• Contains uppercase letters").size(11).style(iced::theme::Text::Color(LIGHT_GRAY_TEXT)),
+                    text("• Contains lowercase letters").size(11).style(iced::theme::Text::Color(LIGHT_GRAY_TEXT)),
+                    text("• Contains numbers").size(11).style(iced::theme::Text::Color(LIGHT_GRAY_TEXT)),
+                    text("• Contains special characters").size(11).style(iced::theme::Text::Color(LIGHT_GRAY_TEXT)),
                 ]
                 .spacing(3)
             },
@@ -603,13 +604,13 @@ impl RepositoryWizard {
                     ]
                     .spacing(4)
                 )
-                .padding([12, 16])
+                .padding(utils::error_container_padding())
                 .width(Length::Fill)
                 .style(crate::ui::theme::container_styles::error_alert()),
                 Space::with_height(Length::Fixed(20.0)),
                 button("Try Again")
                     .on_press(WizardMessage::CreateRepository)
-                    .padding([10, 20])
+                    .padding(utils::standard_button_padding())
                     .style(button_styles::primary()),
             ]
             .align_items(Alignment::Center)
@@ -658,7 +659,7 @@ impl RepositoryWizard {
 
             button("Start Using ZipLock")
                 .on_press(WizardMessage::Finish)
-                .padding([12, 24]),
+                .padding(utils::completion_button_padding()),
         ]
         .align_items(Alignment::Center)
         .into()

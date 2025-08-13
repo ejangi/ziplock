@@ -833,7 +833,7 @@ impl ZipLockApp {
                 .spacing(2),
             )
             .width(Length::Fill)
-            .padding([15, 20])
+            .padding(theme::utils::repository_button_padding())
             .on_press(Message::OpenRepository(
                 OpenRepositoryMessage::SelectSpecificFile(repo.path.clone()),
             ));
@@ -864,11 +864,11 @@ impl ZipLockApp {
                 row![
                     button("Create New Repository")
                         .on_press(Message::ShowWizard)
-                        .padding([10, 20]),
+                        .padding(theme::utils::standard_button_padding()),
                     Space::with_width(Length::Fixed(20.0)),
                     button("Browse for Repository...")
                         .on_press(Message::ShowOpenRepository)
-                        .padding([10, 20]),
+                        .padding(theme::utils::standard_button_padding()),
                 ]
                 .spacing(10),
                 Space::with_height(Length::Fill),
@@ -905,11 +905,11 @@ impl ZipLockApp {
                 Space::with_height(Length::Fixed(40.0)),
                 button("Setup Repository")
                     .on_press(Message::ShowWizard)
-                    .padding([15, 30]),
+                    .padding(theme::utils::setup_button_padding()),
                 Space::with_height(Length::Fixed(20.0)),
                 button("Open Existing Repository")
                     .on_press(Message::ShowOpenRepository)
-                    .padding([10, 20]),
+                    .padding(theme::utils::standard_button_padding()),
                 Space::with_height(Length::Fill),
             ]
             .align_items(Alignment::Center)
@@ -942,7 +942,9 @@ impl ZipLockApp {
                     .size(14)
                     .horizontal_alignment(iced::alignment::Horizontal::Center),
                 Space::with_height(Length::Fixed(30.0)),
-                button("Quit").on_press(Message::Quit).padding([10, 20]),
+                button("Quit")
+                    .on_press(Message::Quit)
+                    .padding(theme::utils::standard_button_padding()),
                 Space::with_height(Length::Fill),
             ]
             .align_items(Alignment::Center)

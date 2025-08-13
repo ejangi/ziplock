@@ -9,7 +9,7 @@ use iced::{Alignment, Color, Command, Element, Length};
 use std::path::PathBuf;
 use tracing::{debug, error, info};
 
-use crate::ui::theme::{self, button_styles, container_styles, utils};
+use crate::ui::theme::{self, button_styles, container_styles, utils, MEDIUM_GRAY};
 use ziplock_shared::validation::PassphraseValidator;
 
 /// Messages for the open repository view
@@ -267,7 +267,7 @@ impl OpenRepositoryView {
         } else {
             text("No file selected")
                 .size(14)
-                .style(iced::theme::Text::Color(Color::from_rgb(0.5, 0.5, 0.5)))
+                .style(iced::theme::Text::Color(MEDIUM_GRAY))
         };
 
         column![

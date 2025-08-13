@@ -104,11 +104,32 @@ pub fn lock_icon() -> svg::Handle {
 /// Logo purple color from design.md (#8338ec)
 pub const LOGO_PURPLE: Color = Color::from_rgb(0.514, 0.220, 0.925);
 
+/// Logo purple hover state (slightly darker)
+pub const LOGO_PURPLE_HOVER: Color = Color::from_rgb(0.45, 0.18, 0.82);
+
+/// Logo purple pressed state (even darker)
+pub const LOGO_PURPLE_PRESSED: Color = Color::from_rgb(0.40, 0.15, 0.75);
+
+/// Logo purple with low opacity for hover backgrounds
+pub const LOGO_PURPLE_LIGHT: Color = Color::from_rgba(0.514, 0.220, 0.925, 0.1);
+
+/// Logo purple with medium opacity for pressed backgrounds
+pub const LOGO_PURPLE_MEDIUM: Color = Color::from_rgba(0.514, 0.220, 0.925, 0.2);
+
+/// Logo purple with very light opacity for subtle backgrounds
+pub const LOGO_PURPLE_SUBTLE: Color = Color::from_rgba(0.514, 0.220, 0.925, 0.05);
+
 /// Success/Valid color from design.md (#06d6a0)
 pub const SUCCESS_GREEN: Color = Color::from_rgb(0.024, 0.839, 0.627);
 
 /// Error/Invalid color from design.md (#ef476f)
 pub const ERROR_RED: Color = Color::from_rgb(0.937, 0.278, 0.435);
+
+/// Error red hover state (slightly darker)
+pub const ERROR_RED_HOVER: Color = Color::from_rgb(0.85, 0.25, 0.40);
+
+/// Error red pressed state (even darker)
+pub const ERROR_RED_PRESSED: Color = Color::from_rgb(0.80, 0.22, 0.35);
 
 /// Warning color from design.md (#fcbf49)
 pub const WARNING_YELLOW: Color = Color::from_rgb(0.988, 0.749, 0.286);
@@ -118,6 +139,39 @@ pub const LIGHT_BACKGROUND: Color = Color::from_rgb(0.97, 0.976, 0.98);
 
 /// Dark text color from design.md (#212529)
 pub const DARK_TEXT: Color = Color::from_rgb(0.129, 0.145, 0.161);
+
+/// White color constant
+pub const WHITE: Color = Color::WHITE;
+
+/// Transparent color constant
+pub const TRANSPARENT: Color = Color::TRANSPARENT;
+
+/// Disabled background color (light gray)
+pub const DISABLED_BACKGROUND: Color = Color::from_rgb(0.8, 0.8, 0.8);
+
+/// Disabled text color (medium gray)
+pub const DISABLED_TEXT: Color = Color::from_rgb(0.5, 0.5, 0.5);
+
+/// Disabled border color (darker gray)
+pub const DISABLED_BORDER: Color = Color::from_rgb(0.7, 0.7, 0.7);
+
+/// Standard shadow color (black with low opacity)
+pub const SHADOW_COLOR: Color = Color::from_rgba(0.0, 0.0, 0.0, 0.1);
+
+/// Light gray text color for help text
+pub const LIGHT_GRAY_TEXT: Color = Color::from_rgb(0.6, 0.6, 0.6);
+
+/// Light gray border color for text inputs
+pub const LIGHT_GRAY_BORDER: Color = Color::from_rgb(0.8, 0.8, 0.8);
+
+/// Medium gray color for icons and placeholders
+pub const MEDIUM_GRAY: Color = Color::from_rgb(0.5, 0.5, 0.5);
+
+/// Very light gray background for disabled inputs
+pub const VERY_LIGHT_GRAY: Color = Color::from_rgb(0.95, 0.95, 0.95);
+
+/// Extra light gray border for disabled elements
+pub const EXTRA_LIGHT_GRAY: Color = Color::from_rgb(0.9, 0.9, 0.9);
 
 /// Creates the ZipLock custom theme with brand colors
 pub fn create_ziplock_theme() -> Theme {
@@ -187,14 +241,14 @@ pub mod button_styles {
         fn active(&self, _style: &Self::Style) -> button::Appearance {
             button::Appearance {
                 background: Some(LOGO_PURPLE.into()),
-                text_color: Color::WHITE,
+                text_color: WHITE,
                 border: iced::Border {
                     color: LOGO_PURPLE,
                     width: 1.0,
                     radius: utils::border_radius().into(),
                 },
                 shadow: iced::Shadow {
-                    color: Color::from_rgba(0.0, 0.0, 0.0, 0.1),
+                    color: SHADOW_COLOR,
                     offset: iced::Vector::new(0.0, 2.0),
                     blur_radius: 4.0,
                 },
@@ -205,7 +259,7 @@ pub mod button_styles {
         fn hovered(&self, style: &Self::Style) -> button::Appearance {
             let active = self.active(style);
             button::Appearance {
-                background: Some(Color::from_rgb(0.45, 0.18, 0.82).into()), // Slightly darker purple
+                background: Some(LOGO_PURPLE_HOVER.into()),
                 ..active
             }
         }
@@ -213,7 +267,7 @@ pub mod button_styles {
         fn pressed(&self, style: &Self::Style) -> button::Appearance {
             let active = self.active(style);
             button::Appearance {
-                background: Some(Color::from_rgb(0.40, 0.15, 0.75).into()), // Even darker purple
+                background: Some(LOGO_PURPLE_PRESSED.into()),
                 shadow: iced::Shadow::default(),
                 shadow_offset: iced::Vector::new(0.0, 1.0),
                 ..active
@@ -222,10 +276,10 @@ pub mod button_styles {
 
         fn disabled(&self, _style: &Self::Style) -> button::Appearance {
             button::Appearance {
-                background: Some(Color::from_rgb(0.8, 0.8, 0.8).into()),
-                text_color: Color::from_rgb(0.5, 0.5, 0.5),
+                background: Some(DISABLED_BACKGROUND.into()),
+                text_color: DISABLED_TEXT,
                 border: iced::Border {
-                    color: Color::from_rgb(0.7, 0.7, 0.7),
+                    color: DISABLED_BORDER,
                     width: 1.0,
                     radius: utils::border_radius().into(),
                 },
@@ -240,7 +294,7 @@ pub mod button_styles {
 
         fn active(&self, _style: &Self::Style) -> button::Appearance {
             button::Appearance {
-                background: Some(Color::TRANSPARENT.into()),
+                background: Some(TRANSPARENT.into()),
                 text_color: LOGO_PURPLE,
                 border: iced::Border {
                     color: LOGO_PURPLE,
@@ -255,7 +309,7 @@ pub mod button_styles {
         fn hovered(&self, style: &Self::Style) -> button::Appearance {
             let active = self.active(style);
             button::Appearance {
-                background: Some(Color::from_rgba(0.514, 0.220, 0.925, 0.1).into()),
+                background: Some(LOGO_PURPLE_LIGHT.into()),
                 ..active
             }
         }
@@ -263,17 +317,17 @@ pub mod button_styles {
         fn pressed(&self, style: &Self::Style) -> button::Appearance {
             let active = self.active(style);
             button::Appearance {
-                background: Some(Color::from_rgba(0.514, 0.220, 0.925, 0.2).into()),
+                background: Some(LOGO_PURPLE_MEDIUM.into()),
                 ..active
             }
         }
 
         fn disabled(&self, _style: &Self::Style) -> button::Appearance {
             button::Appearance {
-                background: Some(Color::TRANSPARENT.into()),
-                text_color: Color::from_rgb(0.5, 0.5, 0.5),
+                background: Some(TRANSPARENT.into()),
+                text_color: DISABLED_TEXT,
                 border: iced::Border {
-                    color: Color::from_rgb(0.7, 0.7, 0.7),
+                    color: DISABLED_BORDER,
                     width: 1.0,
                     radius: utils::border_radius().into(),
                 },
@@ -289,14 +343,14 @@ pub mod button_styles {
         fn active(&self, _style: &Self::Style) -> button::Appearance {
             button::Appearance {
                 background: Some(ERROR_RED.into()),
-                text_color: Color::WHITE,
+                text_color: WHITE,
                 border: iced::Border {
                     color: ERROR_RED,
                     width: 1.0,
                     radius: utils::border_radius().into(),
                 },
                 shadow: iced::Shadow {
-                    color: Color::from_rgba(0.0, 0.0, 0.0, 0.1),
+                    color: SHADOW_COLOR,
                     offset: iced::Vector::new(0.0, 2.0),
                     blur_radius: 4.0,
                 },
@@ -307,7 +361,7 @@ pub mod button_styles {
         fn hovered(&self, style: &Self::Style) -> button::Appearance {
             let active = self.active(style);
             button::Appearance {
-                background: Some(Color::from_rgb(0.85, 0.25, 0.40).into()), // Slightly darker red
+                background: Some(ERROR_RED_HOVER.into()),
                 ..active
             }
         }
@@ -315,7 +369,7 @@ pub mod button_styles {
         fn pressed(&self, style: &Self::Style) -> button::Appearance {
             let active = self.active(style);
             button::Appearance {
-                background: Some(Color::from_rgb(0.80, 0.22, 0.35).into()), // Even darker red
+                background: Some(ERROR_RED_PRESSED.into()),
                 shadow: iced::Shadow::default(),
                 shadow_offset: iced::Vector::new(0.0, 1.0),
                 ..active
@@ -324,10 +378,10 @@ pub mod button_styles {
 
         fn disabled(&self, _style: &Self::Style) -> button::Appearance {
             button::Appearance {
-                background: Some(Color::from_rgb(0.8, 0.8, 0.8).into()),
-                text_color: Color::from_rgb(0.5, 0.5, 0.5),
+                background: Some(DISABLED_BACKGROUND.into()),
+                text_color: DISABLED_TEXT,
                 border: iced::Border {
-                    color: Color::from_rgb(0.7, 0.7, 0.7),
+                    color: DISABLED_BORDER,
                     width: 1.0,
                     radius: utils::border_radius().into(),
                 },
@@ -342,7 +396,7 @@ pub mod button_styles {
 
         fn active(&self, _style: &Self::Style) -> button::Appearance {
             button::Appearance {
-                background: Some(Color::WHITE.into()),
+                background: Some(WHITE.into()),
                 text_color: LOGO_PURPLE,
                 border: iced::Border {
                     color: LOGO_PURPLE,
@@ -357,7 +411,7 @@ pub mod button_styles {
         fn hovered(&self, style: &Self::Style) -> button::Appearance {
             let active = self.active(style);
             button::Appearance {
-                background: Some(Color::from_rgba(0.514, 0.220, 0.925, 0.05).into()),
+                background: Some(LOGO_PURPLE_SUBTLE.into()),
                 ..active
             }
         }
@@ -365,17 +419,17 @@ pub mod button_styles {
         fn pressed(&self, style: &Self::Style) -> button::Appearance {
             let active = self.active(style);
             button::Appearance {
-                background: Some(Color::from_rgba(0.514, 0.220, 0.925, 0.1).into()),
+                background: Some(LOGO_PURPLE_LIGHT.into()),
                 ..active
             }
         }
 
         fn disabled(&self, _style: &Self::Style) -> button::Appearance {
             button::Appearance {
-                background: Some(Color::WHITE.into()),
-                text_color: Color::from_rgb(0.5, 0.5, 0.5),
+                background: Some(WHITE.into()),
+                text_color: DISABLED_TEXT,
                 border: iced::Border {
-                    color: Color::from_rgb(0.7, 0.7, 0.7),
+                    color: DISABLED_BORDER,
                     width: 1.0,
                     radius: utils::border_radius().into(),
                 },
@@ -391,7 +445,7 @@ pub mod button_styles {
         fn active(&self, _style: &Self::Style) -> button::Appearance {
             button::Appearance {
                 background: Some(LOGO_PURPLE.into()),
-                text_color: Color::WHITE,
+                text_color: WHITE,
                 border: iced::Border {
                     color: LOGO_PURPLE,
                     width: 1.0,
@@ -420,10 +474,10 @@ pub mod button_styles {
 
         fn disabled(&self, _style: &Self::Style) -> button::Appearance {
             button::Appearance {
-                background: Some(Color::from_rgb(0.8, 0.8, 0.8).into()),
-                text_color: Color::from_rgb(0.5, 0.5, 0.5),
+                background: Some(WHITE.into()),
+                text_color: DISABLED_TEXT,
                 border: iced::Border {
-                    color: Color::from_rgb(0.7, 0.7, 0.7),
+                    color: DISABLED_BORDER,
                     width: 1.0,
                     radius: utils::border_radius().into(),
                 },
@@ -438,10 +492,10 @@ pub mod button_styles {
 
         fn active(&self, _style: &Self::Style) -> button::Appearance {
             button::Appearance {
-                background: Some(Color::from_rgb(0.8, 0.8, 0.8).into()),
-                text_color: Color::from_rgb(0.5, 0.5, 0.5),
+                background: Some(DISABLED_BACKGROUND.into()),
+                text_color: DISABLED_TEXT,
                 border: iced::Border {
-                    color: Color::from_rgb(0.7, 0.7, 0.7),
+                    color: DISABLED_BORDER,
                     width: 1.0,
                     radius: utils::border_radius().into(),
                 },
@@ -468,10 +522,10 @@ pub mod button_styles {
 
         fn active(&self, _style: &Self::Style) -> button::Appearance {
             button::Appearance {
-                background: Some(Color::WHITE.into()),
+                background: Some(WHITE.into()),
                 text_color: DARK_TEXT,
                 border: iced::Border {
-                    color: Color::from_rgb(0.8, 0.8, 0.8), // Light gray border like text input
+                    color: DISABLED_BACKGROUND,
                     width: 1.0,
                     radius: utils::border_radius().into(),
                 },
@@ -496,7 +550,7 @@ pub mod button_styles {
         fn pressed(&self, style: &Self::Style) -> button::Appearance {
             let active = self.active(style);
             button::Appearance {
-                background: Some(Color::from_rgb(0.95, 0.95, 0.95).into()), // Darker gray when pressed
+                background: Some(VERY_LIGHT_GRAY.into()),
                 border: iced::Border {
                     color: LOGO_PURPLE,
                     width: 2.0,
@@ -508,10 +562,10 @@ pub mod button_styles {
 
         fn disabled(&self, _style: &Self::Style) -> button::Appearance {
             button::Appearance {
-                background: Some(Color::from_rgb(0.95, 0.95, 0.95).into()),
-                text_color: Color::from_rgb(0.5, 0.5, 0.5),
+                background: Some(VERY_LIGHT_GRAY.into()),
+                text_color: DISABLED_TEXT,
                 border: iced::Border {
-                    color: Color::from_rgb(0.7, 0.7, 0.7),
+                    color: EXTRA_LIGHT_GRAY,
                     width: 1.0,
                     radius: utils::border_radius().into(),
                 },
@@ -559,28 +613,28 @@ pub mod text_input_styles {
             iced::widget::text_input::Appearance {
                 background: Color::WHITE.into(),
                 border: iced::Border {
-                    color: Color::from_rgb(0.8, 0.8, 0.8), // Light gray border
+                    color: LIGHT_GRAY_BORDER,
                     width: 1.0,
                     radius: utils::border_radius().into(),
                 },
-                icon_color: Color::from_rgb(0.5, 0.5, 0.5),
+                icon_color: MEDIUM_GRAY,
             }
         }
 
         fn focused(&self, _style: &Self::Style) -> iced::widget::text_input::Appearance {
             iced::widget::text_input::Appearance {
-                background: Color::WHITE.into(),
+                background: WHITE.into(),
                 border: iced::Border {
                     color: LOGO_PURPLE,
                     width: 2.0,
                     radius: utils::border_radius().into(),
                 },
-                icon_color: Color::from_rgb(0.5, 0.5, 0.5),
+                icon_color: MEDIUM_GRAY,
             }
         }
 
         fn placeholder_color(&self, _style: &Self::Style) -> Color {
-            Color::from_rgb(0.5, 0.5, 0.5)
+            MEDIUM_GRAY
         }
 
         fn value_color(&self, _style: &Self::Style) -> Color {
@@ -588,7 +642,7 @@ pub mod text_input_styles {
         }
 
         fn disabled_color(&self, _style: &Self::Style) -> Color {
-            Color::from_rgb(0.5, 0.5, 0.5)
+            MEDIUM_GRAY
         }
 
         fn selection_color(&self, _style: &Self::Style) -> Color {
@@ -597,13 +651,13 @@ pub mod text_input_styles {
 
         fn disabled(&self, _style: &Self::Style) -> iced::widget::text_input::Appearance {
             iced::widget::text_input::Appearance {
-                background: Color::from_rgb(0.95, 0.95, 0.95).into(),
+                background: VERY_LIGHT_GRAY.into(),
                 border: iced::Border {
-                    color: Color::from_rgb(0.8, 0.8, 0.8),
+                    color: LIGHT_GRAY_BORDER,
                     width: 1.0,
                     radius: utils::border_radius().into(),
                 },
-                icon_color: Color::from_rgb(0.5, 0.5, 0.5),
+                icon_color: MEDIUM_GRAY,
             }
         }
     }
@@ -613,30 +667,30 @@ pub mod text_input_styles {
 
         fn active(&self, _style: &Self::Style) -> iced::widget::text_input::Appearance {
             iced::widget::text_input::Appearance {
-                background: Color::WHITE.into(),
+                background: WHITE.into(),
                 border: iced::Border {
                     color: SUCCESS_GREEN,
                     width: 2.0,
                     radius: utils::border_radius().into(),
                 },
-                icon_color: Color::from_rgb(0.5, 0.5, 0.5),
+                icon_color: MEDIUM_GRAY,
             }
         }
 
         fn focused(&self, _style: &Self::Style) -> iced::widget::text_input::Appearance {
             iced::widget::text_input::Appearance {
-                background: Color::WHITE.into(),
+                background: WHITE.into(),
                 border: iced::Border {
                     color: SUCCESS_GREEN,
                     width: 3.0,
                     radius: utils::border_radius().into(),
                 },
-                icon_color: Color::from_rgb(0.5, 0.5, 0.5),
+                icon_color: MEDIUM_GRAY,
             }
         }
 
         fn placeholder_color(&self, _style: &Self::Style) -> Color {
-            Color::from_rgb(0.5, 0.5, 0.5)
+            MEDIUM_GRAY
         }
 
         fn value_color(&self, _style: &Self::Style) -> Color {
@@ -644,7 +698,7 @@ pub mod text_input_styles {
         }
 
         fn disabled_color(&self, _style: &Self::Style) -> Color {
-            Color::from_rgb(0.5, 0.5, 0.5)
+            MEDIUM_GRAY
         }
 
         fn selection_color(&self, _style: &Self::Style) -> Color {
@@ -653,13 +707,13 @@ pub mod text_input_styles {
 
         fn disabled(&self, _style: &Self::Style) -> iced::widget::text_input::Appearance {
             iced::widget::text_input::Appearance {
-                background: Color::from_rgb(0.95, 0.95, 0.95).into(),
+                background: VERY_LIGHT_GRAY.into(),
                 border: iced::Border {
-                    color: Color::from_rgb(0.8, 0.8, 0.8),
+                    color: LIGHT_GRAY_BORDER,
                     width: 1.0,
                     radius: utils::border_radius().into(),
                 },
-                icon_color: Color::from_rgb(0.5, 0.5, 0.5),
+                icon_color: MEDIUM_GRAY,
             }
         }
     }
@@ -669,30 +723,30 @@ pub mod text_input_styles {
 
         fn active(&self, _style: &Self::Style) -> iced::widget::text_input::Appearance {
             iced::widget::text_input::Appearance {
-                background: Color::WHITE.into(),
+                background: WHITE.into(),
                 border: iced::Border {
                     color: ERROR_RED,
                     width: 2.0,
                     radius: utils::border_radius().into(),
                 },
-                icon_color: Color::from_rgb(0.5, 0.5, 0.5),
+                icon_color: MEDIUM_GRAY,
             }
         }
 
         fn focused(&self, _style: &Self::Style) -> iced::widget::text_input::Appearance {
             iced::widget::text_input::Appearance {
-                background: Color::WHITE.into(),
+                background: WHITE.into(),
                 border: iced::Border {
                     color: ERROR_RED,
                     width: 3.0,
                     radius: utils::border_radius().into(),
                 },
-                icon_color: Color::from_rgb(0.5, 0.5, 0.5),
+                icon_color: MEDIUM_GRAY,
             }
         }
 
         fn placeholder_color(&self, _style: &Self::Style) -> Color {
-            Color::from_rgb(0.5, 0.5, 0.5)
+            MEDIUM_GRAY
         }
 
         fn value_color(&self, _style: &Self::Style) -> Color {
@@ -700,7 +754,7 @@ pub mod text_input_styles {
         }
 
         fn disabled_color(&self, _style: &Self::Style) -> Color {
-            Color::from_rgb(0.5, 0.5, 0.5)
+            MEDIUM_GRAY
         }
 
         fn selection_color(&self, _style: &Self::Style) -> Color {
@@ -709,13 +763,13 @@ pub mod text_input_styles {
 
         fn disabled(&self, _style: &Self::Style) -> iced::widget::text_input::Appearance {
             iced::widget::text_input::Appearance {
-                background: Color::from_rgb(0.95, 0.95, 0.95).into(),
+                background: VERY_LIGHT_GRAY.into(),
                 border: iced::Border {
-                    color: Color::from_rgb(0.8, 0.8, 0.8),
+                    color: LIGHT_GRAY_BORDER,
                     width: 1.0,
                     radius: utils::border_radius().into(),
                 },
-                icon_color: Color::from_rgb(0.5, 0.5, 0.5),
+                icon_color: MEDIUM_GRAY,
             }
         }
     }
@@ -725,30 +779,30 @@ pub mod text_input_styles {
 
         fn active(&self, _style: &Self::Style) -> iced::widget::text_input::Appearance {
             iced::widget::text_input::Appearance {
-                background: Color::WHITE.into(),
+                background: WHITE.into(),
                 border: iced::Border {
                     color: LOGO_PURPLE,
                     width: 2.0,
                     radius: utils::border_radius().into(),
                 },
-                icon_color: Color::from_rgb(0.5, 0.5, 0.5),
+                icon_color: MEDIUM_GRAY,
             }
         }
 
         fn focused(&self, _style: &Self::Style) -> iced::widget::text_input::Appearance {
             iced::widget::text_input::Appearance {
-                background: Color::WHITE.into(),
+                background: WHITE.into(),
                 border: iced::Border {
                     color: LOGO_PURPLE,
                     width: 3.0,
                     radius: utils::border_radius().into(),
                 },
-                icon_color: Color::from_rgb(0.5, 0.5, 0.5),
+                icon_color: MEDIUM_GRAY,
             }
         }
 
         fn placeholder_color(&self, _style: &Self::Style) -> Color {
-            Color::from_rgb(0.5, 0.5, 0.5)
+            MEDIUM_GRAY
         }
 
         fn value_color(&self, _style: &Self::Style) -> Color {
@@ -756,7 +810,7 @@ pub mod text_input_styles {
         }
 
         fn disabled_color(&self, _style: &Self::Style) -> Color {
-            Color::from_rgb(0.5, 0.5, 0.5)
+            MEDIUM_GRAY
         }
 
         fn selection_color(&self, _style: &Self::Style) -> Color {
@@ -765,13 +819,13 @@ pub mod text_input_styles {
 
         fn disabled(&self, _style: &Self::Style) -> iced::widget::text_input::Appearance {
             iced::widget::text_input::Appearance {
-                background: Color::from_rgb(0.95, 0.95, 0.95).into(),
+                background: VERY_LIGHT_GRAY.into(),
                 border: iced::Border {
-                    color: Color::from_rgb(0.8, 0.8, 0.8),
+                    color: LIGHT_GRAY_BORDER,
                     width: 1.0,
                     radius: utils::border_radius().into(),
                 },
-                icon_color: Color::from_rgb(0.5, 0.5, 0.5),
+                icon_color: MEDIUM_GRAY,
             }
         }
     }
@@ -940,6 +994,71 @@ pub mod utils {
     /// Creates a consistent padding value for small buttons
     pub fn small_button_padding() -> [u16; 2] {
         [4, 8]
+    }
+
+    /// Creates a consistent padding value for standard UI buttons
+    pub fn standard_button_padding() -> [u16; 2] {
+        [10, 20]
+    }
+
+    /// Creates a consistent padding value for repository buttons
+    pub fn repository_button_padding() -> [u16; 2] {
+        [15, 20]
+    }
+
+    /// Creates a consistent padding value for setup buttons
+    pub fn setup_button_padding() -> [u16; 2] {
+        [15, 30]
+    }
+
+    /// Creates a consistent padding value for text inputs
+    pub fn text_input_padding() -> u16 {
+        10
+    }
+
+    /// Creates a consistent padding value for toast dismiss buttons
+    pub fn toast_dismiss_padding() -> [u16; 2] {
+        [2, 6]
+    }
+
+    /// Creates a consistent padding value for small elements
+    pub fn small_element_padding() -> [u16; 2] {
+        [0, 5]
+    }
+
+    /// Creates a consistent padding value for logo containers
+    pub fn logo_container_padding() -> [u16; 4] {
+        [20, 0, 30, 0]
+    }
+
+    /// Creates a consistent padding value for main content areas
+    pub fn main_content_padding() -> [u16; 4] {
+        [0, 30, 30, 30]
+    }
+
+    /// Creates a consistent padding value for search bars
+    pub fn search_bar_padding() -> [u16; 2] {
+        [8, 12]
+    }
+
+    /// Creates a consistent padding value for add credential buttons
+    pub fn add_credential_button_padding() -> [u16; 2] {
+        [12, 24]
+    }
+
+    /// Creates a consistent padding value for scrollable lists
+    pub fn list_padding() -> [u16; 2] {
+        [10, 0]
+    }
+
+    /// Creates a consistent padding value for error containers
+    pub fn error_container_padding() -> [u16; 2] {
+        [12, 16]
+    }
+
+    /// Creates a consistent padding value for completion buttons
+    pub fn completion_button_padding() -> [u16; 2] {
+        [12, 24]
     }
 
     /// Creates a consistent border radius for UI elements
@@ -1129,7 +1248,7 @@ pub mod alerts {
                 content = content.push(Space::with_width(Length::Fixed(10.0))).push(
                     button("✕")
                         .on_press(dismiss_msg)
-                        .padding([2, 6])
+                        .padding(utils::toast_dismiss_padding())
                         .style(button_styles::secondary()),
                 );
             }

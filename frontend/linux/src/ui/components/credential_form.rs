@@ -11,7 +11,7 @@ use iced::{
 use std::collections::HashMap;
 
 use crate::ui::components::totp_field::TotpField;
-use crate::ui::theme::{button_styles, utils};
+use crate::ui::theme::{button_styles, utils, ERROR_RED};
 use ziplock_shared::models::{CredentialTemplate, FieldType};
 
 /// Messages that can be sent from the credential form
@@ -256,7 +256,7 @@ impl CredentialForm {
             text("Title *").size(14).into(),
             text_input("Enter credential title...", &self.title)
                 .on_input(CredentialFormMessage::TitleChanged)
-                .padding(10)
+                .padding(utils::text_input_padding())
                 .style(crate::ui::theme::text_input_styles::standard())
                 .into(),
             Space::with_height(Length::Fixed(15.0)).into(),
@@ -302,9 +302,7 @@ impl CredentialForm {
             form_fields.push(Space::with_height(Length::Fixed(10.0)).into());
             form_fields.push(
                 text(error)
-                    .style(iced::theme::Text::Color(iced::Color::from_rgb(
-                        0.94, 0.28, 0.44,
-                    ))) // Error red
+                    .style(iced::theme::Text::Color(ERROR_RED))
                     .size(14)
                     .into(),
             );
@@ -403,7 +401,7 @@ impl CredentialForm {
                                 CredentialFormMessage::FieldChanged(field_name.clone(), input)
                             }
                         })
-                        .padding(10)
+                        .padding(utils::text_input_padding())
                         .style(crate::ui::theme::text_input_styles::standard())
                         .into()
                 }
@@ -429,7 +427,7 @@ impl CredentialForm {
                                 CredentialFormMessage::FieldChanged(field_name.clone(), input)
                             }
                         })
-                        .padding(10)
+                        .padding(utils::text_input_padding())
                         .style(crate::ui::theme::text_input_styles::standard())
                         .into()
                 }
@@ -445,7 +443,7 @@ impl CredentialForm {
                             }
                         })
                         .secure(is_sensitive)
-                        .padding(10)
+                        .padding(utils::text_input_padding())
                         .style(crate::ui::theme::text_input_styles::standard()),
                     button(if is_sensitive { "👁" } else { "🙈" })
                         .on_press(CredentialFormMessage::ToggleFieldSensitivity(
@@ -469,7 +467,7 @@ impl CredentialForm {
                             }
                         })
                         .secure(is_sensitive)
-                        .padding(10)
+                        .padding(utils::text_input_padding())
                         .style(crate::ui::theme::text_input_styles::standard()),
                     button(if is_sensitive { "👁" } else { "🙈" })
                         .on_press(CredentialFormMessage::ToggleFieldSensitivity(
@@ -490,7 +488,7 @@ impl CredentialForm {
                         move |input| CredentialFormMessage::FieldChanged(field_name.clone(), input)
                     })
                     .secure(is_sensitive)
-                    .padding(10)
+                    .padding(utils::text_input_padding())
                     .width(Length::Fill)
                     .style(crate::ui::theme::text_input_styles::standard())
                     .into()

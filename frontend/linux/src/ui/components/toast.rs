@@ -320,7 +320,7 @@ pub fn render_toast<Message: Clone + 'static>(
             content = content.push(Space::with_width(Length::Fixed(10.0))).push(
                 button("✕")
                     .on_press(dismiss_msg)
-                    .padding([2, 6])
+                    .padding(crate::ui::theme::utils::toast_dismiss_padding())
                     .style(button_styles::secondary()),
             );
         }
