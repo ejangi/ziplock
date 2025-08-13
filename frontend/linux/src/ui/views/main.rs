@@ -19,6 +19,7 @@ use crate::ui::{button_styles, theme, utils};
 pub enum MainViewMessage {
     // Search functionality
     SearchChanged(String),
+    SearchSubmitted,
     ClearSearch,
 
     // Credential management
@@ -138,6 +139,13 @@ impl MainView {
         match message {
             MainViewMessage::SearchChanged(query) => {
                 self.search_query = query;
+                Command::none()
+            }
+
+            MainViewMessage::SearchSubmitted => {
+                // Search is already filtered in real-time via SearchChanged
+                // This handler satisfies the Enter key requirement
+                // Could be extended for additional search behaviors if needed
                 Command::none()
             }
 
@@ -375,6 +383,7 @@ impl MainView {
         row![
             text_input("Search credentials...", &self.search_query)
                 .on_input(MainViewMessage::SearchChanged)
+                .on_submit(MainViewMessage::SearchSubmitted)
                 .width(Length::FillPortion(3))
                 .padding([8, 12]),
             Space::with_width(Length::Fixed(10.0)),
