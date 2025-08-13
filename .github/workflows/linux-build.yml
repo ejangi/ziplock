@@ -101,16 +101,22 @@ jobs:
         run: cargo fmt --all -- --check
 
       - name: Run clippy
-        run: cargo clippy --all-targets --all-features -- -D warnings -A clippy::uninlined-format-args -A unused-imports -A dead-code -A clippy::empty-line-after-doc-comments -A clippy::single-component-path-imports -A clippy::const-is-empty -A clippy::assertions-on-constants -A clippy::needless-borrow -A clippy::too-many-arguments -A clippy::wildcard-in-or-patterns -A clippy::field-reassign-with-default -A clippy::unnecessary-map-or -A clippy::if-same-then-else -A clippy::match-like-matches-macro -A clippy::redundant-closure -A clippy::manual-map -A clippy::needless-return -A clippy::derivable-impls -A clippy::only-used-in-recursion -A clippy::manual-flatten -A clippy::needless-borrows-for-generic-args
+        run: |
+          # Run clippy on backend and shared libraries (no GUI dependencies)
+          cargo clippy -p ziplock-backend --all-targets -- -D warnings -A clippy::uninlined-format-args -A unused-imports -A dead-code
+          cargo clippy -p ziplock-shared --all-targets -- -D warnings -A clippy::uninlined-format-args -A unused-imports -A dead-code
+
+          # Run clippy on frontend with only iced-gui features (avoiding GTK)
+          cargo clippy -p ziplock-linux --no-default-features --features "iced-gui,wayland-support,file-dialog" --all-targets -- -D warnings -A clippy::uninlined-format-args -A unused-imports -A dead-code
 
       - name: Run tests
-        run: cargo test --verbose --workspace
+        run: |
+          # Run tests on backend and shared libraries
+          cargo test --verbose -p ziplock-backend
+          cargo test --verbose -p ziplock-shared
 
-      - name: Run backend tests
-        run: cargo test --verbose -p ziplock-backend
-
-      - name: Run shared library tests
-        run: cargo test --verbose -p ziplock-shared
+          # Run tests on frontend with only iced-gui features (avoiding GTK)
+          cargo test --verbose -p ziplock-linux --no-default-features --features "iced-gui,wayland-support,file-dialog"
 
   security-audit:
     name: Security Audit

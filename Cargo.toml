@@ -49,8 +49,6 @@ tonic = "0.10"
 prost = "0.12"
 
 # GUI frameworks (conditional)
-gtk = { version = "0.9", package = "gtk4" }
-gdk4 = { version = "0.9" }
 iced = { version = "0.12" }
 tauri = { version = "1.5", features = ["api-all"] }
 

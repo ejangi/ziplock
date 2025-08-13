@@ -136,7 +136,7 @@ build_frontend() {
     log_info "Building frontend client..."
 
     cd "$PROJECT_ROOT"
-    $CARGO_CMD build --profile "$PROFILE" --target "$TARGET_ARCH" -p ziplock-linux
+    $CARGO_CMD build --profile "$PROFILE" --target "$TARGET_ARCH" -p ziplock-linux --no-default-features --features "iced-gui,wayland-support,file-dialog"
 
     local frontend_binary="$RUST_TARGET_DIR/$TARGET_ARCH/$PROFILE/ziplock"
     if [ ! -f "$frontend_binary" ]; then
@@ -151,7 +151,12 @@ run_tests() {
     log_info "Running tests..."
 
     cd "$PROJECT_ROOT"
-    $CARGO_CMD test --profile "$PROFILE" --target "$TARGET_ARCH" --workspace
+    # Test backend and shared libraries
+    $CARGO_CMD test --profile "$PROFILE" --target "$TARGET_ARCH" -p ziplock-backend
+    $CARGO_CMD test --profile "$PROFILE" --target "$TARGET_ARCH" -p ziplock-shared
+
+    # Test frontend with iced-gui features only
+    $CARGO_CMD test --profile "$PROFILE" --target "$TARGET_ARCH" -p ziplock-linux --no-default-features --features "iced-gui,wayland-support,file-dialog"
 
     log_success "All tests passed"
 }
