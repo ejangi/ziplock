@@ -18,6 +18,7 @@
 - [Platform Support](#platform-support)
 - [Architecture](#architecture)
 - [Getting Started](#getting-started)
+- [Build & Development](#build--development)
 - [Documentation](#documentation)
 - [Contributing](#contributing)
 - [License](#license)
@@ -48,6 +49,38 @@ Unlike cloud-based password managers, ZipLock gives you full ownership of your d
 ### Powerful Organization
 - **Full-Text Search**: Search across all credential fields instantly
 - **Smart Tagging**: Organize credentials with custom tags for easy filtering
+
+## 🔧 Build & Development
+
+### Quick Start
+
+For most users, download the pre-built packages from the [releases page](https://github.com/ejangi/ziplock/releases).
+
+### Building from Source
+
+```bash
+# Clone the repository
+git clone https://github.com/ejangi/ziplock.git
+cd ziplock
+
+# Test build locally (requires Docker)
+./scripts/test-build-locally.sh
+
+# Build natively (requires system dependencies)
+./scripts/build-linux.sh --profile release
+```
+
+### Build Troubleshooting
+
+If you encounter build issues, particularly glibc compatibility problems, see our comprehensive [Build Guide](docs/build.md). The guide covers:
+
+- glibc compatibility issues and solutions
+- Containerized build process
+- Local testing with Docker
+- Common build problems and fixes
+- GitHub Actions workflow details
+
+**Note**: Our build system uses Ubuntu 22.04 containers to ensure compatibility with most Linux distributions. This resolves the common `GLIBC_2.39 not found` error.
 - **Custom Field Types**: Create your own credential templates with any combination of fields
 - **Built-in Templates**: Pre-configured templates for logins, credit cards, secure notes, and more
 

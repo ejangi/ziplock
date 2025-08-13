@@ -9,7 +9,7 @@ This document serves as the central index for all technical documentation in the
 This includes but is not limited to:
 - Implementation guides and technical specifications
 - Architecture documentation
-- API documentation 
+- API documentation
 - Mobile integration guides
 - Platform-specific implementation details
 - Security implementation details
@@ -59,7 +59,7 @@ Do not place technical documentation in the root `docs/` directory or other loca
 
 ## Development and Testing
 
-- [Linux Build Guide](technical/build-linux.md) - Comprehensive Linux build process, packaging, and CI/CD setup
+- [Build Guide](build.md) - Comprehensive build troubleshooting, containerized builds, and glibc compatibility
 - Build system configuration
 - Testing strategies and coverage requirements
 - Continuous integration setup
