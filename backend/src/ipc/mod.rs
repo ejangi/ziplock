@@ -38,10 +38,8 @@ pub struct IpcServer {
 /// Represents an active client session
 #[derive(Debug)]
 struct ClientSession {
-    session_id: String,
     authenticated: bool,
     last_activity: std::time::SystemTime,
-    client_info: Option<String>,
 }
 
 /// Request message from frontend to backend
@@ -691,10 +689,8 @@ impl IpcServer {
     ) -> Result<RequestResult> {
         let session_id = Uuid::new_v4().to_string();
         let session = ClientSession {
-            session_id: session_id.clone(),
             authenticated: false,
             last_activity: std::time::SystemTime::now(),
-            client_info: None,
         };
 
         sessions.write().await.insert(session_id.clone(), session);
@@ -1136,7 +1132,6 @@ impl Drop for IpcServer {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::tempdir;
 
     #[tokio::test]
     async fn test_ipc_request_serialization() {
@@ -1329,14 +1324,14 @@ mod tests {
     #[test]
     fn test_session_creation() {
         let session = ClientSession {
-            session_id: "test-session".to_string(),
             authenticated: false,
             last_activity: std::time::SystemTime::now(),
-            client_info: Some("test-client".to_string()),
         };
 
-        assert_eq!(session.session_id, "test-session");
         assert!(!session.authenticated);
-        assert_eq!(session.client_info, Some("test-client".to_string()));
+        // last_activity should be recent (within the last second)
+        let now = std::time::SystemTime::now();
+        let elapsed = now.duration_since(session.last_activity).unwrap();
+        assert!(elapsed.as_secs() < 1);
     }
 }

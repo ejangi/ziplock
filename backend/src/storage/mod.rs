@@ -30,7 +30,7 @@ use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
 use crate::config::StorageConfig;
-use crate::error::{BackendResult, CryptoError, StorageError};
+use crate::error::{BackendResult, StorageError};
 use file_lock::FileLock;
 use ziplock_shared::models::CredentialRecord;
 
@@ -51,6 +51,51 @@ struct OpenArchive {
     credentials: HashMap<String, CredentialRecord>,
     modified: bool,
     last_access: SystemTime,
+}
+
+impl OpenArchive {
+    /// Verify that the file lock is still active and valid
+    fn validate_file_lock(&self) -> BackendResult<()> {
+        // Check if the locked file still exists and matches our expected path
+        if !self.file_lock.path().exists() {
+            return Err(StorageError::FileLock {
+                path: self.path.to_string_lossy().to_string(),
+            }
+            .into());
+        }
+
+        // Verify the lock is for the correct file
+        if self.file_lock.path() != self.path {
+            return Err(StorageError::FileLock {
+                path: format!(
+                    "Lock path mismatch: expected {}, got {}",
+                    self.path.display(),
+                    self.file_lock.path().display()
+                ),
+            }
+            .into());
+        }
+
+        // Validate temp directory is still accessible
+        if !self.temp_dir.path().exists() {
+            return Err(StorageError::ArchiveCreation {
+                reason: "Temporary directory no longer exists".to_string(),
+            }
+            .into());
+        }
+
+        Ok(())
+    }
+
+    /// Get the path of the locked archive file
+    fn locked_file_path(&self) -> &Path {
+        self.file_lock.path()
+    }
+
+    /// Get the temporary directory path for this archive
+    fn temp_dir_path(&self) -> &Path {
+        self.temp_dir.path()
+    }
 }
 
 /// Archive metadata stored in the archive
@@ -287,13 +332,26 @@ impl ArchiveManager {
         let mut archive_guard = self.current_archive.write().await;
 
         if let Some(archive) = archive_guard.take() {
-            info!("Closing archive: {:?}", archive.path);
+            info!("Closing archive: {:?}", archive.locked_file_path());
 
             // Save changes if modified
             if archive.modified {
-                info!("Archive was modified, saving changes");
+                info!(
+                    "Archive was modified, saving changes (temp dir: {:?})",
+                    archive.temp_dir_path()
+                );
+                let save_data = (
+                    archive.path.clone(),
+                    archive.master_password.clone(),
+                    archive.credentials.clone(),
+                    TempDir::new()
+                        .context("Failed to create temp dir")
+                        .map_err(|e| StorageError::ArchiveCreation {
+                            reason: e.to_string(),
+                        })?,
+                );
                 drop(archive_guard); // Release lock before async operation
-                self.save_archive_internal(archive).await?;
+                self.save_archive_with_data(save_data).await?;
             } else {
                 info!("Archive not modified, closing without save");
                 drop(archive_guard); // Release lock to avoid Send trait issues
@@ -313,6 +371,9 @@ impl ArchiveManager {
             id: "Archive not open".to_string(),
         })?;
 
+        // Validate file lock is still active
+        archive.validate_file_lock()?;
+
         archive
             .credentials
             .get(id)
@@ -327,6 +388,9 @@ impl ArchiveManager {
             id: "Archive not open".to_string(),
         })?;
 
+        // Validate file lock is still active
+        archive.validate_file_lock()?;
+
         Ok(archive.credentials.values().cloned().collect())
     }
 
@@ -336,6 +400,9 @@ impl ArchiveManager {
         let archive = archive_guard.as_mut().ok_or(StorageError::RecordNotFound {
             id: "Archive not open".to_string(),
         })?;
+
+        // Validate file lock is still active
+        archive.validate_file_lock()?;
 
         // Generate ID if not provided
         if credential.id.is_empty() {
@@ -379,6 +446,9 @@ impl ArchiveManager {
             id: "Archive not open".to_string(),
         })?;
 
+        // Validate file lock is still active
+        archive.validate_file_lock()?;
+
         // Check if credential exists
         if !archive.credentials.contains_key(id) {
             return Err(StorageError::RecordNotFound { id: id.to_string() }.into());
@@ -409,6 +479,9 @@ impl ArchiveManager {
             id: "Archive not open".to_string(),
         })?;
 
+        // Validate file lock is still active
+        archive.validate_file_lock()?;
+
         if archive.credentials.remove(id).is_none() {
             return Err(StorageError::RecordNotFound { id: id.to_string() }.into());
         }
@@ -426,6 +499,9 @@ impl ArchiveManager {
         let archive = archive.as_ref().ok_or(StorageError::RecordNotFound {
             id: "Archive not open".to_string(),
         })?;
+
+        // Validate file lock is still active
+        archive.validate_file_lock()?;
 
         let query = query.to_lowercase();
         let results = archive
@@ -457,8 +533,15 @@ impl ArchiveManager {
         let archive_guard = self.current_archive.write().await;
 
         if let Some(archive) = archive_guard.as_ref() {
+            // Validate file lock is still active before saving
+            archive.validate_file_lock()?;
+
             if archive.modified {
-                info!("Saving modified archive: {:?}", archive.path);
+                info!(
+                    "Saving modified archive: {:?} (temp dir: {:?})",
+                    archive.locked_file_path(),
+                    archive.temp_dir_path()
+                );
 
                 // Create a temporary directory for the save operation
                 let temp_dir = TempDir::new()
@@ -467,31 +550,17 @@ impl ArchiveManager {
                         reason: e.to_string(),
                     })?;
 
-                // Create a dummy file for the lock during save operation
-                // We can't lock the archive file itself since it's already locked
-                let dummy_lock_file = temp_dir.path().join("save_lock");
-                fs::write(&dummy_lock_file, b"dummy").map_err(|e| {
-                    StorageError::ArchiveCreation {
-                        reason: format!("Failed to create dummy lock file: {}", e),
-                    }
-                })?;
-
-                // Clone the archive data for async operation
-                let archive_data = OpenArchive {
-                    path: archive.path.clone(),
-                    master_password: archive.master_password.clone(),
+                // Clone archive data for save operation, preserving the file lock
+                // Note: We can't move the archive out since we need to keep it locked
+                let save_data = (
+                    archive.path.clone(),
+                    archive.master_password.clone(),
+                    archive.credentials.clone(),
                     temp_dir,
-                    file_lock: FileLock::new(&dummy_lock_file, self.config.file_lock_timeout)
-                        .map_err(|_e| StorageError::FileLock {
-                            path: dummy_lock_file.to_string_lossy().to_string(),
-                        })?,
-                    credentials: archive.credentials.clone(),
-                    modified: archive.modified,
-                    last_access: archive.last_access,
-                };
+                );
 
-                drop(archive_guard); // Release lock before async operation
-                self.save_archive_internal(archive_data).await?;
+                drop(archive_guard); // Release archive guard before async operation
+                self.save_archive_with_data(save_data).await?;
 
                 // Mark as not modified
                 if let Some(archive) = self.current_archive.write().await.as_mut() {
@@ -503,15 +572,23 @@ impl ArchiveManager {
         Ok(())
     }
 
-    /// Internal method to save archive
-    async fn save_archive_internal(&self, archive: OpenArchive) -> BackendResult<()> {
+    /// Internal method to save archive with cloned data
+    async fn save_archive_with_data(
+        &self,
+        (path, master_password, credentials, temp_dir): (
+            PathBuf,
+            String,
+            HashMap<String, CredentialRecord>,
+            TempDir,
+        ),
+    ) -> BackendResult<()> {
         // Create backup if enabled
         if self.config.auto_backup {
-            self.create_backup(&archive.path).await?;
+            self.create_backup(&path).await?;
         }
 
         // Write credentials to temporary directory
-        self.write_credentials_to_directory(archive.temp_dir.path(), &archive.credentials)
+        self.write_credentials_to_directory(temp_dir.path(), &credentials)
             .await?;
 
         // Update metadata
@@ -519,10 +596,10 @@ impl ArchiveManager {
             version: env!("CARGO_PKG_VERSION").to_string(),
             created_at: SystemTime::now(), // TODO: preserve original created_at
             last_modified: SystemTime::now(),
-            credential_count: archive.credentials.len(),
+            credential_count: credentials.len(),
         };
 
-        let metadata_path = archive.temp_dir.path().join("metadata.yml");
+        let metadata_path = temp_dir.path().join("metadata.yml");
         let metadata_content = serde_yaml::to_string(&metadata)
             .context("Failed to serialize metadata")
             .map_err(|e| StorageError::ArchiveCreation {
@@ -536,14 +613,10 @@ impl ArchiveManager {
             })?;
 
         // Create the encrypted archive
-        self.create_encrypted_archive(
-            &archive.path,
-            archive.temp_dir.path(),
-            &archive.master_password,
-        )
-        .await?;
+        self.create_encrypted_archive(&path, temp_dir.path(), &master_password)
+            .await?;
 
-        info!("Successfully saved archive: {:?}", archive.path);
+        info!("Successfully saved archive: {:?}", path);
         Ok(())
     }
 
