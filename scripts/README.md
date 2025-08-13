@@ -20,6 +20,10 @@ Scripts for development workflow, testing, and debugging.
 - **`run-integration-tests.sh`** - Executes the full integration test suite
 - **`run-tests-with-existing-backend.sh`** - Runs tests against an existing backend instance
 - **`test-backend-connection.sh`** - Tests backend service connectivity
+- **`run-ci-checks.sh`** - Runs complete GitHub CI test suite locally (format, clippy, tests)
+- **`run-clippy.sh`** - Quick Clippy linting check (same as GitHub CI)
+- **`run-format.sh`** - Quick code formatting check and fix
+- **`pre-push.sh`** - Quick pre-push validation (format + clippy, no tests)
 
 ### `version/` - Version Management Scripts
 Scripts for managing versions and changelogs.
@@ -59,6 +63,18 @@ Reserved for future deployment automation scripts.
 
 # Test backend connectivity
 ./scripts/dev/test-backend-connection.sh
+
+# Run CI checks locally before pushing
+./scripts/dev/run-ci-checks.sh
+
+# Quick clippy check
+./scripts/dev/run-clippy.sh --fix
+
+# Quick format check and fix
+./scripts/dev/run-format.sh --fix
+
+# Quick pre-push validation
+./scripts/dev/pre-push.sh --fix
 ```
 
 ### Version Management
@@ -145,6 +161,115 @@ Executes comprehensive integration tests across all components.
 
 ### `dev/test-backend-connection.sh`
 Tests backend service connectivity and basic functionality.
+
+### `dev/run-ci-checks.sh`
+Runs the complete GitHub CI test suite locally before pushing.
+
+**Usage:**
+```bash
+./scripts/dev/run-ci-checks.sh [OPTIONS]
+```
+
+**Options:**
+- `--skip-format`: Skip formatting check
+- `--skip-clippy`: Skip Clippy linting
+- `--skip-tests`: Skip running tests
+- `--fix-format`: Automatically fix formatting issues
+
+**What it does:**
+1. Checks system dependencies (GTK4, Rust components)
+2. Runs `cargo fmt --check` for code formatting
+3. Runs Clippy linting on all packages with same flags as CI
+4. Runs tests on all packages with same configuration as CI
+
+### `dev/run-clippy.sh`
+Quick Clippy linting check using the same configuration as GitHub CI.
+
+**Usage:**
+```bash
+./scripts/dev/run-clippy.sh [--fix]
+```
+
+**Options:**
+- `--fix`: Run clippy with automatic fixes
+
+**Features:**
+- Matches exact Clippy configuration from GitHub workflow
+- Checks backend, shared library, and frontend packages
+- Uses same warning levels and allowed lints as CI
+- Fast feedback for linting issues before pushing
+
+### `dev/run-format.sh`
+Quick code formatting check using the same configuration as GitHub CI.
+
+**Usage:**
+```bash
+./scripts/dev/run-format.sh [--fix|--check]
+```
+
+**Options:**
+- `--fix`: Automatically fix formatting issues
+- `--check`: Only check formatting (default)
+
+**Features:**
+- Matches exact formatting configuration from GitHub workflow
+- Fast feedback for formatting issues before pushing
+- Can automatically fix issues with `--fix` option
+
+### `dev/pre-push.sh`
+Quick pre-push validation that runs formatting and Clippy checks (skips tests for speed).
+
+**Usage:**
+```bash
+./scripts/dev/pre-push.sh [--fix|--full]
+```
+
+**Options:**
+- `--fix`: Automatically fix formatting and clippy issues
+- `--full`: Run complete CI test suite including tests
+
+**Features:**
+- Fast validation before pushing (format + clippy only)
+- Can automatically fix common issues
+- Option to run full test suite when needed
+- Designed for quick developer feedback loop
+
+## Quick Reference
+
+### Most Common Workflows
+
+**Before pushing code:**
+```bash
+# Quick check (recommended for most commits)
+./scripts/dev/pre-push.sh
+
+# Quick check with auto-fix
+./scripts/dev/pre-push.sh --fix
+
+# Full validation (recommended before important commits)
+./scripts/dev/run-ci-checks.sh
+```
+
+**Individual checks:**
+```bash
+# Format only
+./scripts/dev/run-format.sh --fix
+
+# Clippy only
+./scripts/dev/run-clippy.sh
+
+# Full CI suite
+./scripts/dev/run-ci-checks.sh --fix-format
+```
+
+### Script Comparison
+
+| Script | Format | Clippy | Tests | Speed | Use Case |
+|--------|--------|--------|-------|-------|----------|
+| `pre-push.sh` | ✓ | ✓ | ✗ | Fast | Quick pre-push validation |
+| `run-ci-checks.sh` | ✓ | ✓ | ✓ | Slow | Complete CI validation |
+| `run-format.sh` | ✓ | ✗ | ✗ | Very Fast | Format-only check |
+| `run-clippy.sh` | ✗ | ✓ | ✗ | Fast | Clippy-only check |
 
 ## Version Management Details
 

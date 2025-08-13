@@ -486,7 +486,7 @@ impl EditCredentialView {
     /// Get subscriptions for TOTP field updates
     pub fn subscription(&self) -> iced::Subscription<EditCredentialMessage> {
         match &self.state {
-            EditCredentialState::Editing { .. } => self
+            EditCredentialState::Editing => self
                 .form
                 .subscription()
                 .map(EditCredentialMessage::FormMessage),

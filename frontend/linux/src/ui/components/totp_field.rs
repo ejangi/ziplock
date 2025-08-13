@@ -339,7 +339,7 @@ impl TotpField {
                     .padding(utils::small_button_padding())
             };
 
-        let mut row_elements = vec![input.into(), toggle_button.into()];
+        let mut row_elements = vec![input, toggle_button.into()];
 
         // Add refresh indicator for code mode
         if self.display_mode == TotpDisplayMode::Code && self.current_code.is_some() {
