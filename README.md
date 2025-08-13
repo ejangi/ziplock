@@ -213,44 +213,27 @@ ZipLock can be customized through configuration files:
 
 > **⚠️ Configuration Format Change**: Starting with version 0.2.0, ZipLock uses YAML format for all configuration files instead of TOML. If you have existing `.toml` config files, run the migration script: `./scripts/migrations/migrate-config-from-toml-to-yaml.sh`
 
-Example configuration:
-```yaml
-storage:
-  backup_count: 5
-  auto_backup: true
-  compression:
-    level: 6
-    solid: false
-    multi_threaded: true
-
-security:
-  auto_lock_timeout: 900  # 15 minutes
-  min_master_key_length: 12
-  enforce_strong_master_key: true
-
-ui:
-  theme: "auto"  # auto, light, dark
-  font_size: 14
-  show_password_strength: true
-```
+For complete configuration documentation and examples, see the [Configuration Guide](docs/technical/configuration.md).
 
 ## 📖 Documentation
 
 ### User Documentation
-- [User Guide](docs/user-guide.md) - Complete guide to using ZipLock
-- [Security Model](docs/security.md) - Understanding ZipLock's security approach
-- [FAQ](docs/faq.md) - Frequently asked questions
+- [User Guide](docs/TODO.md#user-guide) - Complete guide to using ZipLock (planned)
+- [Security Architecture](docs/architecture.md#security-architecture) - Understanding ZipLock's security approach
+- [FAQ](docs/TODO.md#faq) - Frequently asked questions (planned)
 
 ### Technical Documentation
 - [Architecture Overview](docs/architecture.md) - Detailed system architecture
 - [Design Guidelines](docs/design.md) - UI/UX design principles
-- [API Documentation](docs/api.md) - Backend service API reference
+- [IPC Client Examples](docs/technical/ipc-client-examples.md) - Backend service API examples and integration patterns
+- [Configuration Guide](docs/technical/configuration.md) - Complete configuration reference with examples
+- [Mobile Integration](docs/technical/mobile-integration.md) - iOS and Android integration examples
 - [Repository Detection Implementation](docs/technical/repository-detection-implementation.md) - Technical implementation details
 - [Validation Implementation](docs/technical/validation-implementation.md) - Comprehensive validation system details
 
 ### Developer Documentation
-- [Development Guide](docs/development.md) - Setting up the development environment
-- [Contributing Guidelines](docs/contributing.md) - How to contribute to ZipLock
+- [Development Guide](docs/TODO.md#development-guide) - Setting up the development environment (planned)
+- [Contributing Guidelines](docs/TODO.md#contributing-guidelines) - How to contribute to ZipLock (planned)
 - [Build Guide](docs/technical/build.md) - Comprehensive build process, packaging, troubleshooting, and CI/CD setup
 
 ## 🤝 Contributing
@@ -265,7 +248,7 @@ We welcome contributions to ZipLock! Whether you're fixing bugs, adding features
 - **Translation**: Help translate ZipLock to new languages
 
 ### Getting Started
-1. Read our [Contributing Guidelines](docs/contributing.md)
+1. Read our [Contributing Guidelines](docs/TODO.md#contributing-guidelines) (planned)
 2. Check out [good first issues](https://github.com/ejangi/ziplock/labels/good%20first%20issue)
 3. Join our [discussions](https://github.com/ejangi/ziplock/discussions) to connect with the community
 

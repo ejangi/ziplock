@@ -13,7 +13,7 @@ echo
 DEMO_DIR="./validation-demo"
 ARCHIVE_PATH="$DEMO_DIR/demo-archive.7z"
 PASSWORD="demo_validation_password_123"
-CONFIG_FILE="examples/config.example.yml"
+CONFIG_FILE="scripts/dev/demo-config.yml"
 
 # Colors for output
 RED='\033[0;31m'
@@ -47,10 +47,11 @@ setup_demo() {
     rm -rf "$DEMO_DIR"
     mkdir -p "$DEMO_DIR"
 
-    # Use the example configuration file
+    # Use the demo configuration file
     if [ ! -f "$CONFIG_FILE" ]; then
-        log_error "Example config file not found at $CONFIG_FILE"
+        log_error "Demo config file not found at $CONFIG_FILE"
         log_info "Please ensure you're running from the project root directory"
+        log_info "See docs/technical/configuration.md for configuration examples"
         exit 1
     fi
 

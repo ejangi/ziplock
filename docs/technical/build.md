@@ -48,6 +48,12 @@ This will create:
 - **Memory**: 2GB RAM minimum (4GB recommended for builds)
 - **Disk Space**: 1GB free space for build artifacts
 
+### Related Documentation
+
+Before building, you may want to review:
+- [Configuration Guide](configuration.md) - Understanding configuration options for deployment
+- [IPC Client Examples](ipc-client-examples.md) - Examples for integrating with the built backend service
+
 ### Development Dependencies
 
 #### Rust Toolchain
@@ -887,4 +893,4 @@ If you encounter issues not covered in this guide:
 
 The containerized build process should eliminate most environment-related issues, but if you encounter problems, the local testing script can help identify and resolve them quickly.
 
-For additional help, see the [development documentation](development.md) or open an issue on GitHub.
+For additional help, see the [technical documentation index](../technical.md) or open an issue on GitHub.

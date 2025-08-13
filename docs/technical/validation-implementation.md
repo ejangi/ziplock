@@ -46,6 +46,8 @@ pub struct ValidationConfig {
 7. Save repaired archive if changes were made
 8. Load credentials from validated repository
 
+For detailed configuration options and examples, see the [Configuration Guide](configuration.md).
+
 #### Validation Integration:
 ```rust
 // Create validator with configuration settings

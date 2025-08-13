@@ -269,14 +269,14 @@ ZipLockCore.getInstance().enableDebugLogging(true)
 ## Examples
 
 Complete working examples are available in:
-- `examples/mobile-ffi/ios-example.swift` - iOS Swift integration
-- `examples/mobile-ffi/android-example.kt` - Android Kotlin integration
+- [Mobile Integration Guide](mobile-integration.md) - Complete iOS and Android integration examples
+- [IPC Client Examples](ipc-client-examples.md) - Backend communication patterns
 
 ## Support
 
 For integration issues:
 1. Check the troubleshooting section above
-2. Review the examples in `examples/mobile-ffi/`
+2. Review the integration examples in the [Mobile Integration Guide](mobile-integration.md)
 3. Run tests with `cargo test --features c-api`
 4. Enable debug logging for detailed diagnostics
 

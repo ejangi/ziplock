@@ -144,7 +144,6 @@ secrets/
 *.rar
 *.gz
 !**/tests/**/*.7z
-!**/examples/**/*.7z
 
 # Runtime and cache
 .cache/

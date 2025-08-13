@@ -22,7 +22,9 @@ Do not place technical documentation in the root `docs/` directory or other loca
 - [Architecture Overview](architecture.md) - Complete system architecture and component relationships
 - [Design Guidelines](design.md) - UI/UX design principles and visual standards
 - [Repository Detection Implementation](technical/repository-detection-implementation.md) - Technical implementation details for repository detection
-- [Mobile Integration Guide](technical/mobile-integration.md) - Complete mobile platform integration documentation
+- [Configuration Guide](technical/configuration.md) - Complete configuration reference with examples and profiles
+- [IPC Client Examples](technical/ipc-client-examples.md) - Backend service API examples and integration patterns
+- [Mobile Integration Guide](technical/mobile-integration.md) - Complete mobile platform integration documentation with examples
 - [Mobile Shared Implementation](technical/mobile-shared-implementation.md) - Shared library integration for mobile platforms
 
 ## Security and Cryptography
@@ -41,6 +43,7 @@ Do not place technical documentation in the root `docs/` directory or other loca
 
 ## Inter-Process Communication
 
+- [IPC Client Examples](technical/ipc-client-examples.md) - Complete examples for frontend-backend communication
 - Frontend-backend communication protocols
 - API specifications and data formats
 - Error handling and message passing
@@ -54,6 +57,7 @@ Do not place technical documentation in the root `docs/` directory or other loca
 - macOS implementation planning (Swift + SwiftUI)
 
 ### Mobile Platforms
+- [Mobile Integration Guide](technical/mobile-integration.md) - iOS and Android implementation with complete examples
 - iOS implementation planning (Swift + SwiftUI)
 - Android implementation planning (Kotlin + Jetpack Compose)
 
@@ -103,7 +107,7 @@ The `scripts/` directory is organized into functional subdirectories to maintain
 
 ### `scripts/build/` - Build and Packaging
 - **`build-linux.sh`** - Builds ZipLock for Linux platforms with glibc compatibility
-- **`build-mobile.sh`** - Builds shared library for mobile platforms (iOS/Android)
+- **`build-mobile.sh`** - Builds shared library for mobile platforms (iOS/Android) - see [Mobile Integration Guide](technical/mobile-integration.md)
 - **`package-deb.sh`** - Creates Debian packages for distribution
 - **`test-build.sh`** - Tests build process in CI environment
 - **`test-build-locally.sh`** - Comprehensive local build testing with Docker
@@ -128,6 +132,7 @@ For detailed usage instructions and examples, see `scripts/README.md`.
 
 ## Performance and Optimization
 
+- [Configuration Guide](technical/configuration.md) - Performance tuning through configuration
 - Compression algorithm selection and tuning
 - Memory management best practices
 - UI responsiveness optimization
@@ -141,9 +146,38 @@ When adding new technical documentation:
 2. **Use descriptive filenames** that clearly indicate the content (e.g., `encryption-implementation.md`)
 3. **Follow naming convention** of lowercase words separated by hyphens
 4. **Update this index** by adding appropriate links in the relevant sections
-5. **Cross-reference related documents** to maintain documentation cohesion
-6. **Include code examples** and diagrams where appropriate
-7. **Maintain consistent formatting** following the project's documentation standards
+6. **Cross-reference related documents** to maintain documentation cohesion
+7. **Include code examples** and diagrams where appropriate
+8. **Maintain consistent formatting** following the project's documentation standards
+
+## Example Documentation and Integration Patterns
+
+**Note**: As of the latest update, all example files have been reorganized from the `examples/` directory into relevant technical documentation for better discoverability and maintenance. This includes configuration examples, IPC client implementations, and mobile platform integration code.
+
+The ZipLock project includes comprehensive examples and integration patterns distributed across focused technical guides:
+
+### Configuration Examples
+- [Configuration Guide](technical/configuration.md) - Complete configuration reference with examples and deployment profiles
+  - Production, development, and legacy compatibility profiles
+  - Environment variable overrides
+  - Validation configuration examples
+  - YAML migration from TOML
+
+### Client Integration Examples
+- [IPC Client Examples](technical/ipc-client-examples.md) - Complete Rust client implementation
+  - Full protocol implementation
+  - Error handling patterns
+  - Async integration patterns
+  - Connection management and session handling
+
+### Mobile Platform Examples
+- [Mobile Integration Guide](technical/mobile-integration.md) - iOS and Android integration examples
+  - Complete iOS Swift implementation with SwiftUI integration
+  - Complete Android Kotlin implementation with Jetpack Compose
+  - C FFI wrapper patterns
+  - Memory management and error handling
+
+
 
 ## Protected Files
 

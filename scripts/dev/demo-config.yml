@@ -1,0 +1,78 @@
+# ZipLock Demo Configuration
+# This configuration is used by the demo-validation.sh script for testing
+
+# IPC Communication Settings
+ipc:
+  socket_path: "/tmp/ziplock/backend.sock"
+  socket_permissions: 0o600
+  max_connections: 5
+  connection_timeout: 30
+  request_timeout: 60
+  log_requests: true  # Enable for demo
+
+# Storage and Archive Settings
+storage:
+  default_archive_dir: "./validation-demo"
+  max_archive_size_mb: 100
+  backup_count: 3
+  auto_backup: true
+  file_lock_timeout: 30
+  verify_integrity: true
+  min_password_length: 8  # Relaxed for demo
+
+  # 7z Compression Settings
+  compression:
+    level: 1  # Fast compression for demo
+    solid: false
+    multi_threaded: true
+    dictionary_size_mb: 16
+    block_size_mb: 0
+
+  # Repository Validation Settings - Configured for demo
+  validation:
+    enable_comprehensive_validation: true
+    deep_validation: true
+    check_legacy_formats: true
+    validate_schemas: true
+    auto_repair: true
+    fail_on_critical_issues: false  # Allow demo to continue
+    log_validation_details: true    # Detailed logging for demo
+
+# Security Settings - Relaxed for demo
+security:
+  key_derivation_iterations: 1  # Fast for demo
+  key_derivation_memory_kb: 8192  # 8 MB
+  key_derivation_parallelism: 2
+  auto_lock_timeout: 0  # No auto-lock during demo
+  max_auth_attempts: 10
+  auth_lockout_duration: 60
+  memory_protection: true
+  clipboard_clear_timeout: 30
+
+  passphrase_requirements:
+    min_length: 8
+    require_lowercase: false
+    require_uppercase: false
+    require_numeric: false
+    require_special: false
+    max_length: 0
+    min_unique_chars: 4
+
+# Logging Settings - Verbose for demo
+logging:
+  level: "debug"
+  file_logging: true
+  log_file: "./validation-demo/demo.log"
+  max_log_size_mb: 10
+  log_rotation_count: 2
+  json_format: false
+  audit_logging: true
+
+# Performance and Resource Limits
+limits:
+  max_memory_mb: 256
+  max_cached_credentials: 100
+  cache_ttl: 60
+  max_concurrent_operations: 5
+  operation_timeout: 60
+  enable_metrics: true  # Enable for demo
