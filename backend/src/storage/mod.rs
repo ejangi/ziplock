@@ -1547,7 +1547,7 @@ mod tests {
             file_lock_timeout: 5,
             temp_dir: None,
             verify_integrity: true,
-            min_password_length: Some(8),
+            min_password_length: Some(12),
             compression: crate::config::CompressionConfig {
                 level: 6,
                 solid: false,
