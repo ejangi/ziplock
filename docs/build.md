@@ -34,6 +34,7 @@ The problem occurred because:
 1. **Build Environment**: GitHub Actions was using `ubuntu-latest` (which could be Ubuntu 24.04 with glibc 2.39)
 2. **Target Environment**: Testing was done in Ubuntu 22.04 (which has glibc 2.35)
 3. **Binary Incompatibility**: Binaries compiled against newer glibc versions cannot run on systems with older glibc
+4. **GTK4 Version Compatibility**: Ubuntu 22.04 ships with GTK 4.6.9, but the project requires GTK 4.8+ for gtk-gui features
 
 ### Technical Details
 

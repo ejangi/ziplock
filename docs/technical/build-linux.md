@@ -36,8 +36,14 @@ rustup target add x86_64-unknown-linux-gnu
 
 #### System Libraries
 ```bash
-# Ubuntu/Debian
+# Ubuntu/Debian - GTK4 Requirements
+# Note: Ubuntu 22.04 ships with GTK 4.6, but the project requires GTK 4.8+
+# Add PPA for newer GTK4 version
+sudo add-apt-repository -y ppa:savoury1/display
+sudo add-apt-repository -y ppa:savoury1/gtk4
 sudo apt-get update
+
+# Install base dependencies
 sudo apt-get install -y \
     build-essential \
     pkg-config \
@@ -46,10 +52,25 @@ sudo apt-get install -y \
     libx11-dev \
     libxft-dev \
     liblzma-dev \
-    libgtk-4-dev \
-    libadwaita-1-dev \
     git \
     curl
+
+# Install GTK4 and related libraries (4.8+ from PPA)
+sudo apt-get install -y \
+    libgtk-4-dev \
+    libgtk-4-1 \
+    libgtk-4-common \
+    libadwaita-1-dev \
+    libadwaita-1-0 \
+    libatk1.0-dev \
+    libatk-bridge2.0-dev \
+    libgtk-3-dev \
+    libgdk-pixbuf-2.0-dev \
+    libglib2.0-dev \
+    libcairo2-dev \
+    libpango1.0-dev \
+    libgdk-pixbuf2.0-dev \
+    gir1.2-gtk-4.0
 
 # For packaging
 sudo apt-get install -y \
@@ -57,6 +78,10 @@ sudo apt-get install -y \
     fakeroot \
     dh-make \
     lintian
+
+# Verify GTK4 version meets requirements
+pkg-config --modversion gtk4
+# Should show 4.8.0 or higher
 ```
 
 #### Fedora/RHEL/CentOS
@@ -364,6 +389,16 @@ sudo apt-get install libfontconfig1-dev
 
 # Error: X11 libraries not found
 sudo apt-get install libx11-dev libxft-dev
+
+# Error: GTK4 not found or version too old
+# Add PPA for newer GTK4 version
+sudo add-apt-repository -y ppa:savoury1/display
+sudo add-apt-repository -y ppa:savoury1/gtk4
+sudo apt-get update
+sudo apt-get install -y libgtk-4-dev
+
+# Verify GTK4 version
+pkg-config --modversion gtk4
 ```
 
 #### Rust Toolchain Issues
@@ -384,6 +419,14 @@ rm -rf ~/.cargo/registry/cache
 ```bash
 # Verify system dependencies are installed
 sudo apt-get install libfontconfig1-dev libfreetype6-dev libx11-dev libxft-dev liblzma-dev
+
+# If GTK4 build fails, check version and reinstall from PPA
+pkg-config --modversion gtk4
+# Should be 4.8.0 or higher
+sudo add-apt-repository -y ppa:savoury1/display
+sudo add-apt-repository -y ppa:savoury1/gtk4
+sudo apt-get update
+sudo apt-get install -y libgtk-4-dev libadwaita-1-dev
 ```
 
 ### Runtime Issues
