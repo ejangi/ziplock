@@ -86,8 +86,8 @@ debug-ui = []
 mock-backend = []
 
 [package.metadata.deb]
-maintainer = "ZipLock Team <team@ziplock.app>"
-copyright = "2024, ZipLock Team <team@ziplock.app>"
+maintainer = "James Angus <james@ejangi.com>"
+copyright = "2024, James Angus <james@ejangi.com>"
 license-file = ["../../LICENSE", "4"]
 extended-description = """\
 A secure, portable password manager using encrypted 7z archives.

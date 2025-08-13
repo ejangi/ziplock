@@ -13,7 +13,7 @@ PACKAGING_DIR="$PROJECT_ROOT/packaging/linux"
 PACKAGE_NAME="ziplock"
 PACKAGE_VERSION="${VERSION:-$(grep '^version' "$PROJECT_ROOT/Cargo.toml" | head -1 | sed 's/.*"\(.*\)".*/\1/')}"
 PACKAGE_ARCH="${PACKAGE_ARCH:-amd64}"
-MAINTAINER="ZipLock Team <team@ziplock.app>"
+MAINTAINER="James Angus <james@ejangi.com>"
 DESCRIPTION="A secure, portable password manager using encrypted 7z archives"
 HOMEPAGE="https://github.com/ejangi/ziplock"
 
@@ -375,13 +375,32 @@ build_package() {
     [ -f "$deb_dir/usr/share/applications/ziplock.desktop" ] && chmod 644 "$deb_dir/usr/share/applications/ziplock.desktop"
     chmod 644 "$deb_dir/lib/systemd/system/ziplock-backend.service"
 
+    # Debug: Show package structure before building
+    log_info "Package structure summary:"
+    find "$deb_dir" -type f | wc -l | xargs -I {} echo "  Total files: {}"
+    find "$deb_dir" -type d | wc -l | xargs -I {} echo "  Total directories: {}"
+
     log_info "Building Debian package..."
 
-    # Build the package
-    fakeroot dpkg-deb --build "$deb_dir" "$package_file"
+    # Build the package with better error handling and output capture
+    local build_output
+    if build_output=$(fakeroot dpkg-deb --build "$deb_dir" "$package_file" 2>&1); then
+        log_info "Package build output: $build_output"
+    else
+        local exit_code=$?
+        log_error "Package creation failed with exit code: $exit_code"
+        log_error "Build output: $build_output"
+
+        # Show debug info
+        log_info "Debug: Contents of deb directory:"
+        find "$deb_dir" -type f | head -20
+        log_info "Debug: DEBIAN control files:"
+        ls -la "$deb_dir/DEBIAN/" || true
+        exit 1
+    fi
 
     if [ ! -f "$package_file" ]; then
-        log_error "Package creation failed"
+        log_error "Package file was not created: $package_file"
         exit 1
     fi
 
@@ -389,8 +408,19 @@ build_package() {
 
     # Verify package
     log_info "Verifying package..."
-    dpkg-deb --info "$package_file"
-    dpkg-deb --contents "$package_file" | head -20
+    if ! dpkg-deb --info "$package_file" 2>&1; then
+        log_error "Package verification failed"
+        exit 1
+    fi
+
+    # Show package contents safely without risking broken pipe
+    log_info "Package contents (first 20 files):"
+    if ! (dpkg-deb --contents "$package_file" 2>/dev/null | head -20 > /tmp/package_contents.txt 2>/dev/null); then
+        log_warning "Could not display package contents (this may indicate an issue)"
+    else
+        cat /tmp/package_contents.txt || true
+        rm -f /tmp/package_contents.txt
+    fi
 
     local package_size=$(du -h "$package_file" | cut -f1)
     log_success "Package verification completed - Size: $package_size"
