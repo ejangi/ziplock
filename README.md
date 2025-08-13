@@ -72,7 +72,7 @@ cd ziplock
 
 ### Build Troubleshooting
 
-If you encounter build issues, particularly glibc compatibility problems, see our comprehensive [Build Guide](docs/build.md). The guide covers:
+If you encounter build issues, particularly glibc compatibility problems, see our comprehensive [Build Guide](docs/technical/build.md). The guide covers:
 
 - glibc compatibility issues and solutions
 - Containerized build process
@@ -202,7 +202,7 @@ cargo build --release --bin ziplock --manifest-path frontend/linux/Cargo.toml
 ./target/release/ziplock
 ```
 
-For detailed build instructions, see the [Linux Build Guide](docs/technical/build-linux.md).
+For detailed build instructions, see the [Build Guide](docs/technical/build.md).
 
 ### Configuration
 
@@ -250,7 +250,7 @@ ui:
 ### Developer Documentation
 - [Development Guide](docs/development.md) - Setting up the development environment
 - [Contributing Guidelines](docs/contributing.md) - How to contribute to ZipLock
-- [Linux Build Guide](docs/technical/build-linux.md) - Comprehensive Linux build process, packaging, and CI/CD setup
+- [Build Guide](docs/technical/build.md) - Comprehensive build process, packaging, troubleshooting, and CI/CD setup
 
 ## 🤝 Contributing
 
