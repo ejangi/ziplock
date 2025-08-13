@@ -14,6 +14,7 @@ RUST_TARGET_DIR="$BUILD_DIR"
 PROFILE="${PROFILE:-release}"
 TARGET_ARCH="${TARGET_ARCH:-x86_64-unknown-linux-gnu}"
 VERSION="${VERSION:-$(grep '^version' "$PROJECT_ROOT/Cargo.toml" | head -1 | sed 's/.*"\(.*\)".*/\1/')}"
+CARGO_CMD="cargo"  # Will be set to correct path in check_dependencies
 
 # Colors for output
 RED='\033[0;31m'
@@ -41,11 +42,21 @@ log_error() {
 check_dependencies() {
     log_info "Checking build dependencies..."
 
-    # Check for Rust
-    if ! command -v cargo &> /dev/null; then
+    # Check for Rust - try multiple locations
+    if command -v cargo &> /dev/null; then
+        CARGO_CMD="cargo"
+    elif [ -f "/root/.cargo/bin/cargo" ]; then
+        CARGO_CMD="/root/.cargo/bin/cargo"
+        export PATH="/root/.cargo/bin:$PATH"
+    elif [ -f "$HOME/.cargo/bin/cargo" ]; then
+        CARGO_CMD="$HOME/.cargo/bin/cargo"
+        export PATH="$HOME/.cargo/bin:$PATH"
+    else
         log_error "Rust/Cargo not found. Please install Rust: https://rustup.rs/"
         exit 1
     fi
+
+    log_info "Using cargo at: $(which cargo 2>/dev/null || echo $CARGO_CMD)"
 
     # Check for required system dependencies
     local missing_deps=()
@@ -101,7 +112,7 @@ build_shared_library() {
     log_info "Building shared library..."
 
     cd "$PROJECT_ROOT"
-    cargo build --profile "$PROFILE" --target "$TARGET_ARCH" -p ziplock-shared
+    $CARGO_CMD build --profile "$PROFILE" --target "$TARGET_ARCH" -p ziplock-shared
 
     log_success "Shared library built successfully"
 }
@@ -110,7 +121,7 @@ build_backend() {
     log_info "Building backend service..."
 
     cd "$PROJECT_ROOT"
-    cargo build --profile "$PROFILE" --target "$TARGET_ARCH" -p ziplock-backend
+    $CARGO_CMD build --profile "$PROFILE" --target "$TARGET_ARCH" -p ziplock-backend
 
     local backend_binary="$RUST_TARGET_DIR/$TARGET_ARCH/$PROFILE/ziplock-backend"
     if [ ! -f "$backend_binary" ]; then
@@ -125,7 +136,7 @@ build_frontend() {
     log_info "Building frontend client..."
 
     cd "$PROJECT_ROOT"
-    cargo build --profile "$PROFILE" --target "$TARGET_ARCH" -p ziplock-linux
+    $CARGO_CMD build --profile "$PROFILE" --target "$TARGET_ARCH" -p ziplock-linux
 
     local frontend_binary="$RUST_TARGET_DIR/$TARGET_ARCH/$PROFILE/ziplock"
     if [ ! -f "$frontend_binary" ]; then
@@ -140,7 +151,7 @@ run_tests() {
     log_info "Running tests..."
 
     cd "$PROJECT_ROOT"
-    cargo test --profile "$PROFILE" --target "$TARGET_ARCH" --workspace
+    $CARGO_CMD test --profile "$PROFILE" --target "$TARGET_ARCH" --workspace
 
     log_success "All tests passed"
 }
@@ -185,7 +196,9 @@ verify_binaries() {
         exit 1
     fi
 
-    log_info "Frontend version: $("$frontend_binary" --version 2>/dev/null || echo "Version check failed")"
+    # Frontend is a GUI application and cannot be run without a display
+    # so we skip the version check and just verify it's executable
+    log_info "Frontend binary verified (GUI application - version check skipped)"
 
     local frontend_size=$(du -h "$frontend_binary" | cut -f1)
     log_info "Frontend size: $frontend_size"

@@ -107,11 +107,16 @@ RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y \
     --target x86_64-unknown-linux-gnu
 ENV PATH="/root/.cargo/bin:${PATH}"
 
+# Verify Rust installation immediately
+RUN /root/.cargo/bin/rustc --version && /root/.cargo/bin/cargo --version
+
 # Verify environment
 RUN echo "=== Build Container Environment ===" && \
     echo "OS Release:" && cat /etc/os-release && \
     echo "glibc version:" && ldd --version && \
-    echo "Rust version:" && rustc --version && \
+    echo "PATH: $PATH" && \
+    echo "Rust version:" && /root/.cargo/bin/rustc --version && \
+    echo "Cargo version:" && /root/.cargo/bin/cargo --version && \
     echo "=================================="
 
 # Create cargo cache directory
@@ -147,41 +152,56 @@ run_containerized_build() {
 
     cd "$PROJECT_ROOT"
 
-    # Create cache directory if it doesn't exist
-    mkdir -p ~/.cargo
+    # Create cache directory for cargo registry (not the entire .cargo dir)
+    mkdir -p ~/.cargo/registry
+    mkdir -p ~/.cargo/git
+
+    # Create a temporary script to run inside the container
+    cat > "$PROJECT_ROOT/build-container.sh" << 'EOF'
+#!/bin/bash
+set -euo pipefail
+export PATH="/root/.cargo/bin:$PATH"
+cd /workspace
+
+# Make build scripts executable
+chmod +x scripts/build/build-linux.sh
+chmod +x scripts/build/package-deb.sh
+
+# Verify Rust environment
+echo "Container Rust environment:"
+echo "PATH: $PATH"
+/root/.cargo/bin/rustc --version
+/root/.cargo/bin/cargo --version
+echo "Target glibc version in container:"
+(ldd --version 2>&1 | head -1) || echo "ldd version check skipped"
+
+# Build with container environment
+./scripts/build/build-linux.sh --target x86_64-unknown-linux-gnu --profile release
+
+# Verify built binaries
+echo "Verifying built binaries:"
+file /workspace/target/x86_64-unknown-linux-gnu/release/ziplock-backend
+file /workspace/target/x86_64-unknown-linux-gnu/release/ziplock
+(ldd /workspace/target/x86_64-unknown-linux-gnu/release/ziplock-backend 2>&1 | head -5) || echo "ldd check completed"
+EOF
+
+    chmod +x "$PROJECT_ROOT/build-container.sh"
 
     docker run --rm \
         -v "$PWD:/workspace" \
-        -v ~/.cargo:/root/.cargo \
+        -v ~/.cargo/registry:/root/.cargo/registry \
+        -v ~/.cargo/git:/root/.cargo/git \
         -e TARGET_ARCH=x86_64-unknown-linux-gnu \
         -e CARGO_TARGET_DIR=/workspace/target \
         -e RUSTFLAGS="-C target-cpu=x86-64" \
-        ziplock-builder-local bash -c "
-            set -euo pipefail
-            chmod +x scripts/build/build-linux.sh
-            chmod +x scripts/build/package-deb.sh
-
-            # Verify Rust environment
-            echo 'Container Rust environment:'
-            rustc --version
-            cargo --version
-            echo 'Target glibc version in container:'
-            ldd --version | head -1
-
-            # Build with container environment
-            ./scripts/build/build-linux.sh \
-                --target x86_64-unknown-linux-gnu \
-                --profile release
-
-            # Verify built binaries
-            echo 'Verifying built binaries:'
-            file /workspace/target/x86_64-unknown-linux-gnu/release/ziplock-backend
-            file /workspace/target/x86_64-unknown-linux-gnu/release/ziplock
-            ldd /workspace/target/x86_64-unknown-linux-gnu/release/ziplock-backend | head -5
-        " || {
+        ziplock-builder-local /workspace/build-container.sh || {
         log_error "Containerized build failed"
+        rm -f "$PROJECT_ROOT/build-container.sh"
         exit 1
     }
+
+    # Clean up temporary script
+    rm -f "$PROJECT_ROOT/build-container.sh"
 
     log_success "Containerized build completed"
 }
@@ -194,8 +214,10 @@ create_debian_package() {
     docker run --rm \
         -v "$PWD:/workspace" \
         -e PACKAGE_ARCH=amd64 \
+        -e PATH="/root/.cargo/bin:$PATH" \
         ziplock-builder-local bash -c "
             set -euo pipefail
+            export PATH=\"/root/.cargo/bin:\$PATH\"
 
             # Verify installation structure exists
             if [ ! -d '/workspace/target/install' ]; then

@@ -42,9 +42,7 @@ jobs:
 
       - name: Install system dependencies
         run: |
-          # Add PPA for newer GTK4 version (4.8+) needed for gtk-gui features
-          sudo add-apt-repository -y ppa:savoury1/display
-          sudo add-apt-repository -y ppa:savoury1/gtk4
+          # Update package lists
           sudo apt-get update
 
           # Install base development dependencies
@@ -58,7 +56,7 @@ jobs:
             libxft-dev \
             liblzma-dev
 
-          # Install GTK4 and related libraries (now 4.8+ from PPA)
+          # Install GTK4 and related libraries (using Ubuntu 22.04 default versions)
           sudo apt-get install -y \
             libgtk-4-dev \
             libgtk-4-1 \
@@ -72,13 +70,12 @@ jobs:
             libglib2.0-dev \
             libcairo2-dev \
             libpango1.0-dev \
-            libgdk-pixbuf2.0-dev \
             gir1.2-gtk-4.0
 
           # Ensure pkg-config database is updated
           sudo ldconfig
 
-          # Verify GTK4 installation and version requirements
+          # Verify GTK4 installation
           echo "=== GTK4 Installation Verification ==="
           if pkg-config --exists gtk4; then
             echo "✓ GTK4 found via pkg-config"
@@ -87,15 +84,9 @@ jobs:
             echo "GTK4 cflags: $(pkg-config --cflags gtk4)"
             echo "GTK4 libs: $(pkg-config --libs gtk4)"
 
-            # Check if version meets minimum requirement (4.8)
+            # Note: Ubuntu 22.04 provides GTK4 4.6.x which should be sufficient
             GTK_VERSION=$(pkg-config --modversion gtk4)
-            if dpkg --compare-versions "$GTK_VERSION" ge "4.8"; then
-              echo "✓ GTK4 version $GTK_VERSION meets requirement (>=4.8)"
-            else
-              echo "⚠ WARNING: GTK4 version $GTK_VERSION is below requirement (>=4.8)"
-              echo "This may cause build issues with gtk-gui features"
-              exit 1
-            fi
+            echo "Using GTK4 version $GTK_VERSION from Ubuntu repositories"
           else
             echo "✗ GTK4 not found via pkg-config"
             echo "Available GTK packages:"

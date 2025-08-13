@@ -40,7 +40,7 @@ iced = { workspace = true, features = [
 ] }
 
 # Alternative GUI framework option
-gtk = { workspace = true, optional = true, features = ["v4_8"] }
+gtk = { workspace = true, optional = true, features = ["v4_6"] }
 gdk4 = { workspace = true, optional = true }
 glib = { version = "0.18", optional = true }
 

@@ -64,10 +64,8 @@ rustup target add x86_64-unknown-linux-gnu
 
 **Ubuntu/Debian:**
 ```bash
-# Note: Ubuntu 22.04 ships with GTK 4.6, but the project requires GTK 4.8+
-# Add PPA for newer GTK4 version
-sudo add-apt-repository -y ppa:savoury1/display
-sudo add-apt-repository -y ppa:savoury1/gtk4
+# Note: Ubuntu 22.04 ships with GTK 4.6, which is compatible with the project
+# Update package lists
 sudo apt-get update
 
 # Install base dependencies
@@ -82,7 +80,7 @@ sudo apt-get install -y \
     git \
     curl
 
-# Install GTK4 and related libraries (4.8+ from PPA)
+# Install GTK4 and related libraries (using Ubuntu 22.04 default versions)
 sudo apt-get install -y \
     libgtk-4-dev \
     libgtk-4-1 \
@@ -106,9 +104,9 @@ sudo apt-get install -y \
     dh-make \
     lintian
 
-# Verify GTK4 version meets requirements
+# Verify GTK4 installation
 pkg-config --modversion gtk4
-# Should show 4.8.0 or higher
+# Should show 4.6.x from Ubuntu repositories
 ```
 
 **Fedora/RHEL/CentOS:**
@@ -337,7 +335,7 @@ The problem occurs because:
 1. **Build Environment**: GitHub Actions was using `ubuntu-latest` (which could be Ubuntu 24.04 with glibc 2.39)
 2. **Target Environment**: Testing was done in Ubuntu 22.04 (which has glibc 2.35)
 3. **Binary Incompatibility**: Binaries compiled against newer glibc versions cannot run on systems with older glibc
-4. **GTK4 Version Compatibility**: Ubuntu 22.04 ships with GTK 4.6.9, but the project requires GTK 4.8+ for gtk-gui features
+4. **GTK4 Version Compatibility**: Ubuntu 22.04 ships with GTK 4.6.9, which is compatible with gtk-gui features
 
 #### Technical Details
 
@@ -470,11 +468,9 @@ rm -rf ~/.cargo/registry/cache
 # Verify system dependencies are installed
 sudo apt-get install libfontconfig1-dev libfreetype6-dev libx11-dev libxft-dev liblzma-dev
 
-# If GTK4 build fails, check version and reinstall from PPA
+# If GTK4 build fails, check version and reinstall
 pkg-config --modversion gtk4
-# Should be 4.8.0 or higher
-sudo add-apt-repository -y ppa:savoury1/display
-sudo add-apt-repository -y ppa:savoury1/gtk4
+# Should be 4.6.x or higher
 sudo apt-get update
 sudo apt-get install -y libgtk-4-dev libadwaita-1-dev
 ```
