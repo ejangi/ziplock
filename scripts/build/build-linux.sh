@@ -13,7 +13,7 @@ PACKAGING_DIR="$PROJECT_ROOT/packaging/linux"
 RUST_TARGET_DIR="$BUILD_DIR"
 PROFILE="${PROFILE:-release}"
 TARGET_ARCH="${TARGET_ARCH:-x86_64-unknown-linux-gnu}"
-VERSION="${VERSION:-$(grep '^version' "$PROJECT_ROOT/Cargo.toml" | head -1 | sed 's/.*"\(.*\)".*/\1/')}"
+VERSION="${VERSION:-$(grep '^version' "$PROJECT_ROOT/Cargo.toml" | sed -n '1s/.*"\(.*\)".*/\1/p')}"
 CARGO_CMD="cargo"  # Will be set to correct path in check_dependencies
 
 # Colors for output

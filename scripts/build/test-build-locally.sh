@@ -182,7 +182,8 @@ echo "Target glibc version in container:"
 echo "Verifying built binaries:"
 file /workspace/target/x86_64-unknown-linux-gnu/release/ziplock-backend
 file /workspace/target/x86_64-unknown-linux-gnu/release/ziplock
-(ldd /workspace/target/x86_64-unknown-linux-gnu/release/ziplock-backend 2>&1 | head -5) || echo "ldd check completed"
+backend_deps=$(ldd /workspace/target/x86_64-unknown-linux-gnu/release/ziplock-backend 2>/dev/null | head -5) || backend_deps="ldd check failed"
+echo "$backend_deps"
 EOF
 
     chmod +x "$PROJECT_ROOT/build-container.sh"
@@ -266,7 +267,8 @@ test_package_installation() {
 
         # Check glibc version in test container
         echo 'Test container glibc version:'
-        ldd --version | head -1
+        glibc_version=$(ldd --version 2>/dev/null | head -1) || glibc_version='glibc version check failed'
+        echo "$glibc_version"
 
         # Install the package (this will automatically install dependencies)
         echo 'Installing ZipLock package...'
@@ -320,7 +322,7 @@ analyze_build_results() {
     echo "=== Build Analysis ==="
 
     # Package information
-    PACKAGE_FILE=$(ls target/ziplock_*_amd64.deb | head -1 2>/dev/null || echo "")
+    PACKAGE_FILE=$(ls target/ziplock_*_amd64.deb 2>/dev/null | head -1) || PACKAGE_FILE=""
     if [ -n "$PACKAGE_FILE" ]; then
         echo "Package: $(basename $PACKAGE_FILE)"
         echo "Package size: $(du -h $PACKAGE_FILE | cut -f1)"
@@ -335,14 +337,16 @@ analyze_build_results() {
     if [ -f "target/x86_64-unknown-linux-gnu/release/ziplock-backend" ]; then
         echo "Backend binary size: $(du -h target/x86_64-unknown-linux-gnu/release/ziplock-backend | cut -f1)"
         echo "Backend glibc requirements:"
-        objdump -T target/x86_64-unknown-linux-gnu/release/ziplock-backend | grep GLIBC | sort -V | tail -3 || echo "No GLIBC symbols found"
+        backend_glibc=$(objdump -T target/x86_64-unknown-linux-gnu/release/ziplock-backend 2>/dev/null | grep GLIBC | sort -V | tail -3) || backend_glibc="No GLIBC symbols found"
+        echo "$backend_glibc"
         echo ""
     fi
 
     if [ -f "target/x86_64-unknown-linux-gnu/release/ziplock" ]; then
         echo "Frontend binary size: $(du -h target/x86_64-unknown-linux-gnu/release/ziplock | cut -f1)"
         echo "Frontend glibc requirements:"
-        objdump -T target/x86_64-unknown-linux-gnu/release/ziplock | grep GLIBC | sort -V | tail -3 || echo "No GLIBC symbols found"
+        frontend_glibc=$(objdump -T target/x86_64-unknown-linux-gnu/release/ziplock 2>/dev/null | grep GLIBC | sort -V | tail -3) || frontend_glibc="No GLIBC symbols found"
+        echo "$frontend_glibc"
     fi
 
     echo "===================="
@@ -432,7 +436,8 @@ main() {
     log_success "Local build test completed successfully!"
     echo
     echo "Your build is ready and should work the same way in GitHub Actions."
-    echo "Package location: $(ls $PROJECT_ROOT/target/ziplock_*_amd64.deb 2>/dev/null || echo 'Not found')"
+    package_location=$(ls $PROJECT_ROOT/target/ziplock_*_amd64.deb 2>/dev/null) || package_location='Not found'
+    echo "Package location: $package_location"
 }
 
 # Run main function with all arguments

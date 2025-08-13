@@ -182,11 +182,16 @@ jobs:
             --target x86_64-unknown-linux-gnu
           ENV PATH="/root/.cargo/bin:${PATH}"
 
+          # Verify Rust installation immediately
+          RUN /root/.cargo/bin/rustc --version && /root/.cargo/bin/cargo --version
+
           # Verify environment
           RUN echo "=== Build Container Environment ===" && \
             echo "OS Release:" && cat /etc/os-release && \
-            echo "glibc version:" && ldd --version && \
-            echo "Rust version:" && rustc --version && \
+            echo "glibc version:" && (ldd --version 2>/dev/null || echo "ldd not available") && \
+            echo "PATH: $PATH" && \
+            echo "Rust version:" && /root/.cargo/bin/rustc --version && \
+            echo "Cargo version:" && /root/.cargo/bin/cargo --version && \
             echo "=================================="
 
           # Create cargo cache directory
@@ -219,7 +224,12 @@ jobs:
             -e CARGO_TARGET_DIR=/workspace/target \
             -e RUSTFLAGS="-C target-cpu=x86-64" \
             ziplock-builder bash -c "
-              set -euo pipefail
+              # Use safer error handling - avoid pipefail with head/tail commands
+              set -euo
+
+              echo 'Starting containerized build process...'
+
+              # Set permissions
               chmod +x scripts/build/build-linux.sh
               chmod +x scripts/build/package-deb.sh
 
@@ -227,19 +237,51 @@ jobs:
               echo 'Container Rust environment:'
               rustc --version
               cargo --version
-              echo 'Target glibc version in container:'
-              ldd --version | head -1
 
+              echo 'Target glibc version in container:'
+              glibc_version=\$(ldd --version 2>/dev/null | head -1) || glibc_version='unknown'
+              echo \"\$glibc_version\"
+
+              echo 'Running build script...'
               # Build with container environment
               ./scripts/build/build-linux.sh \
                 --target x86_64-unknown-linux-gnu \
                 --profile release
 
-              # Verify built binaries
+              echo 'Build script completed, verifying outputs...'
+
+              # Verify built binaries exist
               echo 'Verifying built binaries:'
-              file /workspace/target/x86_64-unknown-linux-gnu/release/ziplock-backend
-              file /workspace/target/x86_64-unknown-linux-gnu/release/ziplock
-              ldd /workspace/target/x86_64-unknown-linux-gnu/release/ziplock-backend | head -5
+              backend_path='/workspace/target/x86_64-unknown-linux-gnu/release/ziplock-backend'
+              frontend_path='/workspace/target/x86_64-unknown-linux-gnu/release/ziplock'
+
+              if [ -f \"\$backend_path\" ]; then
+                echo 'Backend binary found:'
+                file \"\$backend_path\"
+                echo 'Backend binary dependencies (first 5):'
+                backend_deps=\$(ldd \"\$backend_path\" 2>/dev/null | head -5) || backend_deps='dependency check failed'
+                echo \"\$backend_deps\"
+              else
+                echo 'ERROR: Backend binary not found at:' \"\$backend_path\"
+                echo 'Available files in target directory:'
+                find /workspace/target -name 'ziplock*' -type f || echo 'No ziplock files found'
+                exit 1
+              fi
+
+              if [ -f \"\$frontend_path\" ]; then
+                echo 'Frontend binary found:'
+                file \"\$frontend_path\"
+                echo 'Frontend binary dependencies (first 5):'
+                frontend_deps=\$(ldd \"\$frontend_path\" 2>/dev/null | head -5) || frontend_deps='dependency check failed'
+                echo \"\$frontend_deps\"
+              else
+                echo 'ERROR: Frontend binary not found at:' \"\$frontend_path\"
+                echo 'Available files in target directory:'
+                find /workspace/target -name 'ziplock*' -type f || echo 'No ziplock files found'
+                exit 1
+              fi
+
+              echo 'Build completed successfully'
             "
 
       - name: Create Debian package in container
@@ -283,7 +325,7 @@ jobs:
 
             # Check glibc version in test container
             echo 'Test container glibc version:'
-            ldd --version | head -1
+            ldd --version 2>/dev/null | head -1 || echo 'glibc version check failed'
 
             # Install the package (this will automatically install dependencies)
             echo 'Installing ZipLock package...'
@@ -329,19 +371,24 @@ jobs:
         run: |
           echo "=== Binary Dependency Analysis ==="
           echo "Build environment glibc version:"
-          docker run --rm ziplock-builder ldd --version | head -1
+          glibc_version=$(docker run --rm ziplock-builder bash -c "ldd --version 2>/dev/null" | head -1) || glibc_version='glibc version check failed'
+          echo "$glibc_version"
           echo ""
           echo "Backend binary glibc requirements:"
-          objdump -T target/x86_64-unknown-linux-gnu/release/ziplock-backend | grep GLIBC | sort -V | tail -5 || echo "No GLIBC symbols found"
+          backend_glibc=$(objdump -T target/x86_64-unknown-linux-gnu/release/ziplock-backend 2>/dev/null | grep GLIBC | sort -V | tail -5) || backend_glibc="No GLIBC symbols found"
+          echo "$backend_glibc"
           echo ""
           echo "Frontend binary glibc requirements:"
-          objdump -T target/x86_64-unknown-linux-gnu/release/ziplock | grep GLIBC | sort -V | tail -5 || echo "No GLIBC symbols found"
+          frontend_glibc=$(objdump -T target/x86_64-unknown-linux-gnu/release/ziplock 2>/dev/null | grep GLIBC | sort -V | tail -5) || frontend_glibc="No GLIBC symbols found"
+          echo "$frontend_glibc"
           echo ""
           echo "Maximum glibc version required:"
           echo "Backend:"
-          readelf -V target/x86_64-unknown-linux-gnu/release/ziplock-backend | grep GLIBC | sort -V | tail -1 || echo "No version info"
+          backend_version=$(readelf -V target/x86_64-unknown-linux-gnu/release/ziplock-backend 2>/dev/null | grep GLIBC | sort -V | tail -1) || backend_version="No version info"
+          echo "$backend_version"
           echo "Frontend:"
-          readelf -V target/x86_64-unknown-linux-gnu/release/ziplock | grep GLIBC | sort -V | tail -1 || echo "No version info"
+          frontend_version=$(readelf -V target/x86_64-unknown-linux-gnu/release/ziplock 2>/dev/null | grep GLIBC | sort -V | tail -1) || frontend_version="No version info"
+          echo "$frontend_version"
           echo "================================="
 
       - name: Comprehensive package validation
@@ -409,10 +456,14 @@ jobs:
 
           echo "=== Build Environment ===" >> build-report.txt
           docker run --rm ziplock-builder bash -c "
-            echo 'OS: $(cat /etc/os-release | grep PRETTY_NAME | cut -d= -f2 | tr -d \")'
-            echo 'glibc: $(ldd --version | head -1)'
-            echo 'Rust: $(rustc --version)'
-            echo 'GCC: $(gcc --version | head -1)'
+            os_info=\$(cat /etc/os-release | grep PRETTY_NAME | cut -d= -f2 | tr -d \\\")
+            glibc_info=\$(ldd --version 2>/dev/null | head -1) || glibc_info='unknown'
+            rust_info=\$(rustc --version)
+            gcc_info=\$(gcc --version 2>/dev/null | head -1) || gcc_info='unknown'
+            echo \"OS: \$os_info\"
+            echo \"glibc: \$glibc_info\"
+            echo \"Rust: \$rust_info\"
+            echo \"GCC: \$gcc_info\"
           " >> build-report.txt
           echo "" >> build-report.txt
 
@@ -427,7 +478,8 @@ jobs:
           echo "Backend binary size: $(du -h target/x86_64-unknown-linux-gnu/release/ziplock-backend | cut -f1)" >> build-report.txt
           echo "Frontend binary size: $(du -h target/x86_64-unknown-linux-gnu/release/ziplock | cut -f1)" >> build-report.txt
           echo "Max glibc version required:" >> build-report.txt
-          objdump -T target/x86_64-unknown-linux-gnu/release/ziplock-backend | grep GLIBC | sort -V | tail -1 >> build-report.txt
+          max_glibc=$(objdump -T target/x86_64-unknown-linux-gnu/release/ziplock-backend 2>/dev/null | grep GLIBC | sort -V | tail -1) || max_glibc="No GLIBC info available"
+          echo "$max_glibc" >> build-report.txt
           echo "" >> build-report.txt
 
           echo "=== Test Results ===" >> build-report.txt

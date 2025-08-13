@@ -661,6 +661,46 @@ The workflow produces several artifacts:
    - Download build artifacts
    - Extract and examine build-report.txt
 
+#### SIGPIPE Error Fix (Exit Code 141)
+
+**Problem**: GitHub Actions workflows failing with exit code 141 due to SIGPIPE when using `set -euo pipefail` with pipe operations.
+
+**Root Cause**: Commands like `ldd --version | head -1` cause SIGPIPE when `head` exits before the upstream command finishes writing, triggering script failure due to `pipefail`.
+
+**Solution Applied**:
+
+1. **Avoid problematic pipes in critical sections:**
+   ```bash
+   # Before (problematic):
+   set -euo pipefail
+   ldd --version | head -1
+   
+   # After (safe):
+   set -euo  # Remove pipefail where pipes are used
+   glibc_version=$(ldd --version 2>/dev/null | head -1) || glibc_version='unknown'
+   echo "$glibc_version"
+   ```
+
+2. **Use variable assignments for pipe operations:**
+   ```bash
+   # Safe pattern for multiple commands:
+   result=$(command1 2>/dev/null | command2) || result="fallback value"
+   echo "$result"
+   ```
+
+3. **Add proper error handling:**
+   ```bash
+   # Include error redirection and fallbacks
+   binary_deps=$(ldd /path/to/binary 2>/dev/null | head -5) || binary_deps="dependency check failed"
+   ```
+
+**Files Modified**:
+- `.github/workflows/linux-build.yml` - Fixed pipe operations in container execution
+- `scripts/build/build-linux.sh` - Fixed version extraction using `sed -n` instead of `head`
+- `scripts/build/test-build-locally.sh` - Applied consistent SIGPIPE fixes
+
+This fix maintains all security and compatibility features while preventing pipeline failures from SIGPIPE errors.
+
 ### Triggering a Release
 
 ```bash
