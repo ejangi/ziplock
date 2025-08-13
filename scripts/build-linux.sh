@@ -163,27 +163,32 @@ verify_binaries() {
     log_info "Verifying built binaries..."
 
     local backend_binary="$RUST_TARGET_DIR/$TARGET_ARCH/$PROFILE/ziplock-backend"
-    local frontend_binary="$RUST_TARGET_DIR/$TARGET_ARCH/$PROFILE/ziplock"
 
-    # Check if binaries exist and are executable
+    # Check if backend binary exists and is executable
     if [ ! -x "$backend_binary" ]; then
         log_error "Backend binary is not executable: $backend_binary"
         exit 1
     fi
+
+    # Quick version check for backend
+    log_info "Backend version: $("$backend_binary" --version 2>/dev/null || echo "Version check failed")"
+
+    # Check backend binary size
+    local backend_size=$(du -h "$backend_binary" | cut -f1)
+    log_info "Binary sizes - Backend: $backend_size"
+
+    # Check frontend binary
+    local frontend_binary="$RUST_TARGET_DIR/$TARGET_ARCH/$PROFILE/ziplock"
 
     if [ ! -x "$frontend_binary" ]; then
         log_error "Frontend binary is not executable: $frontend_binary"
         exit 1
     fi
 
-    # Quick version check
-    log_info "Backend version: $("$backend_binary" --version 2>/dev/null || echo "Version check failed")"
     log_info "Frontend version: $("$frontend_binary" --version 2>/dev/null || echo "Version check failed")"
 
-    # Check binary sizes
-    local backend_size=$(du -h "$backend_binary" | cut -f1)
     local frontend_size=$(du -h "$frontend_binary" | cut -f1)
-    log_info "Binary sizes - Backend: $backend_size, Frontend: $frontend_size"
+    log_info "Frontend size: $frontend_size"
 
     log_success "Binary verification completed"
 }
@@ -197,18 +202,37 @@ create_install_structure() {
 
     # Create directory structure
     mkdir -p "$install_dir/usr/bin"
-    mkdir -p "$install_dir/usr/share/applications"
-    mkdir -p "$install_dir/usr/share/icons/hicolor/scalable/apps"
     mkdir -p "$install_dir/lib/systemd/system"
     mkdir -p "$install_dir/etc/ziplock"
     mkdir -p "$install_dir/var/lib/ziplock"
 
-    # Copy binaries
-    cp "$RUST_TARGET_DIR/$TARGET_ARCH/$PROFILE/ziplock-backend" "$install_dir/usr/bin/"
-    cp "$RUST_TARGET_DIR/$TARGET_ARCH/$PROFILE/ziplock" "$install_dir/usr/bin/"
+    # Create GUI directories
+    mkdir -p "$install_dir/usr/share/applications"
+    mkdir -p "$install_dir/usr/share/icons/hicolor/scalable/apps"
 
-    # Copy desktop file
-    cp "$PROJECT_ROOT/frontend/linux/resources/ziplock.desktop" "$install_dir/usr/share/applications/"
+    # Copy binaries
+    local backend_binary="$RUST_TARGET_DIR/$TARGET_ARCH/$PROFILE/ziplock-backend"
+    if [ -f "$backend_binary" ]; then
+        cp "$backend_binary" "$install_dir/usr/bin/"
+    else
+        log_error "Backend binary not found: $backend_binary"
+        exit 1
+    fi
+
+    local frontend_binary="$RUST_TARGET_DIR/$TARGET_ARCH/$PROFILE/ziplock"
+    if [ -f "$frontend_binary" ]; then
+        cp "$frontend_binary" "$install_dir/usr/bin/"
+    else
+        log_error "Frontend binary not found: $frontend_binary"
+        exit 1
+    fi
+
+    # Copy desktop file and icon
+    if [ -f "$PROJECT_ROOT/frontend/linux/resources/ziplock.desktop" ]; then
+        cp "$PROJECT_ROOT/frontend/linux/resources/ziplock.desktop" "$install_dir/usr/share/applications/"
+    else
+        log_warning "Desktop file not found"
+    fi
 
     # Copy icon
     if [ -f "$PROJECT_ROOT/frontend/linux/resources/icons/ziplock.svg" ]; then
@@ -220,7 +244,12 @@ create_install_structure() {
     fi
 
     # Copy systemd service
-    cp "$PACKAGING_DIR/ziplock-backend.service" "$install_dir/lib/systemd/system/"
+    if [ -f "$PACKAGING_DIR/ziplock-backend.service" ]; then
+        cp "$PACKAGING_DIR/ziplock-backend.service" "$install_dir/lib/systemd/system/"
+    else
+        log_error "Systemd service file not found: $PACKAGING_DIR/ziplock-backend.service"
+        exit 1
+    fi
 
     # Create default config
     cat > "$install_dir/etc/ziplock/config.yml" << EOF
@@ -276,7 +305,7 @@ print_usage() {
     echo "Usage: $0 [OPTIONS]"
     echo
     echo "Options:"
-    echo "  --profile PROFILE     Build profile (debug|release) [default: release]"
+    echo "  --profile PROFILE     Build profile (dev|release) [default: release]"
     echo "  --target TARGET       Target architecture [default: x86_64-unknown-linux-gnu]"
     echo "  --skip-tests         Skip running tests"
     echo "  --no-strip           Don't strip debug symbols"
@@ -304,6 +333,7 @@ main() {
                 TARGET_ARCH="$2"
                 shift 2
                 ;;
+
             --skip-tests)
                 skip_tests=true
                 shift
@@ -329,8 +359,8 @@ main() {
     done
 
     # Validate profile
-    if [[ "$PROFILE" != "debug" && "$PROFILE" != "release" ]]; then
-        log_error "Invalid profile: $PROFILE. Must be 'debug' or 'release'"
+    if [[ "$PROFILE" != "dev" && "$PROFILE" != "release" ]]; then
+        log_error "Invalid profile: $PROFILE. Must be 'dev' or 'release'"
         exit 1
     fi
 

@@ -266,21 +266,11 @@ test_cross_compilation() {
 
     cd "$PROJECT_ROOT"
 
-    # Check if cross-compilation target is available
-    if rustup target list --installed | grep -q "aarch64-unknown-linux-gnu"; then
-        log_info "ARM64 target is installed, testing cross-compilation..."
+    # Cross-compilation testing has been removed
+    # ZipLock now focuses on x86_64 architecture only for Linux
+    log_info "Cross-compilation testing skipped (ARM support removed)"
 
-        # Test ARM64 build (may fail without cross-compilation tools)
-        if cargo build --target aarch64-unknown-linux-gnu --release -p ziplock-shared; then
-            log_success "ARM64 cross-compilation works"
-        else
-            log_warning "ARM64 cross-compilation failed (may need cross-compilation tools)"
-        fi
-    else
-        log_info "ARM64 target not installed, skipping cross-compilation test"
-    fi
-
-    return 0
+    log_success "Cross-compilation test completed"
 }
 
 print_summary() {

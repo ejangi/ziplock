@@ -18,7 +18,7 @@ This document provides comprehensive instructions for building ZipLock on Linux 
 ### System Requirements
 
 - **Operating System**: Ubuntu 20.04+, Debian 11+, or compatible Linux distribution
-- **Architecture**: x86_64 (amd64) or aarch64 (arm64)
+- **Architecture**: x86_64 (amd64)
 - **Memory**: 2GB RAM minimum (4GB recommended for builds)
 - **Disk Space**: 1GB free space for build artifacts
 
@@ -32,7 +32,6 @@ source ~/.cargo/env
 
 # Install required targets
 rustup target add x86_64-unknown-linux-gnu
-rustup target add aarch64-unknown-linux-gnu  # For ARM64 builds
 ```
 
 #### System Libraries
@@ -58,11 +57,6 @@ sudo apt-get install -y \
     fakeroot \
     dh-make \
     lintian
-
-# For cross-compilation (ARM64)
-sudo apt-get install -y \
-    gcc-aarch64-linux-gnu \
-    g++-aarch64-linux-gnu
 ```
 
 #### Fedora/RHEL/CentOS
@@ -79,8 +73,6 @@ sudo dnf install -y \
     gtk4-devel \
     libadwaita-devel
 
-# For cross-compilation
-sudo dnf install -y gcc-aarch64-linux-gnu
 ```
 
 #### Arch Linux
@@ -260,44 +252,16 @@ sudo apt-get purge ziplock
 
 ## Cross-Compilation
 
-### Building for ARM64
+ZipLock supports building for x86_64 architecture on Linux.
 
-```bash
-# Install ARM64 toolchain
-rustup target add aarch64-unknown-linux-gnu
-sudo apt-get install gcc-aarch64-linux-gnu
-
-# Set cross-compilation environment
-export CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc
-export AR_aarch64_unknown_linux_gnu=aarch64-linux-gnu-ar
-
-# Build for ARM64
-./scripts/build-linux.sh --target aarch64-unknown-linux-gnu
-
-# Create ARM64 package
-./scripts/package-deb.sh --arch arm64
 ```
 
-### Building for Multiple Architectures
+### Building for x86_64
 
 ```bash
-# Build script for multiple architectures
-for arch in x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu; do
-    case $arch in
-        x86_64-unknown-linux-gnu)
-            deb_arch=amd64
-            ;;
-        aarch64-unknown-linux-gnu)
-            deb_arch=arm64
-            export CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc
-            export AR_aarch64_unknown_linux_gnu=aarch64-linux-gnu-ar
-            ;;
-    esac
-    
-    echo "Building for $arch ($deb_arch)..."
-    ./scripts/build-linux.sh --target $arch --profile release
-    ./scripts/package-deb.sh --arch $deb_arch
-done
+# Build for x86_64
+./scripts/build-linux.sh --target x86_64-unknown-linux-gnu
+./scripts/package-deb.sh --arch amd64
 ```
 
 ## GitHub Actions CI/CD
@@ -308,7 +272,7 @@ The project includes GitHub Actions workflows for:
 
 - **Continuous Integration**: Run tests on every push/PR
 - **Security Audits**: Automated dependency security scanning
-- **Multi-Architecture Builds**: Create packages for amd64 and arm64
+- **x86_64 Architecture Builds**: Create packages for amd64
 - **Release Automation**: Automatic releases when tags are pushed
 
 ### Triggering a Release
@@ -335,9 +299,8 @@ cargo clippy --all-targets --all-features -- -D warnings
 cargo test --workspace
 cargo audit
 
-# Build for both architectures (if cross-compilation is set up)
+# Build for x86_64
 ./scripts/build-linux.sh --target x86_64-unknown-linux-gnu
-./scripts/build-linux.sh --target aarch64-unknown-linux-gnu
 ```
 
 ## Installation and Testing
@@ -417,14 +380,10 @@ cargo clean
 rm -rf ~/.cargo/registry/cache
 ```
 
-#### Cross-Compilation Issues
+#### Build Issues
 ```bash
-# Install missing cross-compilation tools
-sudo apt-get install gcc-aarch64-linux-gnu
-
-# Set correct environment variables
-export CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc
-export AR_aarch64_unknown_linux_gnu=aarch64-linux-gnu-ar
+# Verify system dependencies are installed
+sudo apt-get install libfontconfig1-dev libfreetype6-dev libx11-dev libxft-dev liblzma-dev
 ```
 
 ### Runtime Issues

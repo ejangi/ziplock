@@ -77,9 +77,9 @@ verify_build() {
     local required_files=(
         "$install_dir/usr/bin/ziplock-backend"
         "$install_dir/usr/bin/ziplock"
-        "$install_dir/usr/share/applications/ziplock.desktop"
         "$install_dir/lib/systemd/system/ziplock-backend.service"
         "$install_dir/etc/ziplock/config.yml"
+        "$install_dir/usr/share/applications/ziplock.desktop"
     )
 
     for file in "${required_files[@]}"; do
@@ -131,6 +131,8 @@ Description: $DESCRIPTION
 Homepage: $HOMEPAGE
 EOF
 
+
+
     log_success "Created Debian control file"
 }
 
@@ -167,14 +169,18 @@ chmod 640 /etc/ziplock/config.yml
 systemctl daemon-reload
 systemctl enable ziplock-backend.service
 
-# Update desktop database
-if command -v update-desktop-database >/dev/null 2>&1; then
-    update-desktop-database /usr/share/applications
+# Update desktop database (only if frontend is installed)
+if [ -f /usr/share/applications/ziplock.desktop ]; then
+    if command -v update-desktop-database >/dev/null 2>&1; then
+        update-desktop-database /usr/share/applications
+    fi
 fi
 
-# Update icon cache
-if command -v gtk-update-icon-cache >/dev/null 2>&1; then
-    gtk-update-icon-cache -f -t /usr/share/icons/hicolor 2>/dev/null || true
+# Update icon cache (only if frontend is installed)
+if [ -f /usr/share/icons/hicolor/scalable/apps/ziplock.svg ]; then
+    if command -v gtk-update-icon-cache >/dev/null 2>&1; then
+        gtk-update-icon-cache -f -t /usr/share/icons/hicolor 2>/dev/null || true
+    fi
 fi
 
 # Start the service
@@ -255,12 +261,12 @@ case "$1" in
         rm -rf /var/lib/ziplock
         rm -rf /etc/ziplock
 
-        # Update desktop database
+        # Update desktop database (if it exists)
         if command -v update-desktop-database >/dev/null 2>&1; then
-            update-desktop-database /usr/share/applications
+            update-desktop-database /usr/share/applications 2>/dev/null || true
         fi
 
-        # Update icon cache
+        # Update icon cache (if it exists)
         if command -v gtk-update-icon-cache >/dev/null 2>&1; then
             gtk-update-icon-cache -f -t /usr/share/icons/hicolor 2>/dev/null || true
         fi
@@ -364,9 +370,9 @@ build_package() {
     create_changelog "$deb_dir"
 
     # Set correct permissions
-    find "$deb_dir" -type f -name "*.so*" -exec chmod 644 {} \;
+    find "$deb_dir" -type f -name "*.so*" -exec chmod 644 {} \; 2>/dev/null || true
     find "$deb_dir" -type f -path "*/bin/*" -exec chmod 755 {} \;
-    chmod 644 "$deb_dir/usr/share/applications/ziplock.desktop"
+    [ -f "$deb_dir/usr/share/applications/ziplock.desktop" ] && chmod 644 "$deb_dir/usr/share/applications/ziplock.desktop"
     chmod 644 "$deb_dir/lib/systemd/system/ziplock-backend.service"
 
     log_info "Building Debian package..."

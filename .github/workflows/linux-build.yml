@@ -92,15 +92,6 @@ jobs:
     name: Build Linux Packages
     runs-on: ubuntu-latest
     needs: [test, security-audit]
-    strategy:
-      matrix:
-        target:
-          - arch: x86_64
-            rust_target: x86_64-unknown-linux-gnu
-            deb_arch: amd64
-          - arch: aarch64
-            rust_target: aarch64-unknown-linux-gnu
-            deb_arch: arm64
 
     steps:
       - name: Checkout code
@@ -109,7 +100,7 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.target.rust_target }}
+          targets: x86_64-unknown-linux-gnu
 
       - name: Cache cargo registry
         uses: actions/cache@v4
@@ -118,9 +109,9 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: ${{ runner.os }}-${{ matrix.target.arch }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.os }}-x86_64-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
-            ${{ runner.os }}-${{ matrix.target.arch }}-cargo-
+            ${{ runner.os }}-x86_64-cargo-
 
       - name: Install system dependencies
         run: |
@@ -141,13 +132,6 @@ jobs:
             dpkg-dev \
             fakeroot
 
-      - name: Install cross-compilation dependencies (ARM64)
-        if: matrix.target.arch == 'aarch64'
-        run: |
-          sudo apt-get install -y gcc-aarch64-linux-gnu
-          export CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc
-          export AR_aarch64_unknown_linux_gnu=aarch64-linux-gnu-ar
-
       - name: Make build scripts executable
         run: |
           chmod +x scripts/build-linux.sh
@@ -155,29 +139,26 @@ jobs:
 
       - name: Build binaries
         env:
-          TARGET_ARCH: ${{ matrix.target.rust_target }}
-          CC: ${{ matrix.target.arch == 'aarch64' && 'aarch64-linux-gnu-gcc' || 'gcc' }}
-          AR: ${{ matrix.target.arch == 'aarch64' && 'aarch64-linux-gnu-ar' || 'ar' }}
+          TARGET_ARCH: x86_64-unknown-linux-gnu
         run: |
           ./scripts/build-linux.sh \
-            --target ${{ matrix.target.rust_target }} \
+            --target x86_64-unknown-linux-gnu \
             --profile release
 
       - name: Create Debian package
         env:
-          PACKAGE_ARCH: ${{ matrix.target.deb_arch }}
+          PACKAGE_ARCH: amd64
         run: |
           ./scripts/package-deb.sh \
-            --arch ${{ matrix.target.deb_arch }}
+            --arch amd64
 
-      - name: Test package installation (x86_64 only)
-        if: matrix.target.arch == 'x86_64'
+      - name: Test package installation
         run: |
           # Test package in Docker container
           docker run --rm -v $PWD:/workspace ubuntu:22.04 bash -c "
             cd /workspace &&
             apt-get update &&
-            apt-get install -y ./target/ziplock_*_${{ matrix.target.deb_arch }}.deb &&
+            apt-get install -y ./target/ziplock_*_amd64.deb &&
             ziplock --version &&
             ziplock-backend --version
           "
@@ -185,11 +166,11 @@ jobs:
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: ziplock-linux-${{ matrix.target.deb_arch }}
+          name: ziplock-linux-amd64
           path: |
-            target/ziplock_*_${{ matrix.target.deb_arch }}.deb
-            target/${{ matrix.target.rust_target }}/release/ziplock
-            target/${{ matrix.target.rust_target }}/release/ziplock-backend
+            target/ziplock_*_amd64.deb
+            target/x86_64-unknown-linux-gnu/release/ziplock-backend
+            target/x86_64-unknown-linux-gnu/release/ziplock
           retention-days: 30
 
   release:
@@ -248,12 +229,7 @@ jobs:
           sudo apt-get install -f  # Fix any dependency issues
           \`\`\`
 
-          ### ARM64 (Raspberry Pi, etc.)
-          \`\`\`bash
-          wget https://github.com/ejangi/ziplock/releases/download/v${{ steps.version.outputs.VERSION }}/ziplock_${{ steps.version.outputs.VERSION }}_arm64.deb
-          sudo dpkg -i ziplock_${{ steps.version.outputs.VERSION }}_arm64.deb
-          sudo apt-get install -f
-          \`\`\`
+
 
           ## 🔧 Usage
 

@@ -15,8 +15,7 @@ name = "ziplock_shared"
 path = "src/lib.rs"
 crate-type = [
     "rlib",
-    "cdylib",
-] # Support both Rust library and C dynamic library
+] # Only build as Rust library for cross-compilation compatibility
 
 [dependencies]
 # Workspace dependencies
