@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.2] - 2025-08-13
+
+### Fixed
+- Updating the build process to include user-friendly notes. Many other changes to the linux app in this early release to give the user basic functionality.
+
 ### Changed
 - **BREAKING**: Configuration files now use YAML format instead of TOML
   - Backend configuration: `~/.config/ziplock/backend.yml` (was `backend.toml`)
@@ -69,4 +74,3 @@ The migration script will:
 - Master key never persisted to disk
 - Secure memory management with zeroization
 - File integrity verification
-- Protection against concurrent access during sync

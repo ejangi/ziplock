@@ -447,6 +447,33 @@ jobs:
         id: version
         run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
 
+      - name: Extract changelog for version
+        id: changelog
+        run: |
+          # Extract the version section from CHANGELOG.md
+          VERSION="${{ steps.version.outputs.VERSION }}"
+
+          # First try to find a specific version entry [x.y.z]
+          CHANGELOG_SECTION=""
+          if grep -q "## \[$VERSION\]" CHANGELOG.md; then
+            # Extract from version header to next version header or end of file
+            CHANGELOG_SECTION=$(awk "/^## \[$VERSION\]/{flag=1; next} /^## \[/{flag=0} flag" CHANGELOG.md)
+          elif grep -q "## \[Unreleased\]" CHANGELOG.md; then
+            # If no specific version found, use Unreleased section
+            CHANGELOG_SECTION=$(awk "/^## \[Unreleased\]/{flag=1; next} /^## \[/{flag=0} flag" CHANGELOG.md)
+          fi
+
+          # Clean up and format the changelog section
+          if [ -n "$CHANGELOG_SECTION" ]; then
+            # Remove empty lines at the beginning and end, format for release notes
+            CHANGELOG_SECTION=$(echo "$CHANGELOG_SECTION" | sed '/^$/d' | sed 's/^### /## /')
+            echo "CHANGELOG_CONTENT<<EOF" >> $GITHUB_OUTPUT
+            echo "$CHANGELOG_SECTION" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+          else
+            echo "CHANGELOG_CONTENT=No changelog entries found for this version." >> $GITHUB_OUTPUT
+          fi
+
       - name: Create release notes
         run: |
           cat > release-notes.md << EOF
@@ -454,12 +481,7 @@ jobs:
 
           ## 🚀 What's New
 
-          This release includes:
-
-          - **Linux Support**: Native Linux builds with systemd integration
-          - **Debian Packages**: Easy installation via .deb packages
-          - **Security**: AES-256 encryption with Argon2 key derivation
-          - **Modern UI**: Clean interface built with Rust and iced
+          ${{ steps.changelog.outputs.CHANGELOG_CONTENT }}
 
           ## 📦 Installation
 
@@ -469,8 +491,6 @@ jobs:
           sudo dpkg -i ziplock_${{ steps.version.outputs.VERSION }}_amd64.deb
           sudo apt-get install -f  # Fix any dependency issues
           \`\`\`
-
-
 
           ## 🔧 Usage
 
@@ -492,11 +512,6 @@ jobs:
           - X11 or Wayland display server
           - 50MB disk space
           - systemd (for backend service)
-
-          ## 🐛 Known Issues
-
-          - First launch may take a few seconds to initialize
-          - Wayland support is experimental in this release
 
           ## 📝 Full Changelog
 

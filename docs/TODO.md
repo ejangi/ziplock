@@ -33,3 +33,4 @@ warning: field `file_lock` is never read
    |
    = note: `OpenArchive` has a derived impl for the trait `Debug`, but this is intentionally ignored during dead code analysis
 ```
+- Taking into consideration docs/technical.md and docs/build.md, can you please cleanup the scipts folder so that scripts are put in the correct sub-folders, document these subfolders in the docs/technical.md file and ensure all references to these script files in the project are updated to reference the new location.

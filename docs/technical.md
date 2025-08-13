@@ -65,6 +65,38 @@ Do not place technical documentation in the root `docs/` directory or other loca
 - Continuous integration setup
 - Code quality standards and linting rules
 
+## Version Management and Release Process
+
+### Version Numbering
+- **Every change to the codebase MUST increment the version number by at least 0.0.1**
+- Follow [Semantic Versioning](https://semver.org/): `MAJOR.MINOR.PATCH`
+  - `MAJOR`: Breaking changes or significant architectural updates
+  - `MINOR`: New features, backwards-compatible functionality
+  - `PATCH`: Bug fixes, documentation updates, minor improvements
+- Update version in `Cargo.toml` files before committing changes
+
+### Changelog Maintenance
+- **Every change MUST include a brief, user-friendly entry in `CHANGELOG.md`**
+- Entries should be written for end users, not developers
+- Use clear, non-technical language describing what the change means to users
+- Place new entries in the `[Unreleased]` section following the established format
+- Example entries:
+  - ✅ "Fixed issue where app would crash when opening large password files"
+  - ✅ "Added ability to export passwords to CSV format"
+  - ❌ "Refactored PasswordManager::decrypt() method to use async/await"
+  - ❌ "Updated dependencies in Cargo.toml"
+
+### Release Notes
+- Release notes are automatically generated from the CHANGELOG.md file
+- The build system extracts the relevant version section and includes it in GitHub releases
+- Ensure changelog entries are complete and user-focused before creating releases
+
+### Helper Script
+- Use `scripts/update-version.sh` to automate version bumps and changelog updates
+- Example: `./scripts/update-version.sh patch "Fixed crash when opening large files"`
+- The script automatically updates all Cargo.toml files and adds entries to CHANGELOG.md
+- Supports patch, minor, and major version increments following semantic versioning
+
 ## Performance and Optimization
 
 - Compression algorithm selection and tuning
