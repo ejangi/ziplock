@@ -10,6 +10,7 @@ use iced::{
 };
 use std::collections::HashMap;
 
+use crate::ui::components::totp_field::TotpField;
 use crate::ui::theme::{button_styles, utils};
 use ziplock_shared::models::{CredentialTemplate, FieldType};
 
@@ -24,6 +25,8 @@ pub enum CredentialFormMessage {
     TextEditorAction(String, text_editor::Action),
     /// Toggle the sensitivity (show/hide) of a field
     ToggleFieldSensitivity(String),
+    /// TOTP field message
+    TotpFieldMessage(String, crate::ui::components::totp_field::TotpFieldMessage),
     /// The save button was pressed
     Save,
     /// The cancel button was pressed
@@ -72,6 +75,8 @@ pub struct CredentialForm {
     text_editor_content: HashMap<String, text_editor::Content>,
     /// Field sensitivity state (whether to show or hide sensitive fields)
     field_sensitivity: HashMap<String, bool>,
+    /// TOTP field components
+    totp_fields: HashMap<String, TotpField>,
     /// Form configuration
     config: CredentialFormConfig,
 }
@@ -91,6 +96,7 @@ impl CredentialForm {
             field_values: HashMap::new(),
             text_editor_content: HashMap::new(),
             field_sensitivity: HashMap::new(),
+            totp_fields: HashMap::new(),
             config: CredentialFormConfig::default(),
         }
     }
@@ -119,6 +125,18 @@ impl CredentialForm {
                 self.text_editor_content
                     .insert(field_template.name.clone(), content);
             }
+
+            // Initialize TOTP fields for TotpSecret field types
+            if field_template.field_type == FieldType::TotpSecret {
+                let secret = self
+                    .field_values
+                    .get(&field_template.name)
+                    .unwrap_or(&String::new())
+                    .clone();
+                let totp_field = TotpField::new_editing(field_template.name.clone(), secret);
+                self.totp_fields
+                    .insert(field_template.name.clone(), totp_field);
+            }
         }
         self.template = Some(template);
     }
@@ -137,16 +155,21 @@ impl CredentialForm {
     pub fn set_field_value(&mut self, field_name: String, value: String) {
         self.field_values.insert(field_name.clone(), value.clone());
 
-        // Update text editor content if this is a TextArea field
+        // Update text editor content if it's a TextArea field
         if let Some(content) = self.text_editor_content.get_mut(&field_name) {
             *content = text_editor::Content::with_text(&value);
+        }
+
+        // Update TOTP field if it's a TotpSecret field
+        if let Some(totp_field) = self.totp_fields.get_mut(&field_name) {
+            totp_field.set_secret(value);
         }
     }
 
     /// Set multiple field values at once
     pub fn set_field_values(&mut self, values: HashMap<String, String>) {
-        for (field_name, value) in values {
-            self.set_field_value(field_name, value);
+        for (name, value) in values {
+            self.set_field_value(name, value);
         }
     }
 
@@ -196,6 +219,16 @@ impl CredentialForm {
                     self.field_sensitivity.insert(field_name, !sensitive);
                 }
             }
+            CredentialFormMessage::TotpFieldMessage(field_name, totp_msg) => {
+                tracing::debug!("TOTP field '{}' message: {:?}", field_name, totp_msg);
+
+                if let Some(totp_field) = self.totp_fields.get_mut(&field_name) {
+                    totp_field.update(totp_msg);
+                    // Update the field value with the current secret
+                    let secret = totp_field.secret().to_string();
+                    self.field_values.insert(field_name, secret);
+                }
+            }
             CredentialFormMessage::Save => {
                 tracing::debug!("Save button clicked in credential form");
                 // This is handled by the parent component
@@ -224,6 +257,7 @@ impl CredentialForm {
             text_input("Enter credential title...", &self.title)
                 .on_input(CredentialFormMessage::TitleChanged)
                 .padding(10)
+                .style(crate::ui::theme::text_input_styles::standard())
                 .into(),
             Space::with_height(Length::Fixed(15.0)).into(),
         ];
@@ -353,6 +387,27 @@ impl CredentialForm {
         };
 
         match field_type {
+            FieldType::TotpSecret => {
+                // TOTP field with specialized component
+                if let Some(totp_field) = self.totp_fields.get(field_name) {
+                    totp_field.view().map({
+                        let field_name = field_name.to_string();
+                        move |msg| CredentialFormMessage::TotpFieldMessage(field_name.clone(), msg)
+                    })
+                } else {
+                    // Fallback to regular text input if no TOTP field available
+                    text_input(placeholder, value)
+                        .on_input({
+                            let field_name = field_name.to_string();
+                            move |input| {
+                                CredentialFormMessage::FieldChanged(field_name.clone(), input)
+                            }
+                        })
+                        .padding(10)
+                        .style(crate::ui::theme::text_input_styles::standard())
+                        .into()
+                }
+            }
             FieldType::TextArea => {
                 // Multi-line text editor
                 if let Some(content) = self.text_editor_content.get(field_name) {
@@ -375,6 +430,7 @@ impl CredentialForm {
                             }
                         })
                         .padding(10)
+                        .style(crate::ui::theme::text_input_styles::standard())
                         .into()
                 }
             }
@@ -389,7 +445,8 @@ impl CredentialForm {
                             }
                         })
                         .secure(is_sensitive)
-                        .padding(10),
+                        .padding(10)
+                        .style(crate::ui::theme::text_input_styles::standard()),
                     button(if is_sensitive { "👁" } else { "🙈" })
                         .on_press(CredentialFormMessage::ToggleFieldSensitivity(
                             field_name.to_string()
@@ -412,7 +469,8 @@ impl CredentialForm {
                             }
                         })
                         .secure(is_sensitive)
-                        .padding(10),
+                        .padding(10)
+                        .style(crate::ui::theme::text_input_styles::standard()),
                     button(if is_sensitive { "👁" } else { "🙈" })
                         .on_press(CredentialFormMessage::ToggleFieldSensitivity(
                             field_name.to_string()
@@ -431,10 +489,29 @@ impl CredentialForm {
                         let field_name = field_name.to_string();
                         move |input| CredentialFormMessage::FieldChanged(field_name.clone(), input)
                     })
+                    .secure(is_sensitive)
                     .padding(10)
+                    .width(Length::Fill)
+                    .style(crate::ui::theme::text_input_styles::standard())
                     .into()
             }
         }
+    }
+
+    /// Get subscriptions for all TOTP fields
+    pub fn subscription(&self) -> iced::Subscription<CredentialFormMessage> {
+        let totp_subscriptions: Vec<iced::Subscription<CredentialFormMessage>> = self
+            .totp_fields
+            .iter()
+            .map(|(field_name, totp_field)| {
+                totp_field.subscription().map({
+                    let field_name = field_name.clone();
+                    move |msg| CredentialFormMessage::TotpFieldMessage(field_name.clone(), msg)
+                })
+            })
+            .collect();
+
+        iced::Subscription::batch(totp_subscriptions)
     }
 
     /// Check if the form has valid data for submission

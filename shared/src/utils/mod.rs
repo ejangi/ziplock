@@ -8,6 +8,8 @@ use rand::Rng;
 use std::collections::HashMap;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+pub mod totp;
+
 /// String utilities
 pub struct StringUtils;
 

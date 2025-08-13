@@ -167,6 +167,11 @@ pub mod button_styles {
         iced::theme::Button::Custom(Box::new(PasswordToggleActiveStyle))
     }
 
+    /// Text field style button for copyable TOTP codes
+    pub fn text_field_like() -> iced::theme::Button {
+        iced::theme::Button::Custom(Box::new(TextFieldLikeButtonStyle))
+    }
+
     // Style implementations
     struct PrimaryButtonStyle;
     struct SecondaryButtonStyle;
@@ -174,6 +179,7 @@ pub mod button_styles {
     struct DisabledButtonStyle;
     struct PasswordToggleInactiveStyle;
     struct PasswordToggleActiveStyle;
+    struct TextFieldLikeButtonStyle;
 
     impl button::StyleSheet for PrimaryButtonStyle {
         type Style = Theme;
@@ -185,7 +191,7 @@ pub mod button_styles {
                 border: iced::Border {
                     color: LOGO_PURPLE,
                     width: 1.0,
-                    radius: 10.0.into(),
+                    radius: utils::border_radius().into(),
                 },
                 shadow: iced::Shadow {
                     color: Color::from_rgba(0.0, 0.0, 0.0, 0.1),
@@ -221,7 +227,7 @@ pub mod button_styles {
                 border: iced::Border {
                     color: Color::from_rgb(0.7, 0.7, 0.7),
                     width: 1.0,
-                    radius: 10.0.into(),
+                    radius: utils::border_radius().into(),
                 },
                 shadow: iced::Shadow::default(),
                 shadow_offset: iced::Vector::new(0.0, 0.0),
@@ -239,7 +245,7 @@ pub mod button_styles {
                 border: iced::Border {
                     color: LOGO_PURPLE,
                     width: 1.0,
-                    radius: 10.0.into(),
+                    radius: utils::border_radius().into(),
                 },
                 shadow: iced::Shadow::default(),
                 shadow_offset: iced::Vector::new(0.0, 0.0),
@@ -269,7 +275,7 @@ pub mod button_styles {
                 border: iced::Border {
                     color: Color::from_rgb(0.7, 0.7, 0.7),
                     width: 1.0,
-                    radius: 10.0.into(),
+                    radius: utils::border_radius().into(),
                 },
                 shadow: iced::Shadow::default(),
                 shadow_offset: iced::Vector::new(0.0, 0.0),
@@ -287,7 +293,7 @@ pub mod button_styles {
                 border: iced::Border {
                     color: ERROR_RED,
                     width: 1.0,
-                    radius: 10.0.into(),
+                    radius: utils::border_radius().into(),
                 },
                 shadow: iced::Shadow {
                     color: Color::from_rgba(0.0, 0.0, 0.0, 0.1),
@@ -323,7 +329,7 @@ pub mod button_styles {
                 border: iced::Border {
                     color: Color::from_rgb(0.7, 0.7, 0.7),
                     width: 1.0,
-                    radius: 10.0.into(),
+                    radius: utils::border_radius().into(),
                 },
                 shadow: iced::Shadow::default(),
                 shadow_offset: iced::Vector::new(0.0, 0.0),
@@ -341,7 +347,7 @@ pub mod button_styles {
                 border: iced::Border {
                     color: LOGO_PURPLE,
                     width: 1.0,
-                    radius: 10.0.into(),
+                    radius: utils::border_radius().into(),
                 },
                 shadow: iced::Shadow::default(),
                 shadow_offset: iced::Vector::new(0.0, 0.0),
@@ -371,7 +377,7 @@ pub mod button_styles {
                 border: iced::Border {
                     color: Color::from_rgb(0.7, 0.7, 0.7),
                     width: 1.0,
-                    radius: 10.0.into(),
+                    radius: utils::border_radius().into(),
                 },
                 shadow: iced::Shadow::default(),
                 shadow_offset: iced::Vector::new(0.0, 0.0),
@@ -389,7 +395,7 @@ pub mod button_styles {
                 border: iced::Border {
                     color: LOGO_PURPLE,
                     width: 1.0,
-                    radius: 10.0.into(),
+                    radius: utils::border_radius().into(),
                 },
                 shadow: iced::Shadow::default(),
                 shadow_offset: iced::Vector::new(0.0, 0.0),
@@ -419,7 +425,7 @@ pub mod button_styles {
                 border: iced::Border {
                     color: Color::from_rgb(0.7, 0.7, 0.7),
                     width: 1.0,
-                    radius: 10.0.into(),
+                    radius: utils::border_radius().into(),
                 },
                 shadow: iced::Shadow::default(),
                 shadow_offset: iced::Vector::new(0.0, 0.0),
@@ -437,7 +443,7 @@ pub mod button_styles {
                 border: iced::Border {
                     color: Color::from_rgb(0.7, 0.7, 0.7),
                     width: 1.0,
-                    radius: 10.0.into(),
+                    radius: utils::border_radius().into(),
                 },
                 shadow: iced::Shadow::default(),
                 shadow_offset: iced::Vector::new(0.0, 0.0),
@@ -454,6 +460,319 @@ pub mod button_styles {
 
         fn disabled(&self, style: &Self::Style) -> button::Appearance {
             self.active(style)
+        }
+    }
+
+    impl button::StyleSheet for TextFieldLikeButtonStyle {
+        type Style = Theme;
+
+        fn active(&self, _style: &Self::Style) -> button::Appearance {
+            button::Appearance {
+                background: Some(Color::WHITE.into()),
+                text_color: DARK_TEXT,
+                border: iced::Border {
+                    color: Color::from_rgb(0.8, 0.8, 0.8), // Light gray border like text input
+                    width: 1.0,
+                    radius: utils::border_radius().into(),
+                },
+                shadow: iced::Shadow::default(),
+                shadow_offset: iced::Vector::new(0.0, 0.0),
+            }
+        }
+
+        fn hovered(&self, style: &Self::Style) -> button::Appearance {
+            let active = self.active(style);
+            button::Appearance {
+                background: Some(Color::from_rgb(0.98, 0.98, 0.98).into()), // Slight gray tint on hover
+                border: iced::Border {
+                    color: LOGO_PURPLE, // Purple border on hover
+                    width: 2.0,
+                    radius: utils::border_radius().into(),
+                },
+                ..active
+            }
+        }
+
+        fn pressed(&self, style: &Self::Style) -> button::Appearance {
+            let active = self.active(style);
+            button::Appearance {
+                background: Some(Color::from_rgb(0.95, 0.95, 0.95).into()), // Darker gray when pressed
+                border: iced::Border {
+                    color: LOGO_PURPLE,
+                    width: 2.0,
+                    radius: utils::border_radius().into(),
+                },
+                ..active
+            }
+        }
+
+        fn disabled(&self, _style: &Self::Style) -> button::Appearance {
+            button::Appearance {
+                background: Some(Color::from_rgb(0.95, 0.95, 0.95).into()),
+                text_color: Color::from_rgb(0.5, 0.5, 0.5),
+                border: iced::Border {
+                    color: Color::from_rgb(0.7, 0.7, 0.7),
+                    width: 1.0,
+                    radius: utils::border_radius().into(),
+                },
+                shadow: iced::Shadow::default(),
+                shadow_offset: iced::Vector::new(0.0, 0.0),
+            }
+        }
+    }
+}
+
+/// Custom text input styles
+pub mod text_input_styles {
+    use super::*;
+
+    /// Standard text input style
+    pub fn standard() -> iced::theme::TextInput {
+        iced::theme::TextInput::Custom(Box::new(StandardTextInputStyle))
+    }
+
+    /// Valid text input style (green border)
+    pub fn valid() -> iced::theme::TextInput {
+        iced::theme::TextInput::Custom(Box::new(ValidTextInputStyle))
+    }
+
+    /// Invalid text input style (red border)
+    pub fn invalid() -> iced::theme::TextInput {
+        iced::theme::TextInput::Custom(Box::new(InvalidTextInputStyle))
+    }
+
+    /// Neutral text input style (purple border for focused state)
+    pub fn neutral() -> iced::theme::TextInput {
+        iced::theme::TextInput::Custom(Box::new(NeutralTextInputStyle))
+    }
+
+    // Style implementations
+    struct StandardTextInputStyle;
+    struct ValidTextInputStyle;
+    struct InvalidTextInputStyle;
+    struct NeutralTextInputStyle;
+
+    impl iced::widget::text_input::StyleSheet for StandardTextInputStyle {
+        type Style = iced::Theme;
+
+        fn active(&self, _style: &Self::Style) -> iced::widget::text_input::Appearance {
+            iced::widget::text_input::Appearance {
+                background: Color::WHITE.into(),
+                border: iced::Border {
+                    color: Color::from_rgb(0.8, 0.8, 0.8), // Light gray border
+                    width: 1.0,
+                    radius: utils::border_radius().into(),
+                },
+                icon_color: Color::from_rgb(0.5, 0.5, 0.5),
+            }
+        }
+
+        fn focused(&self, _style: &Self::Style) -> iced::widget::text_input::Appearance {
+            iced::widget::text_input::Appearance {
+                background: Color::WHITE.into(),
+                border: iced::Border {
+                    color: LOGO_PURPLE,
+                    width: 2.0,
+                    radius: utils::border_radius().into(),
+                },
+                icon_color: Color::from_rgb(0.5, 0.5, 0.5),
+            }
+        }
+
+        fn placeholder_color(&self, _style: &Self::Style) -> Color {
+            Color::from_rgb(0.5, 0.5, 0.5)
+        }
+
+        fn value_color(&self, _style: &Self::Style) -> Color {
+            DARK_TEXT
+        }
+
+        fn disabled_color(&self, _style: &Self::Style) -> Color {
+            Color::from_rgb(0.5, 0.5, 0.5)
+        }
+
+        fn selection_color(&self, _style: &Self::Style) -> Color {
+            LOGO_PURPLE
+        }
+
+        fn disabled(&self, _style: &Self::Style) -> iced::widget::text_input::Appearance {
+            iced::widget::text_input::Appearance {
+                background: Color::from_rgb(0.95, 0.95, 0.95).into(),
+                border: iced::Border {
+                    color: Color::from_rgb(0.8, 0.8, 0.8),
+                    width: 1.0,
+                    radius: utils::border_radius().into(),
+                },
+                icon_color: Color::from_rgb(0.5, 0.5, 0.5),
+            }
+        }
+    }
+
+    impl iced::widget::text_input::StyleSheet for ValidTextInputStyle {
+        type Style = iced::Theme;
+
+        fn active(&self, _style: &Self::Style) -> iced::widget::text_input::Appearance {
+            iced::widget::text_input::Appearance {
+                background: Color::WHITE.into(),
+                border: iced::Border {
+                    color: SUCCESS_GREEN,
+                    width: 2.0,
+                    radius: utils::border_radius().into(),
+                },
+                icon_color: Color::from_rgb(0.5, 0.5, 0.5),
+            }
+        }
+
+        fn focused(&self, _style: &Self::Style) -> iced::widget::text_input::Appearance {
+            iced::widget::text_input::Appearance {
+                background: Color::WHITE.into(),
+                border: iced::Border {
+                    color: SUCCESS_GREEN,
+                    width: 3.0,
+                    radius: utils::border_radius().into(),
+                },
+                icon_color: Color::from_rgb(0.5, 0.5, 0.5),
+            }
+        }
+
+        fn placeholder_color(&self, _style: &Self::Style) -> Color {
+            Color::from_rgb(0.5, 0.5, 0.5)
+        }
+
+        fn value_color(&self, _style: &Self::Style) -> Color {
+            DARK_TEXT
+        }
+
+        fn disabled_color(&self, _style: &Self::Style) -> Color {
+            Color::from_rgb(0.5, 0.5, 0.5)
+        }
+
+        fn selection_color(&self, _style: &Self::Style) -> Color {
+            SUCCESS_GREEN
+        }
+
+        fn disabled(&self, _style: &Self::Style) -> iced::widget::text_input::Appearance {
+            iced::widget::text_input::Appearance {
+                background: Color::from_rgb(0.95, 0.95, 0.95).into(),
+                border: iced::Border {
+                    color: Color::from_rgb(0.8, 0.8, 0.8),
+                    width: 1.0,
+                    radius: utils::border_radius().into(),
+                },
+                icon_color: Color::from_rgb(0.5, 0.5, 0.5),
+            }
+        }
+    }
+
+    impl iced::widget::text_input::StyleSheet for InvalidTextInputStyle {
+        type Style = iced::Theme;
+
+        fn active(&self, _style: &Self::Style) -> iced::widget::text_input::Appearance {
+            iced::widget::text_input::Appearance {
+                background: Color::WHITE.into(),
+                border: iced::Border {
+                    color: ERROR_RED,
+                    width: 2.0,
+                    radius: utils::border_radius().into(),
+                },
+                icon_color: Color::from_rgb(0.5, 0.5, 0.5),
+            }
+        }
+
+        fn focused(&self, _style: &Self::Style) -> iced::widget::text_input::Appearance {
+            iced::widget::text_input::Appearance {
+                background: Color::WHITE.into(),
+                border: iced::Border {
+                    color: ERROR_RED,
+                    width: 3.0,
+                    radius: utils::border_radius().into(),
+                },
+                icon_color: Color::from_rgb(0.5, 0.5, 0.5),
+            }
+        }
+
+        fn placeholder_color(&self, _style: &Self::Style) -> Color {
+            Color::from_rgb(0.5, 0.5, 0.5)
+        }
+
+        fn value_color(&self, _style: &Self::Style) -> Color {
+            DARK_TEXT
+        }
+
+        fn disabled_color(&self, _style: &Self::Style) -> Color {
+            Color::from_rgb(0.5, 0.5, 0.5)
+        }
+
+        fn selection_color(&self, _style: &Self::Style) -> Color {
+            ERROR_RED
+        }
+
+        fn disabled(&self, _style: &Self::Style) -> iced::widget::text_input::Appearance {
+            iced::widget::text_input::Appearance {
+                background: Color::from_rgb(0.95, 0.95, 0.95).into(),
+                border: iced::Border {
+                    color: Color::from_rgb(0.8, 0.8, 0.8),
+                    width: 1.0,
+                    radius: utils::border_radius().into(),
+                },
+                icon_color: Color::from_rgb(0.5, 0.5, 0.5),
+            }
+        }
+    }
+
+    impl iced::widget::text_input::StyleSheet for NeutralTextInputStyle {
+        type Style = iced::Theme;
+
+        fn active(&self, _style: &Self::Style) -> iced::widget::text_input::Appearance {
+            iced::widget::text_input::Appearance {
+                background: Color::WHITE.into(),
+                border: iced::Border {
+                    color: LOGO_PURPLE,
+                    width: 2.0,
+                    radius: utils::border_radius().into(),
+                },
+                icon_color: Color::from_rgb(0.5, 0.5, 0.5),
+            }
+        }
+
+        fn focused(&self, _style: &Self::Style) -> iced::widget::text_input::Appearance {
+            iced::widget::text_input::Appearance {
+                background: Color::WHITE.into(),
+                border: iced::Border {
+                    color: LOGO_PURPLE,
+                    width: 3.0,
+                    radius: utils::border_radius().into(),
+                },
+                icon_color: Color::from_rgb(0.5, 0.5, 0.5),
+            }
+        }
+
+        fn placeholder_color(&self, _style: &Self::Style) -> Color {
+            Color::from_rgb(0.5, 0.5, 0.5)
+        }
+
+        fn value_color(&self, _style: &Self::Style) -> Color {
+            DARK_TEXT
+        }
+
+        fn disabled_color(&self, _style: &Self::Style) -> Color {
+            Color::from_rgb(0.5, 0.5, 0.5)
+        }
+
+        fn selection_color(&self, _style: &Self::Style) -> Color {
+            LOGO_PURPLE
+        }
+
+        fn disabled(&self, _style: &Self::Style) -> iced::widget::text_input::Appearance {
+            iced::widget::text_input::Appearance {
+                background: Color::from_rgb(0.95, 0.95, 0.95).into(),
+                border: iced::Border {
+                    color: Color::from_rgb(0.8, 0.8, 0.8),
+                    width: 1.0,
+                    radius: utils::border_radius().into(),
+                },
+                icon_color: Color::from_rgb(0.5, 0.5, 0.5),
+            }
         }
     }
 }
@@ -476,7 +795,7 @@ pub mod progress_bar_styles {
             progress_bar::Appearance {
                 background: Color::from_rgb(0.9, 0.9, 0.9).into(),
                 bar: LOGO_PURPLE.into(),
-                border_radius: 10.0.into(),
+                border_radius: utils::border_radius().into(),
             }
         }
     }
@@ -528,7 +847,7 @@ pub mod container_styles {
                 border: iced::Border {
                     color: ERROR_RED,
                     width: 1.0,
-                    radius: 10.0.into(),
+                    radius: utils::border_radius().into(),
                 },
                 text_color: Some(ERROR_RED),
                 shadow: iced::Shadow::default(),
@@ -546,7 +865,7 @@ pub mod container_styles {
                 border: iced::Border {
                     color: warning_color,
                     width: 1.0,
-                    radius: 10.0.into(),
+                    radius: utils::border_radius().into(),
                 },
                 text_color: Some(iced::Color::from_rgb(0.8, 0.6, 0.0)),
                 shadow: iced::Shadow::default(),
@@ -563,7 +882,7 @@ pub mod container_styles {
                 border: iced::Border {
                     color: SUCCESS_GREEN,
                     width: 1.0,
-                    radius: 10.0.into(),
+                    radius: utils::border_radius().into(),
                 },
                 text_color: Some(SUCCESS_GREEN),
                 shadow: iced::Shadow::default(),
@@ -580,7 +899,7 @@ pub mod container_styles {
                 border: Border {
                     color: LOGO_PURPLE,
                     width: 1.0,
-                    radius: 8.0.into(),
+                    radius: utils::border_radius().into(),
                 },
                 shadow: Shadow::default(),
                 text_color: None,

@@ -5,6 +5,7 @@
 pub mod button;
 pub mod credential_form;
 pub mod toast;
+pub mod totp_field;
 
 // Future UI components will be added here as needed:
 // - Password strength indicator
@@ -17,3 +18,4 @@ pub mod toast;
 pub use button::*;
 pub use credential_form::*;
 pub use toast::*;
+pub use totp_field::*;

@@ -525,4 +525,15 @@ impl AddCredentialView {
             .create_credential(session_id, title, credential_type, fields, Vec::new(), None)
             .await
     }
+
+    /// Get subscriptions for TOTP field updates
+    pub fn subscription(&self) -> iced::Subscription<AddCredentialMessage> {
+        match &self.state {
+            AddCredentialState::FillingForm => self
+                .form
+                .subscription()
+                .map(AddCredentialMessage::FormMessage),
+            _ => iced::Subscription::none(),
+        }
+    }
 }

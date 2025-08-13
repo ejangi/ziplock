@@ -442,8 +442,8 @@ impl OpenRepositoryView {
             iced::theme::TextInput::Default
         } else {
             // For opening, we don't validate strength, just that it's not empty
-            // This gives visual feedback that something has been entered
-            iced::theme::TextInput::Custom(Box::new(PassphraseTextInputStyle::Neutral))
+            // This giving visual feedback that something has been entered
+            theme::text_input_styles::neutral()
         }
     }
 
@@ -536,68 +536,4 @@ impl OpenRepositoryView {
     }
 }
 
-/// Custom text input styles for passphrase input
-#[derive(Debug, Clone)]
-enum PassphraseTextInputStyle {
-    Neutral, // For when we don't want to indicate valid/invalid, just that input exists
-}
-
-impl iced::widget::text_input::StyleSheet for PassphraseTextInputStyle {
-    type Style = iced::Theme;
-
-    fn active(&self, _style: &Self::Style) -> iced::widget::text_input::Appearance {
-        iced::widget::text_input::Appearance {
-            background: Color::WHITE.into(),
-            border: iced::Border {
-                color: theme::LOGO_PURPLE,
-                width: 2.0,
-                radius: 10.0.into(),
-            },
-            icon_color: Color::from_rgb(0.5, 0.5, 0.5),
-        }
-    }
-
-    fn focused(&self, _style: &Self::Style) -> iced::widget::text_input::Appearance {
-        iced::widget::text_input::Appearance {
-            background: Color::WHITE.into(),
-            border: iced::Border {
-                color: theme::LOGO_PURPLE,
-                width: 3.0,
-                radius: 10.0.into(),
-            },
-            icon_color: Color::from_rgb(0.5, 0.5, 0.5),
-        }
-    }
-
-    fn placeholder_color(&self, _style: &Self::Style) -> Color {
-        Color::from_rgb(0.5, 0.5, 0.5)
-    }
-
-    fn value_color(&self, _style: &Self::Style) -> Color {
-        Color::BLACK
-    }
-
-    fn disabled_color(&self, _style: &Self::Style) -> Color {
-        Color::from_rgb(0.5, 0.5, 0.5)
-    }
-
-    fn selection_color(&self, _style: &Self::Style) -> Color {
-        Color::from_rgb(0.8, 0.8, 1.0)
-    }
-
-    fn disabled(&self, _style: &Self::Style) -> iced::widget::text_input::Appearance {
-        iced::widget::text_input::Appearance {
-            background: Color::from_rgb(0.95, 0.95, 0.95).into(),
-            border: iced::Border {
-                color: Color::from_rgb(0.8, 0.8, 0.8),
-                width: 1.0,
-                radius: 10.0.into(),
-            },
-            icon_color: Color::from_rgb(0.5, 0.5, 0.5),
-        }
-    }
-
-    fn hovered(&self, style: &Self::Style) -> iced::widget::text_input::Appearance {
-        self.active(style)
-    }
-}
+// PassphraseTextInputStyle removed - now using centralized theme::text_input_styles

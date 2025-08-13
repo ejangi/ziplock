@@ -637,7 +637,77 @@ pub unsafe extern "C" fn ziplock_validation_result_free(result: *mut CValidation
 }
 
 // ============================================================================
-// Utility Functions for Testing
+// Utility Functions
+// ============================================================================
+
+/// Generate a TOTP code from a base32-encoded secret
+///
+/// # Safety
+///
+/// The caller must ensure that:
+/// - `secret` is a valid, null-terminated C string containing a base32-encoded TOTP secret
+/// - The returned C string is freed with `ziplock_string_free`
+///
+/// # Arguments
+/// - `secret`: Base32-encoded TOTP secret (e.g., "JBSWY3DPEHPK3PXP")
+/// - `time_step`: Time step in seconds (typically 30)
+///
+/// # Returns
+/// - Valid C string containing 6-digit TOTP code on success
+/// - null pointer on error (invalid secret, etc.)
+#[no_mangle]
+pub unsafe extern "C" fn ziplock_totp_generate(
+    secret: *const c_char,
+    time_step: c_uint,
+) -> *mut c_char {
+    let secret_str = match c_char_to_string(secret) {
+        Ok(s) => s,
+        Err(_) => return ptr::null_mut(),
+    };
+
+    match crate::utils::totp::generate_totp(&secret_str, time_step as u64) {
+        Ok(code) => string_to_c_char(&code),
+        Err(_) => ptr::null_mut(),
+    }
+}
+
+/// Format a credit card number with spaces
+///
+/// # Safety
+///
+/// The caller must ensure that:
+/// - `card_number` is a valid, null-terminated C string
+/// - The returned C string is freed with `ziplock_string_free`
+#[no_mangle]
+pub unsafe extern "C" fn ziplock_credit_card_format(card_number: *const c_char) -> *mut c_char {
+    let card_str = match c_char_to_string(card_number) {
+        Ok(s) => s,
+        Err(_) => return ptr::null_mut(),
+    };
+
+    // Simple credit card formatting - remove non-digits and add spaces every 4 digits
+    let digits_only: String = card_str.chars().filter(|c| c.is_ascii_digit()).collect();
+
+    if digits_only.is_empty() {
+        return ptr::null_mut();
+    }
+
+    let formatted = digits_only
+        .chars()
+        .enumerate()
+        .fold(String::new(), |mut acc, (i, c)| {
+            if i > 0 && i % 4 == 0 {
+                acc.push(' ');
+            }
+            acc.push(c);
+            acc
+        });
+
+    string_to_c_char(&formatted)
+}
+
+// ============================================================================
+// Test Functions
 // ============================================================================
 
 /// Test function to verify FFI is working
@@ -721,6 +791,44 @@ mod tests {
             assert!(output_str.contains("Test"));
 
             ziplock_string_free(output);
+        }
+    }
+
+    #[test]
+    fn test_totp_generate() {
+        unsafe {
+            let secret = CString::new("JBSWY3DPEHPK3PXP").unwrap();
+            let code = ziplock_totp_generate(secret.as_ptr(), 30);
+            assert!(!code.is_null());
+
+            let code_str = c_char_to_string(code).unwrap();
+            assert_eq!(code_str.len(), 6);
+            assert!(code_str.chars().all(|c| c.is_ascii_digit()));
+
+            ziplock_string_free(code);
+        }
+    }
+
+    #[test]
+    fn test_totp_generate_invalid_secret() {
+        unsafe {
+            let secret = CString::new("invalid!@#").unwrap();
+            let code = ziplock_totp_generate(secret.as_ptr(), 30);
+            assert!(code.is_null());
+        }
+    }
+
+    #[test]
+    fn test_credit_card_format() {
+        unsafe {
+            let card = CString::new("1234567890123456").unwrap();
+            let formatted = ziplock_credit_card_format(card.as_ptr());
+            assert!(!formatted.is_null());
+
+            let formatted_str = c_char_to_string(formatted).unwrap();
+            assert_eq!(formatted_str, "1234 5678 9012 3456");
+
+            ziplock_string_free(formatted);
         }
     }
 }

@@ -385,7 +385,8 @@ impl MainView {
                 .on_input(MainViewMessage::SearchChanged)
                 .on_submit(MainViewMessage::SearchSubmitted)
                 .width(Length::FillPortion(3))
-                .padding([8, 12]),
+                .padding([8, 12])
+                .style(theme::text_input_styles::standard()),
             Space::with_width(Length::Fixed(10.0)),
             if !self.search_query.is_empty() {
                 button("Clear")
@@ -682,7 +683,7 @@ impl button::StyleSheet for CredentialItemButtonStyle {
             border: iced::Border {
                 color: self.border_color,
                 width: 1.0,
-                radius: iced::border::Radius::from(8.0),
+                radius: iced::border::Radius::from(theme::utils::border_radius()),
             },
             text_color: theme::DARK_TEXT,
             ..Default::default()
@@ -697,7 +698,7 @@ impl button::StyleSheet for CredentialItemButtonStyle {
             border: iced::Border {
                 color: theme::LOGO_PURPLE,
                 width: 1.0,
-                radius: iced::border::Radius::from(8.0),
+                radius: iced::border::Radius::from(theme::utils::border_radius()),
             },
             text_color: theme::DARK_TEXT,
             ..Default::default()
@@ -716,7 +717,7 @@ impl button::StyleSheet for CredentialItemButtonStyle {
             border: iced::Border {
                 color: iced::Color::from_rgb(0.9, 0.9, 0.9),
                 width: 1.0,
-                radius: iced::border::Radius::from(8.0),
+                radius: iced::border::Radius::from(theme::utils::border_radius()),
             },
             text_color: iced::Color::from_rgb(0.6, 0.6, 0.6),
             ..Default::default()

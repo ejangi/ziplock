@@ -711,7 +711,15 @@ impl Application for ZipLockApp {
             iced::Subscription::none()
         };
 
-        iced::Subscription::batch([close_subscription, toast_subscription])
+        let view_subscription = match &self.state {
+            AppState::AddCredentialActive(view) => view.subscription().map(Message::AddCredential),
+            AppState::EditCredentialActive(view) => {
+                view.subscription().map(Message::EditCredential)
+            }
+            _ => iced::Subscription::none(),
+        };
+
+        iced::Subscription::batch([close_subscription, toast_subscription, view_subscription])
     }
 }
 

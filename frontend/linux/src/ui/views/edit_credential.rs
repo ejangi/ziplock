@@ -483,6 +483,17 @@ impl EditCredentialView {
         false
     }
 
+    /// Get subscriptions for TOTP field updates
+    pub fn subscription(&self) -> iced::Subscription<EditCredentialMessage> {
+        match &self.state {
+            EditCredentialState::Editing { .. } => self
+                .form
+                .subscription()
+                .map(EditCredentialMessage::FormMessage),
+            _ => iced::Subscription::none(),
+        }
+    }
+
     /// Load credential types asynchronously
     async fn load_credential_types_async(
         _session_id: Option<String>,

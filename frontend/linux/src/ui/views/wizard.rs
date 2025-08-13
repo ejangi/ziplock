@@ -381,7 +381,8 @@ impl RepositoryWizard {
                     .on_input(WizardMessage::DirectoryPathChanged)
                     .width(Length::Fill)
                     .id(text_input::Id::new("directory_path"))
-                    .on_submit(WizardMessage::NextStep),
+                    .on_submit(WizardMessage::NextStep)
+                    .style(theme::text_input_styles::standard()),
                 button("Browse...")
                     .on_press(WizardMessage::SelectDirectory)
                     .padding(utils::button_padding())
@@ -427,7 +428,8 @@ impl RepositoryWizard {
                     .on_input(WizardMessage::RepositoryNameChanged)
                     .width(Length::Fill)
                     .id(text_input::Id::new("repository_name"))
-                    .on_submit(WizardMessage::NextStep),
+                    .on_submit(WizardMessage::NextStep)
+                    .style(theme::text_input_styles::standard()),
             ]
             .spacing(5),
             Space::with_height(Length::Fixed(20.0)),
@@ -878,10 +880,10 @@ impl RepositoryWizard {
             let strength = self.passphrase_validator.validate(&self.passphrase);
             if strength.meets_requirements && strength.level.is_acceptable() {
                 // Green border for strong passphrase
-                iced::theme::TextInput::Custom(Box::new(PassphraseTextInputStyle::Valid))
+                theme::text_input_styles::valid()
             } else {
                 // Red border for weak passphrase
-                iced::theme::TextInput::Custom(Box::new(PassphraseTextInputStyle::Invalid))
+                theme::text_input_styles::invalid()
             }
         }
     }
@@ -893,87 +895,10 @@ impl RepositoryWizard {
         } else if !self.confirm_passphrase.is_empty() && self.passphrase == self.confirm_passphrase
         {
             // Green border when passphrases match
-            iced::theme::TextInput::Custom(Box::new(PassphraseTextInputStyle::Valid))
+            theme::text_input_styles::valid()
         } else {
             // Red border when passphrases don't match
-            iced::theme::TextInput::Custom(Box::new(PassphraseTextInputStyle::Invalid))
+            theme::text_input_styles::invalid()
         }
-    }
-}
-
-/// Custom text input styles for passphrase validation
-#[derive(Debug, Clone)]
-enum PassphraseTextInputStyle {
-    Valid,
-    Invalid,
-}
-
-impl iced::widget::text_input::StyleSheet for PassphraseTextInputStyle {
-    type Style = iced::Theme;
-
-    fn active(&self, _style: &Self::Style) -> iced::widget::text_input::Appearance {
-        let border_color = match self {
-            PassphraseTextInputStyle::Valid => Color::from_rgb(0.024, 0.839, 0.627), // #06d6a0
-            PassphraseTextInputStyle::Invalid => Color::from_rgb(0.937, 0.278, 0.435), // #ef476f
-        };
-
-        iced::widget::text_input::Appearance {
-            background: Color::WHITE.into(),
-            border: iced::Border {
-                color: border_color,
-                width: 2.0,
-                radius: 10.0.into(),
-            },
-            icon_color: Color::from_rgb(0.5, 0.5, 0.5),
-        }
-    }
-
-    fn focused(&self, _style: &Self::Style) -> iced::widget::text_input::Appearance {
-        let border_color = match self {
-            PassphraseTextInputStyle::Valid => Color::from_rgb(0.024, 0.839, 0.627), // #06d6a0 - Green
-            PassphraseTextInputStyle::Invalid => Color::from_rgb(0.937, 0.278, 0.435), // #ef476f - Red
-        };
-
-        iced::widget::text_input::Appearance {
-            background: Color::WHITE.into(),
-            border: iced::Border {
-                color: border_color,
-                width: 3.0,
-                radius: 10.0.into(),
-            },
-            icon_color: Color::from_rgb(0.5, 0.5, 0.5),
-        }
-    }
-
-    fn placeholder_color(&self, _style: &Self::Style) -> Color {
-        Color::from_rgb(0.5, 0.5, 0.5)
-    }
-
-    fn value_color(&self, _style: &Self::Style) -> Color {
-        Color::BLACK
-    }
-
-    fn disabled_color(&self, _style: &Self::Style) -> Color {
-        Color::from_rgb(0.5, 0.5, 0.5)
-    }
-
-    fn selection_color(&self, _style: &Self::Style) -> Color {
-        Color::from_rgb(0.8, 0.8, 1.0)
-    }
-
-    fn disabled(&self, _style: &Self::Style) -> iced::widget::text_input::Appearance {
-        iced::widget::text_input::Appearance {
-            background: Color::from_rgb(0.95, 0.95, 0.95).into(),
-            border: iced::Border {
-                color: Color::from_rgb(0.8, 0.8, 0.8),
-                width: 1.0,
-                radius: 10.0.into(),
-            },
-            icon_color: Color::from_rgb(0.5, 0.5, 0.5),
-        }
-    }
-
-    fn hovered(&self, style: &Self::Style) -> iced::widget::text_input::Appearance {
-        self.active(style)
     }
 }

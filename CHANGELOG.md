@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.6] - 2025-08-13
+
+### Fixed
+- Added the support for One time password (Multi-factor authentication) secrets to be stored, but the Timed code to be displayed
+
 ## [0.1.5] - 2025-08-13
 
 ### Fixed
