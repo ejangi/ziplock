@@ -196,3 +196,4 @@ tramp
 test_archives/
 benchmark_results/
 perf_data/
+tests/results/
