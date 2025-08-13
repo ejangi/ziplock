@@ -47,52 +47,52 @@ cargo test --test credential_persistence_test -- --nocapture
 **For Fresh Environment (starts its own backend):**
 ```bash
 # Run complete test suite
-./scripts/run-integration-tests.sh
+./scripts/dev/run-integration-tests.sh
 
 # Run only integration tests
-./scripts/run-integration-tests.sh --integration-only
+./scripts/dev/run-integration-tests.sh --integration-only
 
 # Run with verbose output
-./scripts/run-integration-tests.sh --verbose
+./scripts/dev/run-integration-tests.sh --verbose
 
 # Use existing backend if running
-./scripts/run-integration-tests.sh --use-existing-backend
+./scripts/dev/run-integration-tests.sh --use-existing-backend
 
 # Kill existing backend and start fresh
-./scripts/run-integration-tests.sh --kill-existing-backend
+./scripts/dev/run-integration-tests.sh --kill-existing-backend
 ```
 
 **For Existing Backend (recommended for development):**
 ```bash
 # Run with already running backend
-./scripts/run-tests-with-existing-backend.sh
+./scripts/dev/run-tests-with-existing-backend.sh
 
 # Run only storage tests
-./scripts/run-tests-with-existing-backend.sh --storage-only
+./scripts/dev/run-tests-with-existing-backend.sh --storage-only
 
 # Quick test run
-./scripts/run-tests-with-existing-backend.sh --quick
+./scripts/dev/run-tests-with-existing-backend.sh --quick
 ```
 
 **Test Backend Connectivity:**
 ```bash
 # Quick connectivity check
-./scripts/test-backend-connection.sh
+./scripts/dev/test-backend-connection.sh
 
 # Verbose connectivity test
-./scripts/test-backend-connection.sh --verbose
+./scripts/dev/test-backend-connection.sh --verbose
 
 # Wait for backend to become ready
-./scripts/test-backend-connection.sh --wait 30
+./scripts/dev/test-backend-connection.sh --wait 30
 ```
 
 #### CI/CD Integration
 ```bash
 # For automated builds
-./scripts/run-integration-tests.sh --no-build
+./scripts/dev/run-integration-tests.sh --no-build
 
 # For environments with existing backend
-./scripts/run-tests-with-existing-backend.sh --integration-only
+./scripts/dev/run-tests-with-existing-backend.sh --integration-only
 ```
 
 ## Test Configuration
@@ -180,7 +180,7 @@ cat test-results/backend.log
 ### 2. Check Backend Status
 ```bash
 # Test if backend is responsive
-./scripts/test-backend-connection.sh --verbose
+./scripts/dev/test-backend-connection.sh --verbose
 
 # Check backend process
 pgrep -af ziplock-backend
@@ -201,7 +201,7 @@ cargo test --package ziplock-backend storage:: -- --test-threads=1
 RUST_LOG=debug cargo test --test credential_persistence_test
 
 # Run with existing backend and debug logging
-RUST_LOG=debug ./scripts/run-tests-with-existing-backend.sh --verbose
+RUST_LOG=debug ./scripts/dev/run-tests-with-existing-backend.sh --verbose
 ```
 
 ### 5. Manual Verification
@@ -226,7 +226,7 @@ echo '{"request_id":"test","session_id":null,"request":{"Ping":{"client_info":"m
 
 ### Issue: "Session timeout" or "Backend not responsive" errors
 **Solution**: 
-- Test connectivity: `./scripts/test-backend-connection.sh`
+- Test connectivity: `./scripts/dev/test-backend-connection.sh`
 - Check backend startup and IPC socket creation
 - Verify socket permissions: `ls -la /tmp/ziplock.sock`
 - Restart backend if needed
@@ -236,7 +236,7 @@ echo '{"request_id":"test","session_id":null,"request":{"Ping":{"client_info":"m
 - This indicates the auto-save fix is not working
 - Verify the backend saves after operations
 - Check backend logs for save errors
-- Run storage-specific tests: `./scripts/run-tests-with-existing-backend.sh --storage-only`
+- Run storage-specific tests: `./scripts/dev/run-tests-with-existing-backend.sh --storage-only`
 
 ### Issue: Permission denied errors
 **Solution**: 
@@ -247,7 +247,7 @@ echo '{"request_id":"test","session_id":null,"request":{"Ping":{"client_info":"m
 ### Issue: "Backend failed to start within 30 seconds"
 **Solution**: 
 - Backend might already be running: use `--use-existing-backend`
-- Or use the existing backend script: `./scripts/run-tests-with-existing-backend.sh`
+- Or use the existing backend script: `./scripts/dev/run-tests-with-existing-backend.sh`
 - Check if port/socket is already in use
 
 ## Test Data Validation
@@ -344,10 +344,10 @@ The integration tests also serve as performance benchmarks:
 cargo run --release --bin ziplock-backend &
 
 # 2. Run quick tests during development
-./scripts/run-tests-with-existing-backend.sh --quick
+./scripts/dev/run-tests-with-existing-backend.sh --quick
 
 # 3. Run full integration tests before commits
-./scripts/run-tests-with-existing-backend.sh
+./scripts/dev/run-tests-with-existing-backend.sh
 ```
 
 ### Pre-commit Testing

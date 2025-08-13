@@ -5,7 +5,7 @@ set -euo pipefail
 # Creates .deb packages for Ubuntu/Debian distributions
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 BUILD_DIR="$PROJECT_ROOT/target"
 PACKAGING_DIR="$PROJECT_ROOT/packaging/linux"
 
@@ -69,7 +69,7 @@ verify_build() {
 
     if [ ! -d "$install_dir" ]; then
         log_error "Installation directory not found: $install_dir"
-        log_info "Run './scripts/build-linux.sh' first"
+        log_info "Run './scripts/build/build-linux.sh' first"
         exit 1
     fi
 

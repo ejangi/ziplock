@@ -5,7 +5,7 @@ set -euo pipefail
 # Verifies that the build process works correctly
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 # Colors for output
 RED='\033[0;31m'
@@ -165,7 +165,7 @@ test_build_script() {
     export CARGO_TARGET_DIR="$PROJECT_ROOT/target/test-build"
 
     # Test the build script
-    if ! ./scripts/build-linux.sh --profile release; then
+    if ! ./scripts/build/build-linux.sh --profile release; then
         log_error "Build script failed"
         return 1
     fi
@@ -200,7 +200,7 @@ test_package_script() {
 
     if [ ! -d "target/test-build/install" ]; then
         log_warning "No install directory found, running build script first"
-        if ! ./scripts/build-linux.sh --profile release; then
+        if ! ./scripts/build/build-linux.sh --profile release; then
             log_error "Build script failed during package test"
             return 1
         fi
@@ -209,7 +209,7 @@ test_package_script() {
     # Test package creation
     if command -v dpkg-deb &> /dev/null && command -v fakeroot &> /dev/null; then
         export BUILD_DIR="$PROJECT_ROOT/target/test-build"
-        if ! ./scripts/package-deb.sh --arch amd64; then
+        if ! ./scripts/build/package-deb.sh --arch amd64; then
             log_error "Package script failed"
             return 1
         fi
@@ -291,8 +291,8 @@ print_summary() {
     echo "All tests completed successfully!"
     echo
     echo "Next steps:"
-    echo "1. Run './scripts/build-linux.sh' for a full build"
-    echo "2. Run './scripts/package-deb.sh' to create a .deb package"
+    echo "1. Run './scripts/build/build-linux.sh' for a full build"
+    echo "2. Run './scripts/build/package-deb.sh' to create a .deb package"
     echo "3. Install and test the package"
     echo
 }

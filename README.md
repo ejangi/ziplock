@@ -64,10 +64,10 @@ git clone https://github.com/ejangi/ziplock.git
 cd ziplock
 
 # Test build locally (requires Docker)
-./scripts/test-build-locally.sh
+./scripts/build/test-build-locally.sh
 
 # Build natively (requires system dependencies)
-./scripts/build-linux.sh --profile release
+./scripts/build/build-linux.sh --profile release
 ```
 
 ### Build Troubleshooting
@@ -211,7 +211,7 @@ ZipLock can be customized through configuration files:
 **Linux**: `~/.config/ziplock/config.yml`  
 **Windows**: `%APPDATA%/ZipLock/config.yml`
 
-> **⚠️ Configuration Format Change**: Starting with version 0.2.0, ZipLock uses YAML format for all configuration files instead of TOML. If you have existing `.toml` config files, run the migration script: `./scripts/migrate-config.sh`
+> **⚠️ Configuration Format Change**: Starting with version 0.2.0, ZipLock uses YAML format for all configuration files instead of TOML. If you have existing `.toml` config files, run the migration script: `./scripts/migrations/migrate-config-from-toml-to-yaml.sh`
 
 Example configuration:
 ```yaml
@@ -281,7 +281,7 @@ cargo build
 cargo test
 
 # Start development servers
-./scripts/dev-setup.sh
+./scripts/dev/run-linux.sh
 ```
 
 ## 📄 License

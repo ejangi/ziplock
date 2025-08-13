@@ -5,7 +5,7 @@ set -euo pipefail
 # Tests the containerized build process locally before pushing to GitHub Actions
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 # Colors for output
 RED='\033[0;31m'
@@ -158,8 +158,8 @@ run_containerized_build() {
         -e RUSTFLAGS="-C target-cpu=x86-64" \
         ziplock-builder-local bash -c "
             set -euo pipefail
-            chmod +x scripts/build-linux.sh
-            chmod +x scripts/package-deb.sh
+            chmod +x scripts/build/build-linux.sh
+            chmod +x scripts/build/package-deb.sh
 
             # Verify Rust environment
             echo 'Container Rust environment:'
@@ -169,7 +169,7 @@ run_containerized_build() {
             ldd --version | head -1
 
             # Build with container environment
-            ./scripts/build-linux.sh \
+            ./scripts/build/build-linux.sh \
                 --target x86_64-unknown-linux-gnu \
                 --profile release
 
@@ -204,7 +204,7 @@ create_debian_package() {
             fi
 
             echo 'Creating Debian package...'
-            ./scripts/package-deb.sh --arch amd64
+            ./scripts/build/package-deb.sh --arch amd64
 
             # Verify package was created
             if [ ! -f /workspace/target/ziplock_*_amd64.deb ]; then

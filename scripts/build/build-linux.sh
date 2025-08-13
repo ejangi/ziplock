@@ -5,7 +5,7 @@ set -euo pipefail
 # Builds both backend and frontend binaries for Linux distribution
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 BUILD_DIR="$PROJECT_ROOT/target"
 PACKAGING_DIR="$PROJECT_ROOT/packaging/linux"
 
@@ -297,7 +297,7 @@ display_build_summary() {
     echo "Installation structure: $BUILD_DIR/install"
     echo
     echo "Next steps:"
-    echo "  1. Run './scripts/package-deb.sh' to create .deb package"
+    echo "  1. Run './scripts/build/package-deb.sh' to create .deb package"
     echo "  2. Or manually install with 'sudo cp -r $BUILD_DIR/install/* /'"
 }
 

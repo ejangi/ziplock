@@ -61,13 +61,13 @@ Use the provided build script for all platforms:
 
 ```bash
 # Build for all mobile platforms
-./scripts/build-mobile.sh all
+./scripts/build/build-mobile.sh all
 
 # Build for iOS only
-./scripts/build-mobile.sh ios
+./scripts/build/build-mobile.sh ios
 
 # Build for Android only
-./scripts/build-mobile.sh android
+./scripts/build/build-mobile.sh android
 ```
 
 ## Integration Guide

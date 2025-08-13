@@ -24,14 +24,14 @@ git clone https://github.com/ejangi/ziplock.git
 cd ziplock
 
 # Make build scripts executable
-chmod +x scripts/build-linux.sh
-chmod +x scripts/package-deb.sh
+chmod +x scripts/build/build-linux.sh
+chmod +x scripts/build/package-deb.sh
 
 # Build everything
-./scripts/build-linux.sh
+./scripts/build/build-linux.sh
 
 # Create Debian package
-./scripts/package-deb.sh
+./scripts/build/package-deb.sh
 ```
 
 This will create:
@@ -241,10 +241,10 @@ The Debian package includes:
 
 ```bash
 # Build the software first
-./scripts/build-linux.sh --profile release
+./scripts/build/build-linux.sh --profile release
 
 # Create the package
-./scripts/package-deb.sh --arch amd64
+./scripts/build/package-deb.sh --arch amd64
 
 # Verify the package
 dpkg-deb --info target/ziplock_*.deb
@@ -256,8 +256,8 @@ lintian target/ziplock_*.deb
 
 ```bash
 # Build for x86_64
-./scripts/build-linux.sh --target x86_64-unknown-linux-gnu
-./scripts/package-deb.sh --arch amd64
+./scripts/build/build-linux.sh --target x86_64-unknown-linux-gnu
+./scripts/build/package-deb.sh --arch amd64
 ```
 
 ## Installation and Testing
@@ -394,13 +394,13 @@ We provide a script to test the containerized build process locally:
 
 ```bash
 # Run complete build test
-./scripts/test-build-locally.sh
+./scripts/build/test-build-locally.sh
 
 # Run with options
-./scripts/test-build-locally.sh --clean --no-cache
+./scripts/build/test-build-locally.sh --clean --no-cache
 
 # Skip package installation test
-./scripts/test-build-locally.sh --skip-test
+./scripts/build/test-build-locally.sh --skip-test
 ```
 
 #### Manual Local Testing
@@ -413,12 +413,12 @@ docker build -f Dockerfile.build -t ziplock-builder .
 
 # 2. Run containerized build
 docker run --rm -v $PWD:/workspace ziplock-builder bash -c "
-    ./scripts/build-linux.sh --target x86_64-unknown-linux-gnu --profile release
+    ./scripts/build/build-linux.sh --target x86_64-unknown-linux-gnu --profile release
 "
 
 # 3. Create package
 docker run --rm -v $PWD:/workspace ziplock-builder bash -c "
-    ./scripts/package-deb.sh --arch amd64
+    ./scripts/build/package-deb.sh --arch amd64
 "
 
 # 4. Test in clean environment
@@ -684,7 +684,7 @@ cargo test --workspace
 cargo audit
 
 # Build for x86_64
-./scripts/build-linux.sh --target x86_64-unknown-linux-gnu
+./scripts/build/build-linux.sh --target x86_64-unknown-linux-gnu
 ```
 
 ## Development Guidelines
@@ -700,7 +700,7 @@ When adding new Rust dependencies:
 
 2. **Test in Container:**
    ```bash
-   ./scripts/test-build-locally.sh --clean
+   ./scripts/build/test-build-locally.sh --clean
    ```
 
 3. **Verify Binary Size:**
@@ -734,7 +734,7 @@ Before submitting PRs:
 
 - [ ] Run `cargo test --workspace`
 - [ ] Run `cargo clippy --all-targets`
-- [ ] Run `./scripts/test-build-locally.sh`
+- [ ] Run `./scripts/build/test-build-locally.sh`
 - [ ] Test package installation in clean environment
 - [ ] Verify binary dependencies with `ldd`
 

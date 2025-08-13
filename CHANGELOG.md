@@ -17,10 +17,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Backend configuration: `~/.config/ziplock/backend.yml` (was `backend.toml`)
   - Frontend configuration: `~/.config/ziplock/config.yml` (was `config.toml`)
   - All sample configuration files have been updated to YAML format
-  - Migration script provided: `./scripts/migrate-config.sh`
+  - Migration script provided: `./scripts/migrations/migrate-config-from-toml-to-yaml.sh`
 
 ### Added
-- Configuration migration script (`scripts/migrate-config.sh`) to help users transition from TOML to YAML
+- Configuration migration script (`scripts/migrations/migrate-config-from-toml-to-yaml.sh`) to help users transition from TOML to YAML
 - Sample YAML configuration files in the `config/` directory
 - Enhanced configuration documentation with YAML examples
 
@@ -31,7 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Migration Guide
 If you have existing TOML configuration files:
 
-1. Run the migration script: `./scripts/migrate-config.sh`
+1. Run the migration script: `./scripts/migrations/migrate-config-from-toml-to-yaml.sh`
 2. Verify your settings in the new YAML files
 3. Remove old `.toml` files after confirming everything works
 

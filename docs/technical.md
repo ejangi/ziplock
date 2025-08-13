@@ -92,10 +92,39 @@ Do not place technical documentation in the root `docs/` directory or other loca
 - Ensure changelog entries are complete and user-focused before creating releases
 
 ### Helper Script
-- Use `scripts/update-version.sh` to automate version bumps and changelog updates
-- Example: `./scripts/update-version.sh patch "Fixed crash when opening large files"`
+- Use `scripts/version/update-version.sh` to automate version bumps and changelog updates
+- Example: `./scripts/version/update-version.sh patch "Fixed crash when opening large files"`
 - The script automatically updates all Cargo.toml files and adds entries to CHANGELOG.md
 - Supports patch, minor, and major version increments following semantic versioning
+
+## Scripts Organization
+
+The `scripts/` directory is organized into functional subdirectories to maintain clarity and structure:
+
+### `scripts/build/` - Build and Packaging
+- **`build-linux.sh`** - Builds ZipLock for Linux platforms with glibc compatibility
+- **`build-mobile.sh`** - Builds shared library for mobile platforms (iOS/Android)
+- **`package-deb.sh`** - Creates Debian packages for distribution
+- **`test-build.sh`** - Tests build process in CI environment
+- **`test-build-locally.sh`** - Comprehensive local build testing with Docker
+
+### `scripts/dev/` - Development and Testing
+- **`run-linux.sh`** - Launches backend service and frontend GUI for development
+- **`run-integration-tests.sh`** - Executes full integration test suite
+- **`run-tests-with-existing-backend.sh`** - Runs tests against existing backend
+- **`test-backend-connection.sh`** - Tests backend service connectivity
+
+### `scripts/version/` - Version Management
+- **`update-version.sh`** - Automated version bumps and changelog updates
+- **`test-changelog-extraction.sh`** - Tests changelog extraction for releases
+
+### `scripts/migrations/` - Data and Configuration Migration
+- **`migrate-config-from-toml-to-yaml.sh`** - Migrates TOML config to YAML format
+
+### `scripts/deploy/` - Deployment Automation
+Reserved for future deployment scripts and automation tools.
+
+For detailed usage instructions and examples, see `scripts/README.md`.
 
 ## Performance and Optimization
 
