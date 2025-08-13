@@ -288,20 +288,13 @@ impl OpenRepositoryView {
 
     /// Render the passphrase input section
     fn view_passphrase_input(&self) -> Element<'_, OpenRepositoryMessage> {
-        let passphrase_input = text_input(
-            if self.show_passphrase {
-                "Enter your passphrase"
-            } else {
-                "Enter your passphrase"
-            },
-            &self.passphrase,
-        )
-        .on_input(OpenRepositoryMessage::PassphraseChanged)
-        .on_submit(OpenRepositoryMessage::OpenRepository)
-        .secure(!self.show_passphrase)
-        .style(self.get_passphrase_style())
-        .padding(utils::button_padding())
-        .width(Length::Fill);
+        let passphrase_input = text_input("Enter your passphrase", &self.passphrase)
+            .on_input(OpenRepositoryMessage::PassphraseChanged)
+            .on_submit(OpenRepositoryMessage::OpenRepository)
+            .secure(!self.show_passphrase)
+            .style(self.get_passphrase_style())
+            .padding(utils::button_padding())
+            .width(Length::Fill);
 
         let toggle_button = utils::password_visibility_toggle(
             self.show_passphrase,

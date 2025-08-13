@@ -425,7 +425,7 @@ impl MainView {
                         || cred
                             .url
                             .as_ref()
-                            .map_or(false, |url| url.to_lowercase().contains(&query_lower))
+                            .is_some_and(|url| url.to_lowercase().contains(&query_lower))
                 }
             })
             .collect();
@@ -518,10 +518,7 @@ impl MainView {
 
     /// Render a single credential item
     fn view_credential_item(&self, credential: &CredentialItem) -> Element<'_, MainViewMessage> {
-        let is_selected = self
-            .selected_credential
-            .as_ref()
-            .map_or(false, |id| id == &credential.id);
+        let is_selected = self.selected_credential.as_ref() == Some(&credential.id);
 
         let background_color = if is_selected {
             iced::Color::from_rgba(0.514, 0.220, 0.925, 0.1) // Light purple tint
@@ -638,7 +635,6 @@ impl MainView {
     }
 
     /// Async function to lock the database
-
     /// Handle potential session timeout errors
     fn handle_potential_session_timeout(
         &mut self,

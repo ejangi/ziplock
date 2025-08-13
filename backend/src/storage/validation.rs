@@ -648,6 +648,7 @@ impl RepositoryValidator {
     }
 
     /// Calculate total size of directory recursively
+    #[allow(clippy::only_used_in_recursion)]
     fn calculate_directory_size(&self, dir_path: &Path) -> BackendResult<u64> {
         let mut total_size = 0u64;
 

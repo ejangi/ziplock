@@ -80,9 +80,11 @@ impl EditCredentialView {
     /// Create a new edit credential view for the specified credential ID
     pub fn new(credential_id: String) -> Self {
         let mut form = CredentialForm::new();
-        let mut config = CredentialFormConfig::default();
-        config.show_delete_button = true;
-        config.save_button_text = "Save".to_string();
+        let config = CredentialFormConfig {
+            show_delete_button: true,
+            save_button_text: "Save".to_string(),
+            ..CredentialFormConfig::default()
+        };
         form.set_config(config);
 
         Self {
@@ -163,9 +165,11 @@ impl EditCredentialView {
                         self.form.set_field_values(field_values);
 
                         // Configure form to show delete button
-                        let mut config = CredentialFormConfig::default();
-                        config.show_delete_button = true;
-                        config.save_button_text = "Save".to_string();
+                        let config = CredentialFormConfig {
+                            show_delete_button: true,
+                            save_button_text: "Save".to_string(),
+                            ..CredentialFormConfig::default()
+                        };
                         self.form.set_config(config);
 
                         self.credential = Some(credential);
@@ -242,8 +246,10 @@ impl EditCredentialView {
 
                 tracing::debug!("Form validation passed, proceeding with credential update");
                 self.state = EditCredentialState::Saving;
-                let mut config = CredentialFormConfig::default();
-                config.is_loading = true;
+                let config = CredentialFormConfig {
+                    is_loading: true,
+                    ..CredentialFormConfig::default()
+                };
                 self.form.set_config(config);
 
                 Command::perform(
@@ -266,10 +272,10 @@ impl EditCredentialView {
                     Ok(()) => {
                         tracing::info!("Credential updated successfully");
                         self.state = EditCredentialState::Complete;
-                        return Command::perform(
+                        Command::perform(
                             async { "Credential updated successfully".to_string() },
                             EditCredentialMessage::ShowSuccess,
-                        );
+                        )
                     }
                     Err(e) => {
                         tracing::error!("Failed to update credential: {}", e);
@@ -279,10 +285,7 @@ impl EditCredentialView {
                         let config = CredentialFormConfig::default();
                         self.form.set_config(config);
 
-                        return Command::perform(
-                            async move { e },
-                            EditCredentialMessage::ShowError,
-                        );
+                        Command::perform(async move { e }, EditCredentialMessage::ShowError)
                     }
                 }
             }
@@ -290,9 +293,11 @@ impl EditCredentialView {
             EditCredentialMessage::DeleteCredential => {
                 tracing::debug!("Processing DeleteCredential message");
                 self.state = EditCredentialState::Saving;
-                let mut config = CredentialFormConfig::default();
-                config.is_loading = true;
-                config.show_delete_button = true;
+                let config = CredentialFormConfig {
+                    is_loading: true,
+                    show_delete_button: true,
+                    ..CredentialFormConfig::default()
+                };
                 self.form.set_config(config);
 
                 Command::perform(
@@ -309,24 +314,23 @@ impl EditCredentialView {
                     Ok(()) => {
                         tracing::info!("Credential deleted successfully");
                         self.state = EditCredentialState::Complete;
-                        return Command::perform(
+                        Command::perform(
                             async { "Credential deleted successfully".to_string() },
                             EditCredentialMessage::ShowSuccess,
-                        );
+                        )
                     }
                     Err(e) => {
                         tracing::error!("Failed to delete credential: {}", e);
                         self.state =
                             EditCredentialState::Error("Failed to delete credential".to_string());
                         // Reset form to not loading state
-                        let mut config = CredentialFormConfig::default();
-                        config.show_delete_button = true;
+                        let config = CredentialFormConfig {
+                            show_delete_button: true,
+                            ..CredentialFormConfig::default()
+                        };
                         self.form.set_config(config);
 
-                        return Command::perform(
-                            async move { e },
-                            EditCredentialMessage::ShowError,
-                        );
+                        Command::perform(async move { e }, EditCredentialMessage::ShowError)
                     }
                 }
             }
@@ -569,16 +573,13 @@ impl EditCredentialView {
         tracing::debug!("Credential type: {}", credential_type);
         tracing::debug!("Fields: {:?}", fields);
 
-        client
-            .update_credential(
-                session_id,
-                id,
-                title,
-                credential_type,
-                fields,
-                Vec::new(), // tags
-                None,       // notes
-            )
-            .await
+        // Create CredentialRecord from the components
+        let mut credential = CredentialRecord::new(title, credential_type);
+        credential.id = id;
+        credential.fields = fields;
+        credential.tags = Vec::new(); // tags
+        credential.notes = None; // notes
+
+        client.update_credential(session_id, credential).await
     }
 }

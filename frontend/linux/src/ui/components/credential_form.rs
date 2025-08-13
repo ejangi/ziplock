@@ -378,7 +378,30 @@ impl CredentialForm {
                         .into()
                 }
             }
-            FieldType::Password | _ if is_sensitive => {
+            FieldType::Password if is_sensitive => {
+                // Password input with toggle
+                row![
+                    text_input(placeholder, value)
+                        .on_input({
+                            let field_name = field_name.to_string();
+                            move |input| {
+                                CredentialFormMessage::FieldChanged(field_name.clone(), input)
+                            }
+                        })
+                        .secure(is_sensitive)
+                        .padding(10),
+                    button(if is_sensitive { "👁" } else { "🙈" })
+                        .on_press(CredentialFormMessage::ToggleFieldSensitivity(
+                            field_name.to_string()
+                        ))
+                        .style(button_styles::secondary())
+                        .padding(utils::small_button_padding()),
+                ]
+                .spacing(5)
+                .align_items(Alignment::Center)
+                .into()
+            }
+            _ if is_sensitive => {
                 // Password input with toggle
                 row![
                     text_input(placeholder, value)

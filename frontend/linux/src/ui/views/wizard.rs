@@ -126,9 +126,10 @@ impl Default for RepositoryWizard {
 impl RepositoryWizard {
     /// Create a new repository wizard
     pub fn new() -> Self {
-        let mut wizard = Self::default();
-        wizard.can_proceed = true; // Enable the Get Started button on welcome screen
-        wizard
+        Self {
+            can_proceed: true, // Enable the Get Started button on welcome screen
+            ..Self::default()
+        }
     }
 
     /// Update wizard state based on message
@@ -663,15 +664,15 @@ impl RepositoryWizard {
 
     /// View navigation buttons
     fn view_navigation(&self) -> Element<'_, WizardMessage> {
-        let can_go_back = match self.current_step {
-            WizardStep::Welcome | WizardStep::Creating | WizardStep::Complete => false,
-            _ => true,
-        };
+        let can_go_back = !matches!(
+            self.current_step,
+            WizardStep::Welcome | WizardStep::Creating | WizardStep::Complete
+        );
 
-        let show_next_button = match self.current_step {
-            WizardStep::Creating | WizardStep::Complete => false,
-            _ => true,
-        };
+        let show_next_button = !matches!(
+            self.current_step,
+            WizardStep::Creating | WizardStep::Complete
+        );
 
         let can_go_next = self.can_proceed && show_next_button;
 
@@ -763,15 +764,14 @@ impl RepositoryWizard {
             .set_title("Select Repository Directory")
             .set_directory(
                 dirs::document_dir()
-                    .or_else(|| dirs::home_dir())
+                    .or_else(dirs::home_dir)
                     .unwrap_or_else(|| PathBuf::from(".")),
             );
 
-        if let Some(folder) = dialog.pick_folder().await {
-            Some(folder.path().to_path_buf())
-        } else {
-            None
-        }
+        dialog
+            .pick_folder()
+            .await
+            .map(|folder| folder.path().to_path_buf())
     }
 
     /// Async function to create repository

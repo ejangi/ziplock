@@ -436,7 +436,7 @@ impl ArchiveManager {
                     || cred
                         .notes
                         .as_ref()
-                        .map_or(false, |notes| notes.to_lowercase().contains(&query))
+                        .is_some_and(|notes| notes.to_lowercase().contains(&query))
                     || cred
                         .tags
                         .iter()
@@ -511,7 +511,7 @@ impl ArchiveManager {
         }
 
         // Write credentials to temporary directory
-        self.write_credentials_to_directory(&archive.temp_dir.path(), &archive.credentials)
+        self.write_credentials_to_directory(archive.temp_dir.path(), &archive.credentials)
             .await?;
 
         // Update metadata
@@ -1480,12 +1480,10 @@ mod tests {
         // Debug: List all files in our extracted directory
         if let Ok(entries) = std::fs::read_dir(&extract_dir) {
             println!("Files in our extracted directory:");
-            for entry in entries {
-                if let Ok(entry) = entry {
-                    let path = entry.path();
-                    let file_type = if path.is_dir() { "DIR" } else { "FILE" };
-                    println!("  {} - {}", file_type, path.display());
-                }
+            for entry in entries.flatten() {
+                let path = entry.path();
+                let file_type = if path.is_dir() { "DIR" } else { "FILE" };
+                println!("  {} - {}", file_type, path.display());
             }
         }
 
@@ -1530,12 +1528,10 @@ mod tests {
                     // Debug: List all files in the extracted directory
                     if let Ok(entries) = std::fs::read_dir(&system_extract_dir) {
                         println!("Files in system extracted directory:");
-                        for entry in entries {
-                            if let Ok(entry) = entry {
-                                let path = entry.path();
-                                let file_type = if path.is_dir() { "DIR" } else { "FILE" };
-                                println!("  {} - {}", file_type, path.display());
-                            }
+                        for entry in entries.flatten() {
+                            let path = entry.path();
+                            let file_type = if path.is_dir() { "DIR" } else { "FILE" };
+                            println!("  {} - {}", file_type, path.display());
                         }
                     }
 

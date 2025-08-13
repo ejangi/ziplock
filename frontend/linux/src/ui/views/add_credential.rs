@@ -169,10 +169,12 @@ impl AddCredentialView {
                     self.form.set_template(template);
 
                     // Configure the form for adding credentials
-                    let mut config = CredentialFormConfig::default();
-                    config.save_button_text = "Save".to_string();
-                    config.show_cancel_button = true;
-                    config.is_loading = false;
+                    let config = CredentialFormConfig {
+                        save_button_text: "Save".to_string(),
+                        show_cancel_button: true,
+                        is_loading: false,
+                        ..CredentialFormConfig::default()
+                    };
                     self.form.set_config(config);
 
                     self.state = AddCredentialState::FillingForm;
@@ -236,10 +238,12 @@ impl AddCredentialView {
                 self.is_loading = true;
 
                 // Update form config to show loading state
-                let mut config = CredentialFormConfig::default();
-                config.save_button_text = "Save".to_string();
-                config.show_cancel_button = true;
-                config.is_loading = true;
+                let config = CredentialFormConfig {
+                    save_button_text: "Save".to_string(),
+                    show_cancel_button: true,
+                    is_loading: true,
+                    ..CredentialFormConfig::default()
+                };
                 self.form.set_config(config);
 
                 Command::perform(
@@ -262,10 +266,10 @@ impl AddCredentialView {
                     Ok(_id) => {
                         tracing::info!("Credential created successfully");
                         self.state = AddCredentialState::Complete;
-                        return Command::perform(
+                        Command::perform(
                             async { "Credential created successfully".to_string() },
                             AddCredentialMessage::ShowSuccess,
-                        );
+                        )
                     }
                     Err(e) => {
                         tracing::error!("Failed to create credential: {}", e);
@@ -273,13 +277,15 @@ impl AddCredentialView {
                             AddCredentialState::Error("Failed to create credential".to_string());
 
                         // Reset form config to not loading state
-                        let mut config = CredentialFormConfig::default();
-                        config.save_button_text = "Save".to_string();
-                        config.show_cancel_button = true;
-                        config.is_loading = false;
+                        let config = CredentialFormConfig {
+                            save_button_text: "Save".to_string(),
+                            show_cancel_button: true,
+                            is_loading: false,
+                            ..CredentialFormConfig::default()
+                        };
                         self.form.set_config(config);
 
-                        return Command::perform(async move { e }, AddCredentialMessage::ShowError);
+                        Command::perform(async move { e }, AddCredentialMessage::ShowError)
                     }
                 }
             }

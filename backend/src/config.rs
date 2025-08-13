@@ -15,7 +15,7 @@ use crate::error::{BackendResult, ConfigError};
 use ziplock_shared::{PassphraseRequirements, ValidationPresets};
 
 /// Main configuration structure for the backend daemon
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Config {
     /// IPC communication settings
     pub ipc: IpcConfig,
@@ -184,18 +184,6 @@ pub struct LimitsConfig {
 
     /// Enable performance metrics collection
     pub enable_metrics: bool,
-}
-
-impl Default for Config {
-    fn default() -> Self {
-        Self {
-            ipc: IpcConfig::default(),
-            storage: StorageConfig::default(),
-            security: SecurityConfig::default(),
-            logging: LoggingConfig::default(),
-            limits: LimitsConfig::default(),
-        }
-    }
 }
 
 impl Default for IpcConfig {

@@ -43,7 +43,7 @@ pub enum ValidationError {
 }
 
 /// Statistics about credential operations
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct OperationStats {
     pub credentials_created: u64,
     pub credentials_updated: u64,
@@ -51,19 +51,6 @@ pub struct OperationStats {
     pub searches_performed: u64,
     pub archives_opened: u64,
     pub last_operation: Option<SystemTime>,
-}
-
-impl Default for OperationStats {
-    fn default() -> Self {
-        Self {
-            credentials_created: 0,
-            credentials_updated: 0,
-            credentials_deleted: 0,
-            searches_performed: 0,
-            archives_opened: 0,
-            last_operation: None,
-        }
-    }
 }
 
 impl ApiHandlers {

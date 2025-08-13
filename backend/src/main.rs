@@ -11,7 +11,7 @@
 
 use anyhow::{Context, Result};
 use clap::Parser;
-use dirs;
+
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::signal;
@@ -224,7 +224,7 @@ mod tests {
     fn test_args_parsing() {
         use clap::Parser;
 
-        let args = Args::try_parse_from(&[
+        let args = Args::try_parse_from([
             "ziplock-backend",
             "--debug",
             "--foreground",

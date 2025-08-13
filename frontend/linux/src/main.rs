@@ -181,10 +181,7 @@ impl Application for ZipLockApp {
                     let repositories = config_manager.detect_all_accessible_repositories();
                     self.config_manager = Some(config_manager);
 
-                    return Command::perform(
-                        async move { repositories },
-                        Message::RepositoriesDetected,
-                    );
+                    Command::perform(async move { repositories }, Message::RepositoriesDetected)
                 } else {
                     self.state = AppState::Error("Failed to initialize configuration".to_string());
                     Command::none()
@@ -447,18 +444,18 @@ impl Application for ZipLockApp {
                         }
                         MainViewMessage::SessionTimeout => {
                             // Forward session timeout to main application handler
-                            return Command::perform(async {}, |_| Message::SessionTimeout);
+                            Command::perform(async {}, |_| Message::SessionTimeout)
                         }
                         MainViewMessage::AddCredential => {
                             // Show add credential view
-                            return Command::perform(async {}, |_| Message::ShowAddCredential);
+                            Command::perform(async {}, |_| Message::ShowAddCredential)
                         }
                         MainViewMessage::EditCredential(credential_id) => {
                             // Show edit credential view
-                            return Command::perform(
+                            Command::perform(
                                 async move { credential_id },
                                 Message::ShowEditCredential,
-                            );
+                            )
                         }
                         MainViewMessage::TriggerConnectionError => {
                             self.toast_manager.ipc_error(
@@ -480,10 +477,7 @@ impl Application for ZipLockApp {
                         }
                         MainViewMessage::OperationCompleted(result) => {
                             // Forward operation results to main app for toast handling
-                            return Command::perform(
-                                async move { result },
-                                Message::OperationResult,
-                            );
+                            Command::perform(async move { result }, Message::OperationResult)
                         }
                         _ => main_view.update(main_msg).map(Message::MainView),
                     }
@@ -660,10 +654,9 @@ impl Application for ZipLockApp {
                 // If we have an active session, try to logout first
                 if self.session_id.is_some() {
                     info!("Active session detected, logging out before quit");
-                    return Command::perform(
-                        Self::logout_and_quit_async(self.session_id.clone()),
-                        |_| Message::QuittingWithLogout,
-                    );
+                    Command::perform(Self::logout_and_quit_async(self.session_id.clone()), |_| {
+                        Message::QuittingWithLogout
+                    })
                 } else {
                     // No active session, quit immediately
                     std::process::exit(0);

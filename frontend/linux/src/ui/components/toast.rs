@@ -29,20 +29,15 @@ pub const TOAST_MIN_WIDTH: f32 = 300.0;
 pub const TOAST_MAX_WIDTH: f32 = 500.0;
 
 /// Position where toasts should appear
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub enum ToastPosition {
     TopRight,
     TopLeft,
+    #[default]
     BottomRight,
     BottomLeft,
     TopCenter,
     BottomCenter,
-}
-
-impl Default for ToastPosition {
-    fn default() -> Self {
-        ToastPosition::BottomRight
-    }
 }
 
 /// Individual toast item with timing information

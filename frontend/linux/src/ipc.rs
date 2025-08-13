@@ -232,7 +232,7 @@ impl IpcClient {
             .await
             .map_err(|e| format!("Failed to read response: {}", e))?;
 
-        let ipc_response: IpcResponse = serde_json::from_str(&response_line.trim())
+        let ipc_response: IpcResponse = serde_json::from_str(response_line.trim())
             .map_err(|e| format!("Failed to deserialize response: {}", e))?;
 
         if ipc_response.request_id != request_id {
@@ -338,25 +338,13 @@ impl IpcClient {
     pub async fn update_credential(
         &mut self,
         session_id: Option<String>,
-        id: String,
-        title: String,
-        credential_type: String,
-        fields: HashMap<String, CredentialField>,
-        tags: Vec<String>,
-        notes: Option<String>,
+        credential: CredentialRecord,
     ) -> Result<(), String> {
         self.session_id = session_id;
-
-        // Create CredentialRecord from individual fields
-        let mut credential = CredentialRecord::new(title, credential_type);
-        credential.fields = fields;
-        credential.tags = tags;
-        credential.notes = notes;
-        // Set the ID for update
-        credential.id = id.clone();
+        // The credential already has its ID set
 
         let request = Request::UpdateCredential {
-            credential_id: id,
+            credential_id: credential.id.clone(),
             credential,
         };
         let response = self.send_request(request).await?;

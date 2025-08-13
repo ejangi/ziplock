@@ -7,7 +7,7 @@
 use std::collections::HashMap;
 
 use tempfile::TempDir;
-use tokio;
+
 use ziplock_backend::config::Config;
 use ziplock_backend::storage::ArchiveManager;
 use ziplock_shared::models::{CredentialField, CredentialRecord, FieldType};
