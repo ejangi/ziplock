@@ -29,10 +29,10 @@ For form validation and user feedback, specific colors are used to indicate succ
   - Valid passphrase fields that meet all security requirements
   - Matching confirmation fields
   - Successful operation indicators
-  
+
 * **Error/Invalid Color:** **\#ef476f** - A vibrant red/pink used to indicate invalid input, errors, or negative feedback. This color is used for:
   - Invalid or weak passphrase fields
-  - Mismatched confirmation fields  
+  - Mismatched confirmation fields
   - Error messages and warnings
   - Failed operation indicators
 
@@ -224,7 +224,7 @@ For modal-like experiences (wizard, open repository), consistent navigation patt
 
 ### **7.1 Icon Guidelines**
 
-Building on the Iconoir icon system with additional considerations:
+Building on the [Iconoir icon system](https://github.com/iconoir-icons/iconoir/tree/main/icons) with additional considerations:
 
 #### **Custom Icons**
 - **Eye Icon:** Password visibility toggle using embedded SVG
@@ -276,7 +276,7 @@ The application implements a centralized toast notification system that provides
 
 #### **Design Integration**
 - **Error Toasts:** Use `ERROR_RED` (#ef476f) with error icon
-- **Warning Toasts:** Use `WARNING_YELLOW` (#fcbf49) with warning icon  
+- **Warning Toasts:** Use `WARNING_YELLOW` (#fcbf49) with warning icon
 - **Success Toasts:** Use `SUCCESS_GREEN` (#06d6a0) with check icon
 - **Info Toasts:** Use `LOGO_PURPLE` (#8338ec) with alert icon
 
