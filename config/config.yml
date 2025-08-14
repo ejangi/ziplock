@@ -1,141 +1,78 @@
-# ZipLock Configuration File
-# This is the default configuration for ZipLock password manager
+# ZipLock Backend Configuration
+# Copy to ~/.config/ziplock/config.yml (Linux) or %APPDATA%/ZipLock/config.yml (Windows)
 
-# Storage settings
+# IPC Communication Settings
+ipc:
+  # Unix socket path for backend communication
+  socket_path: "/tmp/ziplock/backend.sock"
+  # Maximum concurrent connections
+  max_connections: 10
+  # Connection timeout in seconds
+  connection_timeout: 30
+  # Request timeout in seconds
+  request_timeout: 60
+
+# Storage and Archive Settings
 storage:
-  # Number of backup files to keep
+  # Default directory for storing archives
+  default_archive_dir: "~/Documents/ZipLock"
+  # Number of backup copies to maintain
   backup_count: 5
-
-  # Enable automatic backups when saving
+  # Enable automatic backup creation
   auto_backup: true
+  # Custom backup directory (optional)
+  backup_dir: null
+  # File lock timeout in seconds
+  file_lock_timeout: 30
+  # Enable basic archive integrity checking
+  verify_integrity: true
+  # Minimum master password length
+  min_password_length: 12
 
-  # 7z compression settings
+  # 7z Compression Settings
   compression:
-    # Compression level (0-9, higher = better compression, slower)
+    # Compression level (0-9, higher = better compression but slower)
     level: 6
-
-    # Use solid compression (better compression ratio)
+    # Use solid compression (better compression but slower random access)
     solid: false
 
-    # Enable multi-threaded compression
-    multi_threaded: true
+  # Repository Validation Settings
+  validation:
+    # Enable comprehensive repository validation when opening archives
+    enable_comprehensive_validation: true
+    # Enable deep validation that checks all credential files individually
+    deep_validation: true
+    # Check for legacy format repositories and automatically migrate them
+    check_legacy_formats: true
+    # Validate YAML schema compliance for all repository files
+    validate_schemas: true
+    # Automatically attempt to repair validation issues when found
+    auto_repair: true
+    # Fail repository opening if critical validation issues are found
+    fail_on_critical_issues: true
+    # Log detailed validation reports for monitoring and debugging
+    log_validation_details: false
 
-# Security settings
+# Security Settings
 security:
-  # Auto-lock timeout in seconds (900 = 15 minutes)
-  auto_lock_timeout: 900
+  # Auto-lock timeout in seconds (0 = disabled)
+  auto_lock_timeout: 900 # 15 minutes
 
-  # Minimum master password length
-  min_master_key_length: 12
+  # Master passphrase requirements
+  passphrase_requirements:
+    min_length: 12
+    require_lowercase: true
+    require_uppercase: true
+    require_numeric: true
+    require_special: true
+    max_length: 0 # 0 = no limit
+    min_unique_chars: 8
 
-  # Enforce strong master password requirements
-  enforce_strong_master_key: true
-
-  # Clear clipboard after copying passwords (seconds)
-  clipboard_clear_timeout: 30
-
-# Backend service settings
-backend:
-  # Bind address for IPC communication (127.0.0.1:0 = random port)
-  bind_address: "127.0.0.1:0"
-
-  # Logging level (trace, debug, info, warn, error)
-  log_level: "info"
-
-  # Maximum number of concurrent sessions
-  max_sessions: 10
-
-  # Session timeout in seconds
-  session_timeout: 3600
-
-# User interface settings
-ui:
-  # Theme selection (auto, light, dark)
-  theme: "auto"
-
-  # Font size for the interface
-  font_size: 14
-
-  # Show password strength indicators
-  show_password_strength: true
-
-  # Enable search highlighting
-  search_highlight: true
-
-  # Default window size
-  window:
-    width: 1024
-    height: 768
-
-  # Show system tray icon
-  show_tray_icon: true
-
-# Search settings
-search:
-  # Enable fuzzy search
-  fuzzy_search: true
-
-  # Search in all fields by default
-  search_all_fields: true
-
-  # Maximum search results to display
-  max_results: 100
-
-# TOTP (Two-Factor Authentication) settings
-totp:
-  # Default time step in seconds
-  time_step: 30
-
-  # Default number of digits
-  digits: 6
-
-  # Copy TOTP codes to clipboard automatically
-  auto_copy: false
-
-# Password generator defaults
-password_generator:
-  # Default password length
-  length: 16
-
-  # Include uppercase letters
-  uppercase: true
-
-  # Include lowercase letters
-  lowercase: true
-
-  # Include numbers
-  numbers: true
-
-  # Include symbols
-  symbols: true
-
-  # Avoid ambiguous characters
-  avoid_ambiguous: true
-
-  # Custom symbol set (if empty, uses default)
-  custom_symbols: ""
-
-# Import/Export settings
-import_export:
-  # Default export format (json, csv)
-  default_export_format: "json"
-
-  # Include metadata in exports
-  include_metadata: true
-
-  # Encrypt exports by default
-  encrypt_exports: true
-
-# Logging settings
+# Logging Settings
 logging:
+  # Log level: trace, debug, info, warn, error
+  level: "info"
   # Enable file logging
-  file_logging: true
-
-  # Log file path (relative to user config directory)
-  log_file: "ziplock.log"
-
-  # Maximum log file size in MB
-  max_log_size: 10
-
-  # Number of log files to keep
-  log_rotation_count: 5
+  file_logging: false
+  # Log file path (defaults to system log directory)
+  log_file: null

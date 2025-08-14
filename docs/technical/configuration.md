@@ -30,23 +30,17 @@ Here's a comprehensive example configuration file showing all available options:
 ipc:
   # Unix socket path for backend communication
   socket_path: "/tmp/ziplock/backend.sock"
-  # Socket file permissions (octal)
-  socket_permissions: 0o600
   # Maximum concurrent connections
   max_connections: 10
   # Connection timeout in seconds
   connection_timeout: 30
   # Request timeout in seconds
   request_timeout: 60
-  # Log all IPC requests (for debugging)
-  log_requests: false
 
 # Storage and Archive Settings
 storage:
   # Default directory for storing archives
   default_archive_dir: "~/Documents/ZipLock"
-  # Maximum archive file size in MB (0 = unlimited)
-  max_archive_size_mb: 500
   # Number of backup copies to maintain
   backup_count: 5
   # Enable automatic backup creation
@@ -55,8 +49,6 @@ storage:
   backup_dir: null
   # File lock timeout in seconds
   file_lock_timeout: 30
-  # Custom temporary directory (optional)
-  temp_dir: null
   # Enable basic archive integrity checking
   verify_integrity: true
   # Minimum master password length
@@ -68,12 +60,6 @@ storage:
     level: 6
     # Use solid compression (better compression but slower random access)
     solid: false
-    # Enable multi-threaded compression
-    multi_threaded: true
-    # Dictionary size in MB for compression
-    dictionary_size_mb: 64
-    # Block size in MB (0 = auto)
-    block_size_mb: 0
 
   # Repository Validation Settings
   validation:
@@ -107,23 +93,8 @@ storage:
 
 # Security Settings
 security:
-  # Argon2 key derivation settings
-  key_derivation_iterations: 3
-  key_derivation_memory_kb: 65536  # 64 MB
-  key_derivation_parallelism: 4
-
   # Auto-lock timeout in seconds (0 = disabled)
   auto_lock_timeout: 900  # 15 minutes
-
-  # Maximum authentication attempts before lockout
-  max_auth_attempts: 5
-  # Lockout duration in seconds after max attempts
-  auth_lockout_duration: 300  # 5 minutes
-
-  # Enable memory protection features
-  memory_protection: true
-  # Clipboard clear timeout in seconds
-  clipboard_clear_timeout: 30
 
   # Master passphrase requirements
   passphrase_requirements:
@@ -143,29 +114,6 @@ logging:
   file_logging: true
   # Log file path (defaults to system log directory)
   log_file: null
-  # Maximum log file size in MB before rotation
-  max_log_size_mb: 10
-  # Number of rotated log files to keep
-  log_rotation_count: 5
-  # Use JSON format for structured logging
-  json_format: false
-  # Enable audit logging for security events
-  audit_logging: true
-
-# Performance and Resource Limits
-limits:
-  # Maximum memory usage in MB
-  max_memory_mb: 512
-  # Maximum cached credentials in memory
-  max_cached_credentials: 1000
-  # Cache TTL in seconds
-  cache_ttl: 300  # 5 minutes
-  # Maximum concurrent operations
-  max_concurrent_operations: 10
-  # Operation timeout in seconds
-  operation_timeout: 120  # 2 minutes
-  # Enable performance metrics collection
-  enable_metrics: false
 ```
 
 ## Configuration Profiles
@@ -181,7 +129,6 @@ storage:
   compression:
     level: 6
     solid: false
-    multi_threaded: true
   validation:
     enable_comprehensive_validation: true
     deep_validation: true
@@ -191,7 +138,6 @@ storage:
 
 security:
   auto_lock_timeout: 900
-  memory_protection: true
   passphrase_requirements:
     min_length: 16
     require_lowercase: true
@@ -202,7 +148,6 @@ security:
 logging:
   level: "warn"
   file_logging: true
-  audit_logging: true
 ```
 
 ### Development Profile
@@ -212,7 +157,6 @@ storage:
   backup_count: 3
   compression:
     level: 1  # Faster builds
-    multi_threaded: true
   validation:
     enable_comprehensive_validation: true
     deep_validation: false  # Faster validation
@@ -228,7 +172,6 @@ security:
 logging:
   level: "debug"
   file_logging: true
-  json_format: false  # Easier to read during development
 ```
 
 ### Legacy Compatibility Profile
@@ -263,32 +206,28 @@ logging:
 Controls how the frontend communicates with the backend service:
 
 - `socket_path`: Location of the Unix domain socket for communication
-- `socket_permissions`: File permissions for the socket (security)
-- `max_connections`: Prevents resource exhaustion
+- `max_connections`: Prevents resource exhaustion by limiting concurrent connections
 - `connection_timeout`: Prevents hanging connections
 - `request_timeout`: Maximum time for a single request
-- `log_requests`: Enable for debugging communication issues
 
 ### Storage Settings
 
 Controls how archives are stored and managed:
 
 - `default_archive_dir`: Where new archives are created by default
-- `max_archive_size_mb`: Prevents extremely large archive files
 - `backup_count`: Number of automatic backups to maintain
 - `auto_backup`: Whether to create backups automatically
+- `backup_dir`: Custom backup directory (optional, defaults to subdirectory of archive dir)
 - `file_lock_timeout`: Prevents concurrent access issues
 - `verify_integrity`: Basic integrity checking on archive open
+- `min_password_length`: Minimum master password length requirement
 
 ### Compression Settings
 
 Fine-tune 7z compression behavior:
 
-- `level`: Higher values provide better compression but slower performance
+- `level`: Higher values provide better compression but slower performance (0-9)
 - `solid`: Improves compression ratio but slower random access
-- `multi_threaded`: Use multiple CPU cores for compression
-- `dictionary_size_mb`: Larger dictionaries improve compression for similar data
-- `block_size_mb`: Controls memory usage during compression
 
 ### Validation Settings
 
@@ -306,34 +245,61 @@ Controls repository validation and auto-repair:
 
 Configure security policies and encryption:
 
-- `key_derivation_*`: Argon2 parameters for master key derivation
-- `auto_lock_timeout`: Automatically lock after inactivity
-- `max_auth_attempts`: Brute force protection
-- `memory_protection`: Use secure memory allocation when available
-- `clipboard_clear_timeout`: Automatically clear clipboard after copying passwords
+- `auto_lock_timeout`: Automatically lock after inactivity (seconds, 0 = disabled)
 - `passphrase_requirements`: Enforce strong master passphrase policies
+  - `min_length`: Minimum passphrase length
+  - `require_lowercase`: Require lowercase letters
+  - `require_uppercase`: Require uppercase letters
+  - `require_numeric`: Require numbers
+  - `require_special`: Require special characters
+  - `max_length`: Maximum passphrase length (0 = no limit)
+  - `min_unique_chars`: Minimum number of unique characters
 
 ### Logging Settings
 
 Control logging behavior and output:
 
-- `level`: Minimum log level to record
+- `level`: Minimum log level to record (trace, debug, info, warn, error)
 - `file_logging`: Whether to write logs to files
-- `log_file`: Custom log file location
-- `max_log_size_mb`: Log rotation size threshold
-- `json_format`: Use structured JSON logging
-- `audit_logging`: Enable security event logging
+- `log_file`: Custom log file location (optional)
 
-### Performance Limits
+## Frontend Configuration
 
-Prevent resource exhaustion:
+The frontend maintains its own configuration file for UI and application settings:
 
-- `max_memory_mb`: Total memory usage limit
-- `max_cached_credentials`: Credential cache size limit
-- `cache_ttl`: How long to keep cached data
-- `max_concurrent_operations`: Prevent resource overload
-- `operation_timeout`: Maximum time for any single operation
-- `enable_metrics`: Collect performance metrics
+```yaml
+# Frontend Configuration Example
+repository:
+  # Current repository path
+  path: null
+  # Default directory for creating new repositories
+  default_directory: "~/Documents/ZipLock"
+  # Recently accessed repositories
+  recent_repositories: []
+  # Maximum number of recent repositories to remember
+  max_recent: 10
+  # Additional directories to search for repositories
+  search_directories: []
+
+ui:
+  # Window dimensions
+  window_width: 1200
+  window_height: 800
+  # Remember and restore window state
+  remember_window_state: true
+  # Show setup wizard on startup if no repository is configured
+  show_wizard_on_startup: true
+
+app:
+  # Auto-lock timeout in minutes (0 = disabled)
+  auto_lock_timeout: 15
+  # Clear clipboard after copying password (seconds)
+  clipboard_timeout: 30
+  # Enable auto-backup
+  enable_backup: true
+
+version: "1.0"
+```
 
 ## Testing Configuration
 
@@ -400,6 +366,8 @@ python3 -c "import yaml; yaml.safe_load(open('~/.config/ziplock/config.yml'))"
 ziplock --validate-config
 ```
 
+
+
 ## Related Documentation
 
 - [Validation Implementation](validation-implementation.md) - Technical details about repository validation
@@ -407,3 +375,6 @@ ziplock --validate-config
 - [Architecture Overview](../architecture.md) - How configuration fits into the overall system
 - [IPC Client Examples](ipc-client-examples.md) - Examples of using configured backend services
 - [Mobile Integration](mobile-integration.md) - Configuration considerations for mobile platforms
+```
+
+Now let me update the demo validation script to reflect the new config format:

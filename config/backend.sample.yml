@@ -11,9 +11,6 @@ ipc:
   # Unix domain socket path for IPC communication
   socket_path: "/tmp/ziplock/backend.sock"
 
-  # Socket file permissions (octal format)
-  socket_permissions: 0o600
-
   # Maximum number of concurrent client connections
   max_connections: 10
 
@@ -23,15 +20,9 @@ ipc:
   # Request processing timeout in seconds
   request_timeout: 60
 
-  # Enable IPC request/response logging (for debugging)
-  log_requests: false
-
 storage:
   # Default directory for storing archives
   default_archive_dir: "~/.local/share/ziplock"
-
-  # Maximum archive file size in MB (0 = unlimited)
-  max_archive_size_mb: 100
 
   # Number of backup copies to maintain
   backup_count: 5
@@ -40,13 +31,10 @@ storage:
   auto_backup: true
 
   # Backup directory path (defaults to archive_dir/backups if not specified)
-  # backup_dir: "~/.local/share/ziplock/backups"
+  backup_dir: null
 
   # File lock timeout in seconds
   file_lock_timeout: 30
-
-  # Temporary directory for archive operations (defaults to system temp if not specified)
-  # temp_dir: "/tmp/ziplock"
 
   # Enable archive integrity checking
   verify_integrity: true
@@ -65,43 +53,42 @@ storage:
     # to individual files. Recommended for archives that are mostly read-only.
     solid: false
 
-    # Multi-threading and advanced options are handled internally by sevenz-rust2
-    # The library automatically optimizes based on available CPU cores and content
-    multi_threaded: true
+  # Repository validation settings
+  validation:
+    # Enable comprehensive repository validation on open
+    enable_comprehensive_validation: true
 
-    # Dictionary size is automatically determined by the compression level
-    # Higher levels use larger dictionaries for better compression
-    dictionary_size_mb: 64
+    # Enable deep validation (checks all credential files individually)
+    deep_validation: true
 
-    # Block size optimization is handled internally by sevenz-rust2
-    # The library chooses optimal block sizes based on content and compression level
-    block_size_mb: 0
+    # Check for legacy format repositories and migrate them
+    check_legacy_formats: true
+
+    # Validate YAML schema compliance for all repository files
+    validate_schemas: true
+
+    # Automatically attempt to repair validation issues when found
+    auto_repair: true
+
+    # Fail repository opening if critical validation issues are found
+    fail_on_critical_issues: true
+
+    # Log detailed validation reports for monitoring and debugging
+    log_validation_details: false
 
 security:
-  # Argon2 key derivation parameters
-  # Higher values provide better security but slower key derivation
-  key_derivation_iterations: 100000
-  key_derivation_memory_kb: 65536   # 64 MB
-  key_derivation_parallelism: 4
-
   # Master key auto-lock timeout in seconds (0 = never auto-lock)
   auto_lock_timeout: 900 # 15 minutes
 
-  # Authentication failure handling
-  max_auth_attempts: 5
-  auth_lockout_duration: 300 # 5 minutes
-
-  # Enable memory protection features (recommended)
-  memory_protection: true
-
-  # Clear clipboard after timeout in seconds (0 = disabled)
-  clipboard_clear_timeout: 30
-
-  # Minimum master key length
-  min_master_key_length: 12
-
-  # Enforce strong master key requirements
-  enforce_strong_master_key: true
+  # Master passphrase validation requirements
+  passphrase_requirements:
+    min_length: 12
+    require_lowercase: true
+    require_uppercase: true
+    require_numeric: true
+    require_special: true
+    max_length: 0 # 0 = no limit
+    min_unique_chars: 8
 
 logging:
   # Log level: trace, debug, info, warn, error
@@ -111,40 +98,7 @@ logging:
   file_logging: false
 
   # Log file path (used when file_logging = true)
-  # log_file: "~/.local/share/ziplock/logs/backend.log"
-
-  # Maximum log file size in MB before rotation
-  max_log_size_mb: 10
-
-  # Number of rotated log files to keep
-  log_rotation_count: 5
-
-  # Enable structured JSON logging (useful for log aggregation)
-  json_format: false
-
-  # Enable logging of sensitive operations for security auditing
-  audit_logging: true
-
-limits:
-  # Maximum memory usage in MB (0 = unlimited)
-  # Set this to prevent excessive memory usage
-  max_memory_mb: 0
-
-  # Maximum number of cached credentials
-  max_cached_credentials: 1000
-
-  # Credential cache TTL in seconds
-  cache_ttl: 300 # 5 minutes
-
-  # Maximum concurrent operations
-  max_concurrent_operations: 10
-
-  # Operation timeout in seconds
-  operation_timeout: 120 # 2 minutes
-
-  # Enable performance metrics collection
-  enable_metrics: false
-
+  log_file: null
 # Example configurations for different use cases:
 
 # High compression configuration (slower but smaller archives):
@@ -152,37 +106,52 @@ limits:
 #   compression:
 #     level: 9
 #     solid: true
-#     multi_threaded: true
-#     dictionary_size_mb: 256  # (handled internally)
-#     block_size_mb: 64       # (handled internally)
 
 # Fast compression configuration (faster but larger archives):
 # storage:
 #   compression:
-#     level: 3
+#     level: 1
 #     solid: false
-#     multi_threaded: true
-#     dictionary_size_mb: 32  # (handled internally)
-#     block_size_mb: 0        # (handled internally)
 
-# Memory-constrained configuration:
+# Development configuration (fast and permissive):
 # storage:
+#   backup_count: 3
+#   compression:
+#     level: 1
+#   validation:
+#     deep_validation: false
+#     fail_on_critical_issues: false
+#     log_validation_details: true
+# security:
+#   auto_lock_timeout: 0
+#   passphrase_requirements:
+#     min_length: 8
+#     require_lowercase: false
+#     require_uppercase: false
+#     require_numeric: false
+#     require_special: false
+# logging:
+#   level: "debug"
+#   file_logging: true
+
+# Production configuration (secure and robust):
+# storage:
+#   backup_count: 10
 #   compression:
 #     level: 6
 #     solid: false
-#     multi_threaded: true    # Library handles CPU usage efficiently
-#     dictionary_size_mb: 16  # (handled internally)
-#     block_size_mb: 0        # (handled internally)
-# limits:
-#   max_memory_mb: 512
-
-# High-security configuration:
+#   validation:
+#     enable_comprehensive_validation: true
+#     deep_validation: true
+#     fail_on_critical_issues: true
 # security:
-#   key_derivation_iterations: 500000
-#   key_derivation_memory_kb: 131072  # 128 MB
-#   key_derivation_parallelism: 8
-#   auto_lock_timeout: 300  # 5 minutes
-#   max_auth_attempts: 3
-#   auth_lockout_duration: 600  # 10 minutes
-#   min_master_key_length: 16
-#   enforce_strong_master_key: true
+#   auto_lock_timeout: 600  # 10 minutes
+#   passphrase_requirements:
+#     min_length: 16
+#     require_lowercase: true
+#     require_uppercase: true
+#     require_numeric: true
+#     require_special: true
+# logging:
+#   level: "warn"
+#   file_logging: true

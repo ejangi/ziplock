@@ -277,6 +277,11 @@ show_features() {
     echo "   ✓ Schema validation (configurable)"
     echo "   ✓ Legacy format checking (optional)"
     echo
+    echo "6. Streamlined Configuration:"
+    echo "   ✓ Removed unused parameters for clarity"
+    echo "   ✓ Only includes actively implemented features"
+    echo "   ✓ Simplified maintenance and documentation"
+    echo
 }
 
 # Cleanup function
@@ -318,11 +323,11 @@ main() {
     echo "• Comprehensive validation runs automatically when opening archives"
     echo "• Auto-repair fixes common issues (missing directories, etc.)"
     echo "• Validation is fully configurable for different use cases"
-    echo "• Previously unused validation methods are now actively used"
+    echo "• Config file has been streamlined to only include used parameters"
     echo "• System provides detailed logging and reporting"
     echo
     log_info "Check the backend logs at: $DEMO_DIR/backend.log"
-    log_info "Check the example validation config at: $CONFIG_FILE"
+    log_info "Check the streamlined validation config at: $CONFIG_FILE"
     echo
 
     read -p "Press Enter to cleanup and exit..."
