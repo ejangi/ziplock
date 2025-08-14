@@ -580,10 +580,149 @@ jobs:
             target/x86_64-unknown-linux-gnu/release/ziplock
           retention-days: 30
 
+  build-arch:
+    name: Build Arch Linux Package
+    runs-on: ubuntu-22.04
+    needs: [test, security-audit]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Create Arch build environment
+        run: |
+          # Create Dockerfile for Arch Linux build environment
+          cat > Dockerfile.arch << 'EOF'
+          FROM archlinux:latest
+
+          # Update system and install dependencies
+          RUN pacman -Syu --noconfirm && \
+              pacman -S --noconfirm \
+                base-devel \
+                rust \
+                cargo \
+                pkg-config \
+                fontconfig \
+                freetype2 \
+                libx11 \
+                libxft \
+                xz \
+                gtk4 \
+                libadwaita \
+                git \
+                curl \
+                file \
+                fakeroot \
+                && pacman -Scc --noconfirm
+
+          # Create non-root user for makepkg (required)
+          RUN useradd -m -G wheel builder && \
+              echo '%wheel ALL=(ALL) NOPASSWD: ALL' >> /etc/sudoers
+
+          # Set up Rust environment
+          USER builder
+          WORKDIR /home/builder
+          ENV PATH="/home/builder/.cargo/bin:${PATH}"
+
+          # Verify environment
+          RUN echo "=== Arch Build Environment ===" && \
+              echo "OS Release:" && cat /etc/os-release && \
+              echo "Rust version:" && rustc --version && \
+              echo "Cargo version:" && cargo --version && \
+              echo "=================================="
+          EOF
+
+      - name: Build Arch Docker image
+        run: |
+          docker build -f Dockerfile.arch -t ziplock-arch-builder .
+
+      - name: Build binaries in Arch container
+        run: |
+          docker run --rm \
+            -v $PWD:/workspace \
+            -e TARGET_ARCH=x86_64-unknown-linux-gnu \
+            -e CARGO_TARGET_DIR=/workspace/target \
+            -e RUSTFLAGS="-C target-cpu=x86-64" \
+            ziplock-arch-builder bash -c "
+              set -euo pipefail
+              cd /workspace
+
+              echo 'Building ZipLock for Arch Linux...'
+              echo 'Workspace contents:'
+              ls -la
+
+              # Build the project
+              export RUST_BACKTRACE=1
+              cargo build --release --workspace --locked
+
+              echo 'Build completed. Binaries:'
+              ls -la target/release/ziplock* || echo 'No binaries found in target/release/'
+
+              # Create installation structure
+              ./scripts/build/build-linux.sh --profile release
+            "
+
+      - name: Create Arch package
+        run: |
+          docker run --rm \
+            -v $PWD:/workspace \
+            ziplock-arch-builder bash -c "
+              set -euo pipefail
+              cd /workspace
+
+              echo 'Creating Arch Linux package...'
+
+              # Create source archive for packaging
+              ./scripts/build/package-arch.sh --source-only
+
+              # Verify source archive was created
+              archive_file=\$(ls target/ziplock-*.tar.gz 2>/dev/null | head -n1) || archive_file=''
+              if [ -z \"\$archive_file\" ]; then
+                echo 'ERROR: Source archive was not created'
+                exit 1
+              fi
+
+              echo 'Source archive created successfully:'
+              ls -la target/ziplock-*.tar.gz
+              echo 'SHA256:' \$(cat target/archive.sha256)
+            "
+
+      - name: Test Arch package structure
+        run: |
+          echo "Verifying Arch package files..."
+
+          # Check if required files exist
+          if [ ! -f packaging/arch/PKGBUILD ]; then
+            echo "ERROR: PKGBUILD not found"
+            exit 1
+          fi
+
+          if [ ! -f packaging/arch/ziplock.install ]; then
+            echo "ERROR: ziplock.install not found"
+            exit 1
+          fi
+
+          echo "PKGBUILD contents:"
+          head -20 packaging/arch/PKGBUILD
+
+          echo "Source archive info:"
+          ls -la target/ziplock-*.tar.gz || echo "No source archive found"
+
+      - name: Upload Arch artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ziplock-arch-package
+          path: |
+            target/ziplock-*.tar.gz
+            target/archive.sha256
+            packaging/arch/PKGBUILD
+            packaging/arch/ziplock.install
+          retention-days: 30
+
   release:
     name: Create Release
     runs-on: ubuntu-22.04
-    needs: [build-linux]
+    needs: [build-linux, build-arch]
     if: startsWith(github.ref, 'refs/tags/v')
 
     steps:
@@ -602,9 +741,14 @@ jobs:
           # Copy .deb packages
           find artifacts -name "*.deb" -exec cp {} release-assets/ \;
 
+          # Copy Arch packages
+          find artifacts -name "ziplock-*.tar.gz" -exec cp {} release-assets/ \;
+          find artifacts -name "PKGBUILD" -exec cp {} release-assets/ \;
+          find artifacts -name "ziplock.install" -exec cp {} release-assets/ \;
+
           # Create checksums
           cd release-assets
-          sha256sum *.deb > SHA256SUMS
+          sha256sum *.deb *.tar.gz > SHA256SUMS
 
           # List files for verification
           ls -la
@@ -693,6 +837,9 @@ jobs:
           prerelease: ${{ contains(steps.version.outputs.VERSION, '-') }}
           files: |
             release-assets/*.deb
+            release-assets/*.tar.gz
+            release-assets/PKGBUILD
+            release-assets/ziplock.install
             release-assets/SHA256SUMS
           generate_release_notes: true
         env:

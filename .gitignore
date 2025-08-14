@@ -196,3 +196,17 @@ test_archives/
 benchmark_results/
 perf_data/
 tests/results/
+
+# Package artifacts (keep packaging/ source files tracked)
+*.deb
+*.pkg.tar.*
+*.tar.gz
+!packaging/**/*.tar.gz
+target/ziplock-*.tar.gz
+target/archive.sha256
+target/src/
+target/pkg/
+target/deb/
+target/install/
+target/logs/
+target/makepkg/

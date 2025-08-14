@@ -227,7 +227,9 @@ cargo audit
 
 ## Packaging
 
-### Debian Package Structure
+ZipLock supports packaging for multiple Linux distributions:
+
+### Debian/Ubuntu Package Structure
 
 The Debian package includes:
 
@@ -241,7 +243,25 @@ The Debian package includes:
 /var/lib/ziplock/                 # Service state directory
 ```
 
+### Arch Linux Package Structure
+
+The Arch package includes the same files as Debian, but follows Arch conventions:
+
+```
+/usr/bin/ziplock-backend          # Backend service binary
+/usr/bin/ziplock                  # Frontend GUI binary
+/usr/share/applications/ziplock.desktop  # Desktop entry
+/usr/share/icons/hicolor/scalable/apps/ziplock.svg  # Application icon
+/usr/lib/systemd/system/ziplock-backend.service  # Systemd service (note: /usr/lib)
+/etc/ziplock/config.yml           # Default configuration
+/var/lib/ziplock/                 # Service state directory
+/usr/share/licenses/ziplock/LICENSE  # License file
+/usr/share/doc/ziplock/           # Documentation
+```
+
 ### Creating Packages
+
+#### Debian/Ubuntu Packages
 
 ```bash
 # Build the software first
@@ -256,17 +276,65 @@ dpkg-deb --contents target/ziplock_*.deb
 lintian target/ziplock_*.deb
 ```
 
+#### Arch Linux Packages
+
+```bash
+# Build the software first
+./scripts/build/build-linux.sh --profile release
+
+# Create source archive for AUR
+./scripts/build/package-arch.sh --source-only
+
+# Or create binary package (requires Arch Linux)
+./scripts/build/package-arch.sh
+
+# Verify the package (on Arch Linux)
+pacman -Qip target/ziplock-*.pkg.tar.xz
+pacman -Qlp target/ziplock-*.pkg.tar.xz
+```
+
+#### AUR (Arch User Repository) Publishing
+
+For AUR submission, use the source-only mode:
+
+```bash
+# Create source archive and PKGBUILD
+./scripts/build/package-arch.sh --source-only
+
+# Update PKGBUILD with correct SHA256 checksum
+# Edit packaging/arch/PKGBUILD and replace 'SKIP' with actual checksum
+sha256sum target/ziplock-*.tar.gz
+
+# Test build on Arch Linux
+cd packaging/arch
+makepkg -si
+
+# Submit to AUR (requires AUR account and SSH keys)
+git clone ssh://aur@aur.archlinux.org/ziplock.git aur-ziplock
+cp PKGBUILD ziplock.install aur-ziplock/
+cd aur-ziplock
+makepkg --printsrcinfo > .SRCINFO
+git add .
+git commit -m "Update to version X.Y.Z"
+git push
+```
+
 ### Cross-Compilation
 
 ```bash
 # Build for x86_64
 ./scripts/build/build-linux.sh --target x86_64-unknown-linux-gnu
+
+# Create packages
 ./scripts/build/package-deb.sh --arch amd64
+./scripts/build/package-arch.sh --arch x86_64
 ```
 
 ## Installation and Testing
 
 ### Package Installation
+
+#### Debian/Ubuntu
 
 ```bash
 # Install the package
@@ -274,6 +342,25 @@ sudo dpkg -i target/ziplock_*.deb
 
 # Fix any dependency issues
 sudo apt-get install -f
+
+# Verify installation
+systemctl status ziplock-backend
+ziplock --version
+```
+
+#### Arch Linux
+
+```bash
+# Install from binary package
+sudo pacman -U target/ziplock-*.pkg.tar.xz
+
+# Or install from AUR (once published)
+yay -S ziplock
+# or
+paru -S ziplock
+
+# Enable and start service
+sudo systemctl enable --now ziplock-backend.service
 
 # Verify installation
 systemctl status ziplock-backend
@@ -609,6 +696,140 @@ ziplock --version
 systemctl status ziplock-backend
 ```
 
+### Arch Linux Specific Issues
+
+#### PKGBUILD Build Fails
+
+**Symptoms:**
+```
+==> ERROR: makepkg must be run as a normal user
+```
+
+**Solutions:**
+
+1. **Never run makepkg as root:**
+   ```bash
+   # Correct - run as normal user
+   makepkg -si
+   
+   # Wrong - never do this
+   sudo makepkg
+   ```
+
+2. **If building in container, create non-root user:**
+   ```bash
+   useradd -m builder
+   su - builder
+   cd /path/to/PKGBUILD
+   makepkg -si
+   ```
+
+#### Package Installation Conflicts
+
+**Symptoms:**
+```
+error: failed to commit transaction (conflicting files)
+ziplock: /usr/bin/ziplock exists in filesystem
+```
+
+**Solutions:**
+
+1. **Check for existing installations:**
+   ```bash
+   pacman -Qs ziplock
+   which ziplock
+   ```
+
+2. **Remove conflicting packages:**
+   ```bash
+   sudo pacman -R ziplock-git  # Remove AUR git version
+   sudo pacman -U ziplock-*.pkg.tar.xz --overwrite '*'
+   ```
+
+#### Missing Dependencies on Arch
+
+**Symptoms:**
+```
+error while loading shared libraries: libfontconfig.so.1
+```
+
+**Solutions:**
+
+1. **Install base dependencies:**
+   ```bash
+   sudo pacman -S base-devel fontconfig freetype2 libx11 libxft xz
+   ```
+
+2. **For GUI dependencies:**
+   ```bash
+   sudo pacman -S gtk4 libadwaita
+   ```
+
+3. **Check package dependencies:**
+   ```bash
+   pacman -Qip ziplock-*.pkg.tar.xz | grep "Depends On"
+   ```
+
+#### AUR Package Out of Date
+
+**Symptoms:**
+- AUR package shows older version than latest release
+
+**Solutions:**
+
+1. **Check current version:**
+   ```bash
+   curl -s https://api.github.com/repos/ejangi/ziplock/releases/latest | grep tag_name
+   ```
+
+2. **Flag package out of date on AUR web interface**
+
+3. **Build from source manually:**
+   ```bash
+   git clone https://github.com/ejangi/ziplock.git
+   cd ziplock
+   cargo build --release
+   ```
+
+#### Systemd Service Issues on Arch
+
+**Symptoms:**
+```
+Failed to enable unit: Unit file ziplock-backend.service does not exist
+```
+
+**Solutions:**
+
+1. **Check service file location (Arch uses /usr/lib):**
+   ```bash
+   ls -la /usr/lib/systemd/system/ziplock-backend.service
+   ```
+
+2. **Reload systemd if service was just installed:**
+   ```bash
+   sudo systemctl daemon-reload
+   sudo systemctl enable ziplock-backend.service
+   ```
+
+3. **Check service file syntax:**
+   ```bash
+   systemd-analyze verify /usr/lib/systemd/system/ziplock-backend.service
+   ```
+
+### Docker Testing for Arch
+
+```bash
+# Test package in clean Arch environment
+docker run --rm -it -v $(pwd):/workspace archlinux:latest bash
+
+# Inside container:
+cd /workspace
+pacman -Syu --noconfirm
+pacman -U --noconfirm ziplock-*.pkg.tar.xz
+ziplock --version
+systemctl status ziplock-backend
+```
+
 ## CI/CD and GitHub Actions
 
 ### Automated Builds
@@ -617,25 +838,36 @@ The project includes GitHub Actions workflows for:
 
 - **Continuous Integration**: Run tests on every push/PR
 - **Security Audits**: Automated dependency security scanning
-- **x86_64 Architecture Builds**: Create packages for amd64
+- **Multi-Distribution Builds**: Create packages for Debian/Ubuntu and Arch Linux
 - **Release Automation**: Automatic releases when tags are pushed
 
 ### GitHub Actions Workflow
 
 #### Build Stages
 
-1. **Environment Setup**: Creates containerized build environment
+The workflow includes two parallel build jobs:
+
+**Debian/Ubuntu Build (`build-linux`):**
+1. **Environment Setup**: Creates Ubuntu 22.04 containerized build environment
 2. **Dependencies**: Installs all required system and Rust dependencies
 3. **Build**: Compiles binaries in container
 4. **Package**: Creates .deb package
 5. **Test**: Validates package in clean Ubuntu 22.04 environment
 6. **Analyze**: Checks binary dependencies and compatibility
 
+**Arch Linux Build (`build-arch`):**
+1. **Environment Setup**: Creates Arch Linux containerized build environment
+2. **Dependencies**: Installs base-devel, rust, and system dependencies
+3. **Build**: Compiles binaries with Arch toolchain
+4. **Package**: Creates source archive and PKGBUILD for AUR
+5. **Test**: Validates package structure and metadata
+
 #### Workflow Artifacts
 
 The workflow produces several artifacts:
 
 - **ziplock-linux-amd64**: Contains binaries and .deb package
+- **ziplock-arch-package**: Contains source archive, PKGBUILD, and install script for AUR
 - **build-report**: Detailed build analysis and environment info
 - **benchmark-results**: Performance metrics (on main branch)
 

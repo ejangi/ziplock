@@ -1,0 +1,81 @@
+# Maintainer: James Angus <james@ejangi.com>
+pkgname=ziplock
+pkgver=0.1.7
+pkgrel=1
+pkgdesc="A secure, portable password manager using encrypted 7z archives"
+arch=('x86_64')
+url="https://github.com/ejangi/ziplock"
+license=('Apache')
+depends=('glibc' 'fontconfig' 'freetype2' 'libx11' 'libxft' 'xz' 'systemd' 'gcc-libs')
+optdepends=('gnome-keyring: for GNOME keyring integration'
+           'kwallet: for KDE wallet integration'
+           'firejail: for additional sandboxing')
+makedepends=('rust' 'cargo' 'pkg-config')
+provides=('ziplock')
+conflicts=('ziplock-bin' 'ziplock-git')
+backup=('etc/ziplock/config.yml')
+install=ziplock.install
+source=("$pkgname-$pkgver.tar.gz::https://github.com/ejangi/ziplock/archive/v$pkgver.tar.gz")
+sha256sums=('SKIP')  # This should be updated for each release
+
+prepare() {
+    cd "$pkgname-$pkgver"
+
+    # Update Cargo.lock to ensure reproducible builds
+    cargo fetch --locked --target "$CARCH-unknown-linux-gnu"
+}
+
+build() {
+    cd "$pkgname-$pkgver"
+
+    # Set build environment
+    export RUSTUP_TOOLCHAIN=stable
+    export CARGO_TARGET_DIR=target
+    export RUSTFLAGS="-C opt-level=3 -C target-cpu=native"
+
+    # Build the workspace with release profile
+    cargo build --release --locked --workspace
+}
+
+check() {
+    cd "$pkgname-$pkgver"
+
+    # Run tests
+    cargo test --release --locked --workspace
+}
+
+package() {
+    cd "$pkgname-$pkgver"
+
+    # Install binaries
+    install -Dm755 target/release/ziplock-backend "$pkgdir/usr/bin/ziplock-backend"
+    install -Dm755 target/release/ziplock "$pkgdir/usr/bin/ziplock"
+
+    # Install systemd service
+    install -Dm644 packaging/linux/ziplock-backend.service "$pkgdir/usr/lib/systemd/system/ziplock-backend.service"
+
+    # Install configuration
+    install -Dm644 config/config.yml "$pkgdir/etc/ziplock/config.yml"
+
+    # Install desktop file if it exists
+    if [ -f frontend/linux/resources/ziplock.desktop ]; then
+        install -Dm644 frontend/linux/resources/ziplock.desktop "$pkgdir/usr/share/applications/ziplock.desktop"
+    fi
+
+    # Install icon
+    if [ -f frontend/linux/resources/icons/ziplock.svg ]; then
+        install -Dm644 frontend/linux/resources/icons/ziplock.svg "$pkgdir/usr/share/icons/hicolor/scalable/apps/ziplock.svg"
+    elif [ -f assets/icons/ziplock-logo.svg ]; then
+        install -Dm644 assets/icons/ziplock-logo.svg "$pkgdir/usr/share/icons/hicolor/scalable/apps/ziplock.svg"
+    fi
+
+    # Install license
+    install -Dm644 LICENSE.md "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+
+    # Install documentation
+    install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
+    install -Dm644 CHANGELOG.md "$pkgdir/usr/share/doc/$pkgname/CHANGELOG.md"
+
+    # Create state directory
+    install -dm755 "$pkgdir/var/lib/ziplock"
+}

@@ -173,6 +173,18 @@ wget -O- https://github.com/ejangi/ziplock/releases/latest/download/ziplock_amd6
 sudo dpkg -i ziplock_amd64.deb
 ```
 
+**Arch Linux**:
+```bash
+# From AUR (recommended)
+yay -S ziplock
+# or
+paru -S ziplock
+
+# Manual installation from release
+wget -O- https://github.com/ejangi/ziplock/releases/latest/download/ziplock-0.1.7.tar.gz
+# Extract and follow PKGBUILD instructions
+```
+
 **Windows**: Not yet available - Windows implementation is currently in development
 
 **iOS**: Available on the App Store (coming soon)

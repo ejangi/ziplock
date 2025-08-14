@@ -10,8 +10,10 @@ Scripts for compiling, building, and packaging ZipLock for distribution.
 - **`build-linux.sh`** - Builds ZipLock for Linux platforms
 - **`build-mobile.sh`** - Builds shared library for mobile platforms (iOS/Android)
 - **`package-deb.sh`** - Creates Debian packages for distribution
+- **`package-arch.sh`** - Creates Arch Linux packages and source archives for AUR
 - **`test-build.sh`** - Tests build process in CI environment
 - **`test-build-locally.sh`** - Tests complete build process locally with Docker
+- **`test-arch-packaging.sh`** - Tests Arch Linux packaging in containerized environment
 
 ### `dev/` - Development Scripts
 Scripts for development workflow, testing, and debugging.
@@ -49,8 +51,14 @@ Reserved for future deployment automation scripts.
 # Create Debian package
 ./scripts/build/package-deb.sh --arch amd64
 
+# Create Arch Linux package
+./scripts/build/package-arch.sh --source-only
+
 # Test build locally with Docker
 ./scripts/build/test-build-locally.sh
+
+# Test Arch packaging
+./scripts/build/test-arch-packaging.sh
 ```
 
 ### Development
@@ -130,6 +138,31 @@ Creates Debian packages for distribution.
 
 **Options:**
 - `--arch`: Package architecture (amd64, arm64, default: amd64)
+
+### `build/package-arch.sh`
+Creates Arch Linux packages and source archives for AUR submission.
+
+**Usage:**
+```bash
+./scripts/build/package-arch.sh [--arch ARCH] [--source-only] [--skip-tests]
+```
+
+**Options:**
+- `--arch`: Package architecture (x86_64, default: x86_64)
+- `--source-only`: Create only source archive for AUR (recommended)
+- `--skip-tests`: Skip package installation tests
+
+### `build/test-arch-packaging.sh`
+Tests Arch Linux packaging process in containerized environment.
+
+**Usage:**
+```bash
+./scripts/build/test-arch-packaging.sh [--full-build] [--clean-images]
+```
+
+**Options:**
+- `--full-build`: Run complete makepkg build test (slow)
+- `--clean-images`: Remove Docker images after test
 
 ### `build/test-build-locally.sh`
 Comprehensive local build testing using Docker containers.
@@ -270,6 +303,48 @@ Quick pre-push validation that runs formatting and Clippy checks (skips tests fo
 | `run-ci-checks.sh` | ✓ | ✓ | ✓ | Slow | Complete CI validation |
 | `run-format.sh` | ✓ | ✗ | ✗ | Very Fast | Format-only check |
 | `run-clippy.sh` | ✗ | ✓ | ✗ | Fast | Clippy-only check |
+
+## Arch Linux Packaging
+
+### Creating AUR Packages
+
+```bash
+# Build software first
+./scripts/build/build-linux.sh --profile release
+
+# Create source archive for AUR
+./scripts/build/package-arch.sh --source-only
+
+# Test packaging
+./scripts/build/test-arch-packaging.sh
+
+# Update PKGBUILD with correct checksum
+sha256sum target/ziplock-*.tar.gz
+# Edit packaging/arch/PKGBUILD and replace 'SKIP' with actual checksum
+
+# Submit to AUR (requires AUR account)
+git clone ssh://aur@aur.archlinux.org/ziplock.git aur-ziplock
+cp packaging/arch/PKGBUILD packaging/arch/ziplock.install aur-ziplock/
+cd aur-ziplock
+makepkg --printsrcinfo > .SRCINFO
+git add .
+git commit -m "Update to version X.Y.Z"
+git push
+```
+
+### Testing Arch Packages
+
+```bash
+# Quick validation
+./scripts/build/test-arch-packaging.sh
+
+# Full build test (slow)
+./scripts/build/test-arch-packaging.sh --full-build
+
+# Test on real Arch system
+cd packaging/arch
+makepkg -si
+```
 
 ## Version Management Details
 

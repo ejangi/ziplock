@@ -1,0 +1,155 @@
+# ZipLock Arch Linux Install Script
+# Handles package installation, upgrade, and removal lifecycle
+
+post_install() {
+    echo "Setting up ZipLock..."
+
+    # Create ziplock user and group for the backend service
+    if ! getent group ziplock >/dev/null; then
+        groupadd -r ziplock
+    fi
+
+    if ! getent passwd ziplock >/dev/null; then
+        useradd -r -g ziplock -d /var/lib/ziplock -s /usr/bin/nologin \
+                -c "ZipLock Backend Service" ziplock
+    fi
+
+    # Set correct ownership and permissions
+    chown -R ziplock:ziplock /var/lib/ziplock
+    chmod 755 /var/lib/ziplock
+
+    # Set up configuration directory
+    chown root:ziplock /etc/ziplock
+    chmod 750 /etc/ziplock
+    chown root:ziplock /etc/ziplock/config.yml
+    chmod 640 /etc/ziplock/config.yml
+
+    # Reload systemd daemon
+    systemctl daemon-reload
+
+    # Update desktop database if desktop file was installed
+    if [ -f /usr/share/applications/ziplock.desktop ]; then
+        if command -v update-desktop-database >/dev/null 2>&1; then
+            update-desktop-database -q /usr/share/applications
+        fi
+    fi
+
+    # Update icon cache if icon was installed
+    if [ -f /usr/share/icons/hicolor/scalable/apps/ziplock.svg ]; then
+        if command -v gtk-update-icon-cache >/dev/null 2>&1; then
+            gtk-update-icon-cache -q -t -f /usr/share/icons/hicolor 2>/dev/null || true
+        fi
+    fi
+
+    echo "ZipLock has been installed successfully!"
+    echo ""
+    echo "To get started:"
+    echo "  1. Enable the backend service: sudo systemctl enable ziplock-backend.service"
+    echo "  2. Start the backend service: sudo systemctl start ziplock-backend.service"
+    echo "  3. Launch ZipLock from your applications menu or run 'ziplock' in terminal"
+    echo ""
+    echo "Configuration file: /etc/ziplock/config.yml"
+    echo "Service logs: journalctl -u ziplock-backend.service"
+}
+
+post_upgrade() {
+    echo "Upgrading ZipLock..."
+
+    # Ensure user and group still exist
+    if ! getent group ziplock >/dev/null; then
+        groupadd -r ziplock
+    fi
+
+    if ! getent passwd ziplock >/dev/null; then
+        useradd -r -g ziplock -d /var/lib/ziplock -s /usr/bin/nologin \
+                -c "ZipLock Backend Service" ziplock
+    fi
+
+    # Update permissions
+    chown -R ziplock:ziplock /var/lib/ziplock
+    chmod 755 /var/lib/ziplock
+    chown root:ziplock /etc/ziplock
+    chmod 750 /etc/ziplock
+    chown root:ziplock /etc/ziplock/config.yml
+    chmod 640 /etc/ziplock/config.yml
+
+    # Reload systemd daemon
+    systemctl daemon-reload
+
+    # Restart service if it was running
+    if systemctl is-active --quiet ziplock-backend.service; then
+        echo "Restarting ZipLock backend service..."
+        systemctl restart ziplock-backend.service
+    fi
+
+    # Update desktop database
+    if [ -f /usr/share/applications/ziplock.desktop ]; then
+        if command -v update-desktop-database >/dev/null 2>&1; then
+            update-desktop-database -q /usr/share/applications
+        fi
+    fi
+
+    # Update icon cache
+    if [ -f /usr/share/icons/hicolor/scalable/apps/ziplock.svg ]; then
+        if command -v gtk-update-icon-cache >/dev/null 2>&1; then
+            gtk-update-icon-cache -q -t -f /usr/share/icons/hicolor 2>/dev/null || true
+        fi
+    fi
+
+    echo "ZipLock has been upgraded successfully!"
+}
+
+pre_remove() {
+    echo "Preparing to remove ZipLock..."
+
+    # Stop the backend service if running
+    if systemctl is-active --quiet ziplock-backend.service; then
+        echo "Stopping ZipLock backend service..."
+        systemctl stop ziplock-backend.service
+    fi
+
+    # Disable the service
+    if systemctl is-enabled --quiet ziplock-backend.service; then
+        echo "Disabling ZipLock backend service..."
+        systemctl disable ziplock-backend.service
+    fi
+}
+
+post_remove() {
+    echo "Cleaning up ZipLock..."
+
+    # Remove user and group (only if no user data exists)
+    if getent passwd ziplock >/dev/null; then
+        if [ ! -d /var/lib/ziplock ] || [ -z "$(ls -A /var/lib/ziplock 2>/dev/null)" ]; then
+            userdel ziplock 2>/dev/null || true
+        else
+            echo "Note: ZipLock user preserved because user data exists in /var/lib/ziplock"
+        fi
+    fi
+
+    if getent group ziplock >/dev/null; then
+        # Only remove group if no users are in it
+        if [ -z "$(getent group ziplock | cut -d: -f4)" ]; then
+            groupdel ziplock 2>/dev/null || true
+        fi
+    fi
+
+    # Reload systemd daemon
+    systemctl daemon-reload
+
+    # Update desktop database
+    if command -v update-desktop-database >/dev/null 2>&1; then
+        update-desktop-database -q /usr/share/applications 2>/dev/null || true
+    fi
+
+    # Update icon cache
+    if command -v gtk-update-icon-cache >/dev/null 2>&1; then
+        gtk-update-icon-cache -q -t -f /usr/share/icons/hicolor 2>/dev/null || true
+    fi
+
+    echo "ZipLock has been removed."
+    echo ""
+    echo "Note: Configuration files and user data have been preserved."
+    echo "To completely remove all data:"
+    echo "  sudo rm -rf /etc/ziplock /var/lib/ziplock"
+}
