@@ -107,7 +107,7 @@ ZipLock follows a client-server architecture with native applications for each p
 ZipLock follows a secure client-server architecture designed for maximum security and portability:
 
 ```
-┌─────────────────┐    IPC     ┌─────────────────┐    File I/O    ┌─────────────────┐
+┌─────────────────┐     IPC     ┌─────────────────┐    File I/O   ┌─────────────────┐
 │  Frontend UI    │ ◄─────────► │ Backend Service │ ◄────────────► │ Encrypted 7z    │
 │  (Platform      │             │ (Rust/Swift/    │               │ Archive         │
 │   Native)       │             │  Kotlin)        │               │                 │
@@ -283,6 +283,6 @@ For enterprise deployments and professional support, contact James Angus at [jam
 ---
 
 <div align="center">
-  <p>Made with ❤️ by James Angus <james@ejangi.com> using [Zed](https://zed.dev/agentic)</p>
+    <p>Made with ❤️ by James Angus <james@ejangi.com> using <a href="https://zed.dev/agentic" target="_blank">Zed</a></p>
   <p>🔐 Your security is our priority 🔐</p>
 </div>
