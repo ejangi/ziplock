@@ -645,6 +645,9 @@ jobs:
             -e RUSTFLAGS="-C target-cpu=x86-64" \
             ziplock-arch-builder bash -c "
               set -euo pipefail
+
+              # Fix workspace permissions for builder user
+              sudo chown -R builder:builder /workspace
               cd /workspace
 
               echo 'Building ZipLock for Arch Linux...'
@@ -668,6 +671,9 @@ jobs:
             -v $PWD:/workspace \
             ziplock-arch-builder bash -c "
               set -euo pipefail
+
+              # Fix workspace permissions for builder user
+              sudo chown -R builder:builder /workspace
               cd /workspace
 
               echo 'Creating Arch Linux package...'
