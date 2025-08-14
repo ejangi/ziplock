@@ -707,6 +707,33 @@ jobs:
               echo 'SHA256:' \$(cat target/archive.sha256)
             "
 
+      - name: Fix permissions after Arch packaging
+        run: |
+          # Fix ownership of all files created by Docker container
+          # The container runs as builder user, but the runner needs to access these files
+          echo "Fixing permissions after Arch packaging..."
+          if [ -d ~/.cargo/registry ]; then
+            sudo chown -R $USER:$USER ~/.cargo/registry || true
+            echo "Fixed ~/.cargo/registry permissions"
+          fi
+          if [ -d ~/.cargo/git ]; then
+            sudo chown -R $USER:$USER ~/.cargo/git || true
+            echo "Fixed ~/.cargo/git permissions"
+          fi
+          if [ -d target ]; then
+            sudo chown -R $USER:$USER target || true
+            echo "Fixed target directory permissions"
+          fi
+          if [ -d packaging ]; then
+            sudo chown -R $USER:$USER packaging || true
+            echo "Fixed packaging directory permissions"
+          fi
+          # Fix git directory permissions to allow cleanup
+          if [ -d .git ]; then
+            sudo chown -R $USER:$USER .git || true
+            echo "Fixed .git directory permissions"
+          fi
+
       - name: Test Arch package structure
         run: |
           echo "Verifying Arch package files..."
