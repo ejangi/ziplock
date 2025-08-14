@@ -609,6 +609,7 @@ jobs:
                 fakeroot \
                 openssl \
                 xz \
+                rsync \
                 fontconfig \
                 freetype2 \
                 libx11 \
