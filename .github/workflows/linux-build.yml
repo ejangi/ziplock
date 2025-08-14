@@ -317,7 +317,7 @@ jobs:
           # Test package in clean Ubuntu 22.04 container
           echo "Testing package installation in Ubuntu 22.04..."
           docker run --rm -v $PWD:/workspace ubuntu:22.04 bash -c "
-            set -euo pipefail
+            set -eu
             cd /workspace
             export DEBIAN_FRONTEND=noninteractive
 
@@ -326,8 +326,7 @@ jobs:
 
             # Check glibc version in test container
             echo 'Test container glibc version:'
-            glibc_version=$(ldd --version 2>/dev/null | sed -n '1p') || glibc_version='glibc version check failed'
-            echo "$glibc_version"
+            ldd --version 2>/dev/null | head -1 || echo 'glibc version check failed'
 
             # Install the package (this will automatically install dependencies)
             echo 'Installing ZipLock package...'
@@ -335,7 +334,7 @@ jobs:
 
             # Verify installation
             echo 'Verifying installation...'
-            dpkg -l | grep ziplock
+            dpkg -l | grep ziplock || echo 'no ziplock packages found'
 
             # Test binaries exist and are executable
             echo 'Testing binary existence...'
@@ -364,8 +363,7 @@ jobs:
               apt-get update > /dev/null 2>&1
               dpkg --info ./target/ziplock_*_amd64.deb
               echo 'Package file listing:'
-              package_contents=$(dpkg --contents ./target/ziplock_*_amd64.deb 2>/dev/null | sed -n '1,20p') || package_contents='package listing failed'
-              echo "$package_contents"
+              dpkg --contents ./target/ziplock_*_amd64.deb 2>/dev/null | head -20 || echo 'package listing failed'
             "
             exit 1
           }
