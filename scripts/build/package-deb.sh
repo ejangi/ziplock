@@ -11,7 +11,7 @@ PACKAGING_DIR="$PROJECT_ROOT/packaging/linux"
 
 # Package configuration
 PACKAGE_NAME="ziplock"
-PACKAGE_VERSION="${VERSION:-$(grep '^version' "$PROJECT_ROOT/Cargo.toml" | head -1 | sed 's/.*"\(.*\)".*/\1/')}"
+PACKAGE_VERSION="${VERSION:-$(grep '^version' "$PROJECT_ROOT/Cargo.toml" | sed -n '1s/.*"\(.*\)".*/\1/p')}"
 PACKAGE_ARCH="${PACKAGE_ARCH:-amd64}"
 MAINTAINER="James Angus <james@ejangi.com>"
 DESCRIPTION="A secure, portable password manager using encrypted 7z archives"
@@ -401,7 +401,8 @@ build_package() {
 
         # Show debug info
         log_info "Debug: Contents of deb directory:"
-        find "$deb_dir" -type f | head -20
+        debug_contents=$(find "$deb_dir" -type f | sed -n '1,20p') || debug_contents="Could not list debug contents"
+        echo "$debug_contents"
         log_info "Debug: DEBIAN control files:"
         ls -la "$deb_dir/DEBIAN/" || true
         exit 1
@@ -423,12 +424,8 @@ build_package() {
 
     # Show package contents safely without risking broken pipe
     log_info "Package contents (first 20 files):"
-    if ! (dpkg-deb --contents "$package_file" 2>/dev/null | head -20 > /tmp/package_contents.txt 2>/dev/null); then
-        log_warning "Could not display package contents (this may indicate an issue)"
-    else
-        cat /tmp/package_contents.txt || true
-        rm -f /tmp/package_contents.txt
-    fi
+    package_contents=$(dpkg-deb --contents "$package_file" 2>/dev/null | sed -n '1,20p') || package_contents="Could not list package contents"
+    echo "$package_contents"
 
     local package_size=$(du -h "$package_file" | cut -f1)
     log_success "Package verification completed - Size: $package_size"

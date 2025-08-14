@@ -173,7 +173,8 @@ echo "PATH: $PATH"
 /root/.cargo/bin/rustc --version
 /root/.cargo/bin/cargo --version
 echo "Target glibc version in container:"
-(ldd --version 2>&1 | head -1) || echo "ldd version check skipped"
+glibc_version=$(ldd --version 2>/dev/null | sed -n '1p') || glibc_version='ldd version check skipped'
+echo "$glibc_version"
 
 # Build with container environment
 ./scripts/build/build-linux.sh --target x86_64-unknown-linux-gnu --profile release
@@ -182,7 +183,7 @@ echo "Target glibc version in container:"
 echo "Verifying built binaries:"
 file /workspace/target/x86_64-unknown-linux-gnu/release/ziplock-backend
 file /workspace/target/x86_64-unknown-linux-gnu/release/ziplock
-backend_deps=$(ldd /workspace/target/x86_64-unknown-linux-gnu/release/ziplock-backend 2>/dev/null | head -5) || backend_deps="ldd check failed"
+backend_deps=$(ldd /workspace/target/x86_64-unknown-linux-gnu/release/ziplock-backend 2>/dev/null | sed -n '1,5p') || backend_deps="ldd check failed"
 echo "$backend_deps"
 EOF
 
@@ -267,7 +268,7 @@ test_package_installation() {
 
         # Check glibc version in test container
         echo 'Test container glibc version:'
-        glibc_version=$(ldd --version 2>/dev/null | head -1) || glibc_version='glibc version check failed'
+        glibc_version=$(ldd --version 2>/dev/null | sed -n '1p') || glibc_version='glibc version check failed'
         echo "$glibc_version"
 
         # Install the package (this will automatically install dependencies)
@@ -306,7 +307,8 @@ test_package_installation() {
             apt-get update > /dev/null 2>&1
             dpkg --info ./target/ziplock_*_amd64.deb
             echo 'Package file listing:'
-            dpkg --contents ./target/ziplock_*_amd64.deb | head -20
+            package_contents=$(dpkg --contents ./target/ziplock_*_amd64.deb 2>/dev/null | sed -n '1,20p') || package_contents='package listing failed'
+            echo "$package_contents"
         "
         exit 1
     }
@@ -322,7 +324,7 @@ analyze_build_results() {
     echo "=== Build Analysis ==="
 
     # Package information
-    PACKAGE_FILE=$(ls target/ziplock_*_amd64.deb 2>/dev/null | head -1) || PACKAGE_FILE=""
+    PACKAGE_FILE=$(ls target/ziplock_*_amd64.deb 2>/dev/null | sed -n '1p') || PACKAGE_FILE=""
     if [ -n "$PACKAGE_FILE" ]; then
         echo "Package: $(basename $PACKAGE_FILE)"
         echo "Package size: $(du -h $PACKAGE_FILE | cut -f1)"
@@ -337,7 +339,7 @@ analyze_build_results() {
     if [ -f "target/x86_64-unknown-linux-gnu/release/ziplock-backend" ]; then
         echo "Backend binary size: $(du -h target/x86_64-unknown-linux-gnu/release/ziplock-backend | cut -f1)"
         echo "Backend glibc requirements:"
-        backend_glibc=$(objdump -T target/x86_64-unknown-linux-gnu/release/ziplock-backend 2>/dev/null | grep GLIBC | sort -V | tail -3) || backend_glibc="No GLIBC symbols found"
+        backend_glibc=$(objdump -T target/x86_64-unknown-linux-gnu/release/ziplock-backend 2>/dev/null | grep GLIBC | sort -V | sed -n '$-2,$p') || backend_glibc="No GLIBC symbols found"
         echo "$backend_glibc"
         echo ""
     fi
@@ -345,7 +347,7 @@ analyze_build_results() {
     if [ -f "target/x86_64-unknown-linux-gnu/release/ziplock" ]; then
         echo "Frontend binary size: $(du -h target/x86_64-unknown-linux-gnu/release/ziplock | cut -f1)"
         echo "Frontend glibc requirements:"
-        frontend_glibc=$(objdump -T target/x86_64-unknown-linux-gnu/release/ziplock 2>/dev/null | grep GLIBC | sort -V | tail -3) || frontend_glibc="No GLIBC symbols found"
+        frontend_glibc=$(objdump -T target/x86_64-unknown-linux-gnu/release/ziplock 2>/dev/null | grep GLIBC | sort -V | sed -n '$-2,$p') || frontend_glibc="No GLIBC symbols found"
         echo "$frontend_glibc"
     fi
 

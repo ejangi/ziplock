@@ -239,7 +239,7 @@ jobs:
               cargo --version
 
               echo 'Target glibc version in container:'
-              glibc_version=\$(ldd --version 2>/dev/null | head -1) || glibc_version='unknown'
+              glibc_version=\$(ldd --version 2>/dev/null | sed -n '1p') || glibc_version='unknown'
               echo \"\$glibc_version\"
 
               echo 'Running build script...'
@@ -259,7 +259,7 @@ jobs:
                 echo 'Backend binary found:'
                 file \"\$backend_path\"
                 echo 'Backend binary dependencies (first 5):'
-                backend_deps=\$(ldd \"\$backend_path\" 2>/dev/null | head -5) || backend_deps='dependency check failed'
+                backend_deps=\$(ldd \"\$backend_path\" 2>/dev/null | sed -n '1,5p') || backend_deps='dependency check failed'
                 echo \"\$backend_deps\"
               else
                 echo 'ERROR: Backend binary not found at:' \"\$backend_path\"
@@ -272,7 +272,7 @@ jobs:
                 echo 'Frontend binary found:'
                 file \"\$frontend_path\"
                 echo 'Frontend binary dependencies (first 5):'
-                frontend_deps=\$(ldd \"\$frontend_path\" 2>/dev/null | head -5) || frontend_deps='dependency check failed'
+                frontend_deps=\$(ldd \"\$frontend_path\" 2>/dev/null | sed -n '1,5p') || frontend_deps='dependency check failed'
                 echo \"\$frontend_deps\"
               else
                 echo 'ERROR: Frontend binary not found at:' \"\$frontend_path\"
@@ -302,7 +302,8 @@ jobs:
               ./scripts/build/package-deb.sh --arch amd64
 
               # Verify package was created
-              if ! ls /workspace/target/ziplock_*_amd64.deb 1> /dev/null 2>&1; then
+              package_file=\$(ls /workspace/target/ziplock_*_amd64.deb 2>/dev/null) || package_file=''
+              if [ -z \"\$package_file\" ]; then
                 echo 'ERROR: Debian package was not created'
                 exit 1
               fi
@@ -325,7 +326,8 @@ jobs:
 
             # Check glibc version in test container
             echo 'Test container glibc version:'
-            ldd --version 2>/dev/null | head -1 || echo 'glibc version check failed'
+            glibc_version=$(ldd --version 2>/dev/null | sed -n '1p') || glibc_version='glibc version check failed'
+            echo "$glibc_version"
 
             # Install the package (this will automatically install dependencies)
             echo 'Installing ZipLock package...'
@@ -362,7 +364,8 @@ jobs:
               apt-get update > /dev/null 2>&1
               dpkg --info ./target/ziplock_*_amd64.deb
               echo 'Package file listing:'
-              dpkg --contents ./target/ziplock_*_amd64.deb | head -20
+              package_contents=$(dpkg --contents ./target/ziplock_*_amd64.deb 2>/dev/null | sed -n '1,20p') || package_contents='package listing failed'
+              echo "$package_contents"
             "
             exit 1
           }
@@ -371,23 +374,23 @@ jobs:
         run: |
           echo "=== Binary Dependency Analysis ==="
           echo "Build environment glibc version:"
-          glibc_version=$(docker run --rm ziplock-builder bash -c "ldd --version 2>/dev/null" | head -1) || glibc_version='glibc version check failed'
+          glibc_version=$(docker run --rm ziplock-builder bash -c "ldd --version 2>/dev/null | sed -n '1p'") || glibc_version='glibc version check failed'
           echo "$glibc_version"
           echo ""
           echo "Backend binary glibc requirements:"
-          backend_glibc=$(objdump -T target/x86_64-unknown-linux-gnu/release/ziplock-backend 2>/dev/null | grep GLIBC | sort -V | tail -5) || backend_glibc="No GLIBC symbols found"
+          backend_glibc=$(objdump -T target/x86_64-unknown-linux-gnu/release/ziplock-backend 2>/dev/null | grep GLIBC | sort -V | sed -n '$-4,$p') || backend_glibc="No GLIBC symbols found"
           echo "$backend_glibc"
           echo ""
           echo "Frontend binary glibc requirements:"
-          frontend_glibc=$(objdump -T target/x86_64-unknown-linux-gnu/release/ziplock 2>/dev/null | grep GLIBC | sort -V | tail -5) || frontend_glibc="No GLIBC symbols found"
+          frontend_glibc=$(objdump -T target/x86_64-unknown-linux-gnu/release/ziplock 2>/dev/null | grep GLIBC | sort -V | sed -n '$-4,$p') || frontend_glibc="No GLIBC symbols found"
           echo "$frontend_glibc"
           echo ""
           echo "Maximum glibc version required:"
           echo "Backend:"
-          backend_version=$(readelf -V target/x86_64-unknown-linux-gnu/release/ziplock-backend 2>/dev/null | grep GLIBC | sort -V | tail -1) || backend_version="No version info"
+          backend_version=$(readelf -V target/x86_64-unknown-linux-gnu/release/ziplock-backend 2>/dev/null | grep GLIBC | sort -V | sed -n '$p') || backend_version="No version info"
           echo "$backend_version"
           echo "Frontend:"
-          frontend_version=$(readelf -V target/x86_64-unknown-linux-gnu/release/ziplock 2>/dev/null | grep GLIBC | sort -V | tail -1) || frontend_version="No version info"
+          frontend_version=$(readelf -V target/x86_64-unknown-linux-gnu/release/ziplock 2>/dev/null | grep GLIBC | sort -V | sed -n '$p') || frontend_version="No version info"
           echo "$frontend_version"
           echo "================================="
 
@@ -396,7 +399,11 @@ jobs:
           echo "=== Comprehensive Package Validation ==="
 
           # Check package file exists and has reasonable size
-          PACKAGE_FILE=$(ls target/ziplock_*_amd64.deb | head -1)
+          PACKAGE_FILE=$(ls target/ziplock_*_amd64.deb 2>/dev/null | sed -n '1p') || PACKAGE_FILE=""
+          if [ -z "$PACKAGE_FILE" ]; then
+            echo "ERROR: Package file not found"
+            exit 1
+          fi
           if [ ! -f "$PACKAGE_FILE" ]; then
             echo "ERROR: Package file not found"
             exit 1
@@ -410,37 +417,58 @@ jobs:
 
           # Validate package structure
           echo "Validating package structure..."
-          dpkg-deb --contents "$PACKAGE_FILE" | grep -q "usr/bin/ziplock-backend" || {
+
+          # Use safer approach to avoid SIGPIPE errors
+          set +e  # Temporarily disable exit on error for pipe operations
+
+          backend_found=$(dpkg-deb --contents "$PACKAGE_FILE" 2>/dev/null | grep "usr/bin/ziplock-backend" | wc -l)
+          if [ "$backend_found" -eq 0 ]; then
             echo "ERROR: Backend binary not found in package"
             exit 1
-          }
-          dpkg-deb --contents "$PACKAGE_FILE" | grep -q "usr/bin/ziplock" || {
+          fi
+
+          frontend_found=$(dpkg-deb --contents "$PACKAGE_FILE" 2>/dev/null | grep "usr/bin/ziplock" | grep -v "ziplock-backend" | wc -l)
+          if [ "$frontend_found" -eq 0 ]; then
             echo "ERROR: Frontend binary not found in package"
             exit 1
-          }
-          dpkg-deb --contents "$PACKAGE_FILE" | grep -q "lib/systemd/system/ziplock-backend.service" || {
+          fi
+
+          service_found=$(dpkg-deb --contents "$PACKAGE_FILE" 2>/dev/null | grep "lib/systemd/system/ziplock-backend.service" | wc -l)
+          if [ "$service_found" -eq 0 ]; then
             echo "ERROR: Systemd service file not found in package"
             exit 1
-          }
+          fi
+
+          set -e  # Re-enable exit on error
 
           # Check package metadata
           echo "Package control information:"
-          dpkg-deb --info "$PACKAGE_FILE" | grep -E "(Package|Version|Architecture|Depends)"
+          package_info=$(dpkg-deb --info "$PACKAGE_FILE" 2>/dev/null | grep -E "(Package|Version|Architecture|Depends)") || package_info="metadata check failed"
+          echo "$package_info"
 
           # Verify binary architecture
           echo "Verifying binary architecture..."
           docker run --rm -v $PWD:/workspace ubuntu:22.04 bash -c "
+            set -euo
             cd /workspace
+            apt-get update -qq && apt-get install -y -qq file > /dev/null 2>&1
             dpkg --add-architecture amd64
             dpkg-deb --extract ./target/ziplock_*_amd64.deb /tmp/extract
-            file /tmp/extract/usr/bin/ziplock-backend | grep -q 'x86-64' || {
+
+            # Check backend binary architecture
+            backend_arch=\$(file /tmp/extract/usr/bin/ziplock-backend 2>/dev/null | grep 'x86-64') || backend_arch=''
+            if [ -z \"\$backend_arch\" ]; then
               echo 'ERROR: Backend binary is not x86-64'
               exit 1
-            }
-            file /tmp/extract/usr/bin/ziplock | grep -q 'x86-64' || {
+            fi
+
+            # Check frontend binary architecture
+            frontend_arch=\$(file /tmp/extract/usr/bin/ziplock 2>/dev/null | grep 'x86-64') || frontend_arch=''
+            if [ -z \"\$frontend_arch\" ]; then
               echo 'ERROR: Frontend binary is not x86-64'
               exit 1
-            }
+            fi
+
             echo 'Binary architecture validation: PASSED'
           "
 
@@ -457,9 +485,9 @@ jobs:
           echo "=== Build Environment ===" >> build-report.txt
           docker run --rm ziplock-builder bash -c "
             os_info=\$(cat /etc/os-release | grep PRETTY_NAME | cut -d= -f2 | tr -d \\\")
-            glibc_info=\$(ldd --version 2>/dev/null | head -1) || glibc_info='unknown'
+            glibc_info=\$(ldd --version 2>/dev/null | sed -n '1p') || glibc_info='unknown'
             rust_info=\$(rustc --version)
-            gcc_info=\$(gcc --version 2>/dev/null | head -1) || gcc_info='unknown'
+            gcc_info=\$(gcc --version 2>/dev/null | sed -n '1p') || gcc_info='unknown'
             echo \"OS: \$os_info\"
             echo \"glibc: \$glibc_info\"
             echo \"Rust: \$rust_info\"
@@ -468,7 +496,7 @@ jobs:
           echo "" >> build-report.txt
 
           echo "=== Package Information ===" >> build-report.txt
-          PACKAGE_FILE=$(ls target/ziplock_*_amd64.deb | head -1)
+          PACKAGE_FILE=$(ls target/ziplock_*_amd64.deb | sed -n '1p')
           echo "File: $(basename $PACKAGE_FILE)" >> build-report.txt
           echo "Size: $(du -h $PACKAGE_FILE | cut -f1)" >> build-report.txt
           dpkg-deb --info "$PACKAGE_FILE" | grep -E "(Package|Version|Architecture|Depends|Description)" >> build-report.txt
@@ -478,7 +506,7 @@ jobs:
           echo "Backend binary size: $(du -h target/x86_64-unknown-linux-gnu/release/ziplock-backend | cut -f1)" >> build-report.txt
           echo "Frontend binary size: $(du -h target/x86_64-unknown-linux-gnu/release/ziplock | cut -f1)" >> build-report.txt
           echo "Max glibc version required:" >> build-report.txt
-          max_glibc=$(objdump -T target/x86_64-unknown-linux-gnu/release/ziplock-backend 2>/dev/null | grep GLIBC | sort -V | tail -1) || max_glibc="No GLIBC info available"
+          max_glibc=$(objdump -T target/x86_64-unknown-linux-gnu/release/ziplock-backend 2>/dev/null | grep GLIBC | sort -V | sed -n '$p') || max_glibc="No GLIBC info available"
           echo "$max_glibc" >> build-report.txt
           echo "" >> build-report.txt
 
