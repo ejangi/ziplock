@@ -302,7 +302,7 @@ jobs:
               ./scripts/build/package-deb.sh --arch amd64
 
               # Verify package was created
-              if [ ! -f '/workspace/target/ziplock_*_amd64.deb' ]; then
+              if ! ls /workspace/target/ziplock_*_amd64.deb 1> /dev/null 2>&1; then
                 echo 'ERROR: Debian package was not created'
                 exit 1
               fi
