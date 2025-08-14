@@ -490,7 +490,8 @@ jobs:
             cd /workspace
             apt-get update -qq && apt-get install -y -qq file > /dev/null 2>&1
             dpkg --add-architecture amd64
-            dpkg-deb --extract ./target/ziplock_*_amd64.deb /tmp/extract
+            PACKAGE_FILE=\$(ls ./target/ziplock_*_amd64.deb | head -n1)
+            dpkg-deb --extract \"\$PACKAGE_FILE\" /tmp/extract
 
             # Check backend binary architecture
             backend_arch=\$(file /tmp/extract/usr/bin/ziplock-backend 2>/dev/null | grep 'x86-64') || backend_arch=''
