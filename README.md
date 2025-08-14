@@ -2,9 +2,9 @@
 
 <div align="center">
   <img src="assets/icons/ziplock-logo.svg" alt="ZipLock Logo" width="128" height="128">
-  
+
   **A secure, portable password manager using encrypted 7z archives**
-  
+
   [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE.md)
   [![Build Status](https://img.shields.io/github/workflow/status/ejangi/ziplock/CI)](https://github.com/ejangi/ziplock/actions)
   [![Security Audit](https://img.shields.io/badge/security-audited-green.svg)](docs/architecture.md#security-architecture)
@@ -49,40 +49,6 @@ Unlike cloud-based password managers, ZipLock gives you full ownership of your d
 ### Powerful Organization
 - **Full-Text Search**: Search across all credential fields instantly
 - **Smart Tagging**: Organize credentials with custom tags for easy filtering
-
-## 🔧 Build & Development
-
-### Quick Start
-
-For most users, download the pre-built packages from the [releases page](https://github.com/ejangi/ziplock/releases).
-
-### Building from Source
-
-```bash
-# Clone the repository
-git clone https://github.com/ejangi/ziplock.git
-cd ziplock
-
-# Test build locally (requires Docker)
-./scripts/build/test-build-locally.sh
-
-# Build natively (requires system dependencies)
-./scripts/build/build-linux.sh --profile release
-```
-
-### Build Troubleshooting
-
-If you encounter build issues, particularly glibc compatibility problems, see our comprehensive [Build Guide](docs/technical/build.md). The guide covers:
-
-- glibc compatibility issues and solutions
-- Containerized build process
-- Local testing with Docker
-- Common build problems and fixes
-- GitHub Actions workflow details
-
-**Note**: Our build system uses Ubuntu 22.04 containers to ensure compatibility with most Linux distributions. This resolves the common `GLIBC_2.39 not found` error.
-- **Custom Field Types**: Create your own credential templates with any combination of fields
-- **Built-in Templates**: Pre-configured templates for logins, credit cards, secure notes, and more
 
 ### Modern User Experience
 - **Clean, Flat Design**: Modern interface with dark/light theme support
@@ -142,7 +108,7 @@ ZipLock follows a secure client-server architecture designed for maximum securit
 
 ```
 ┌─────────────────┐    IPC     ┌─────────────────┐    File I/O    ┌─────────────────┐
-│  Frontend UI    │ ◄──────────► │ Backend Service │ ◄─────────────► │ Encrypted 7z    │
+│  Frontend UI    │ ◄─────────► │ Backend Service │ ◄────────────► │ Encrypted 7z    │
 │  (Platform      │             │ (Rust/Swift/    │               │ Archive         │
 │   Native)       │             │  Kotlin)        │               │                 │
 └─────────────────┘             └─────────────────┘               └─────────────────┘
@@ -220,7 +186,7 @@ For detailed build instructions, see the [Build Guide](docs/technical/build.md).
 
 ZipLock can be customized through configuration files:
 
-**Linux**: `~/.config/ziplock/config.yml`  
+**Linux**: `~/.config/ziplock/config.yml`
 **Windows**: `%APPDATA%/ZipLock/config.yml`
 
 > **⚠️ Configuration Format Change**: Starting with version 0.2.0, ZipLock uses YAML format for all configuration files instead of TOML. If you have existing `.toml` config files, run the migration script: `./scripts/migrations/migrate-config-from-toml-to-yaml.sh`
@@ -299,6 +265,7 @@ ZipLock is built on the shoulders of giants:
 - **[Iconoir](https://iconoir.com/)** - Beautiful free SVG icons used throughout the UI
 - **Rust Community** - For excellent cryptography and systems programming crates
 - **Contributors** - Everyone who has contributed code, documentation, and feedback
+- **[Zed Agenctic Editor](https://zed.dev/agentic)** - This entire app was vibe-coded with Zed's self-hosted Claude Sonnet 4 agent.
 
 ## 📞 Support
 
@@ -316,6 +283,6 @@ For enterprise deployments and professional support, contact James Angus at [jam
 ---
 
 <div align="center">
-  <p>Made with ❤️ by James Angus <james@ejangi.com></p>
+  <p>Made with ❤️ by James Angus <james@ejangi.com> using [Zed](https://zed.dev/agentic)</p>
   <p>🔐 Your security is our priority 🔐</p>
 </div>
