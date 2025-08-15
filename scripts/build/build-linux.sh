@@ -112,7 +112,6 @@ build_shared_library() {
     log_info "Building shared library with C API..."
 
     cd "$PROJECT_ROOT"
-    $CARGO_CMD build --profile "$PROFILE" --target "$TARGET_ARCH" -p ziplock-shared --features c-api
 
     # Map profile name to actual directory name
     local cargo_profile="$PROFILE"
@@ -124,12 +123,64 @@ build_shared_library() {
     local shared_lib_so="$shared_lib_dir/libziplock_shared.so"
     local shared_lib_dylib="$shared_lib_dir/libziplock_shared.dylib"
 
-    if [ ! -f "$shared_lib_so" ] && [ ! -f "$shared_lib_dylib" ]; then
-        log_error "Shared library not found at: $shared_lib_dir"
-        exit 1
+    # First attempt to build shared library
+    log_info "First attempt: Building shared library..."
+    $CARGO_CMD build --profile "$PROFILE" --target "$TARGET_ARCH" -p ziplock-shared --features c-api
+
+    # Verify the shared library was created
+    if [ -f "$shared_lib_so" ] || [ -f "$shared_lib_dylib" ]; then
+        log_success "Shared library built successfully on first attempt"
+        if [ -f "$shared_lib_so" ]; then
+            log_info "Shared library (.so): $(ls -la "$shared_lib_so")"
+        fi
+        if [ -f "$shared_lib_dylib" ]; then
+            log_info "Shared library (.dylib): $(ls -la "$shared_lib_dylib")"
+        fi
+        return 0
     fi
 
-    log_success "Shared library with C API built successfully"
+    # If first attempt failed, try with clean build
+    log_warning "Shared library not found after first attempt, trying clean build..."
+    $CARGO_CMD clean -p ziplock-shared
+    $CARGO_CMD build --profile "$PROFILE" --target "$TARGET_ARCH" -p ziplock-shared --features c-api --verbose
+
+    # Second verification
+    if [ -f "$shared_lib_so" ] || [ -f "$shared_lib_dylib" ]; then
+        log_success "Shared library built successfully on second attempt"
+        if [ -f "$shared_lib_so" ]; then
+            log_info "Shared library (.so): $(ls -la "$shared_lib_so")"
+        fi
+        if [ -f "$shared_lib_dylib" ]; then
+            log_info "Shared library (.dylib): $(ls -la "$shared_lib_dylib")"
+        fi
+        return 0
+    fi
+
+    # Final attempt with explicit cdylib build
+    log_warning "Shared library still not found, trying explicit cdylib build..."
+    RUSTFLAGS="--cfg cdylib" $CARGO_CMD build --profile "$PROFILE" --target "$TARGET_ARCH" -p ziplock-shared --features c-api --verbose
+
+    # Final verification
+    if [ -f "$shared_lib_so" ] || [ -f "$shared_lib_dylib" ]; then
+        log_success "Shared library built successfully on final attempt"
+        if [ -f "$shared_lib_so" ]; then
+            log_info "Shared library (.so): $(ls -la "$shared_lib_so")"
+        fi
+        if [ -f "$shared_lib_dylib" ]; then
+            log_info "Shared library (.dylib): $(ls -la "$shared_lib_dylib")"
+        fi
+        return 0
+    fi
+
+    # If all attempts failed, show debug information
+    log_error "Shared library not found after all attempts at: $shared_lib_dir"
+    log_info "Available files in target directory:"
+    find "$RUST_TARGET_DIR" -name "libziplock*" -type f 2>/dev/null || log_warning "No libziplock files found"
+    log_info "Available .so files in target directory:"
+    find "$RUST_TARGET_DIR" -name "*.so" -type f 2>/dev/null | head -10 || log_warning "No .so files found"
+    log_info "Cargo target directory contents:"
+    ls -la "$shared_lib_dir/" 2>/dev/null || log_warning "Target directory not accessible"
+    exit 1
 }
 
 build_unified_application() {
@@ -266,14 +317,40 @@ create_install_structure() {
         exit 1
     fi
 
-    # Copy shared library
+    # Copy shared library with robust verification
     local shared_lib_dir="$RUST_TARGET_DIR/$TARGET_ARCH/$cargo_profile"
+    local shared_lib_copied=false
+
+    log_info "Copying shared library from: $shared_lib_dir"
+
     if [ -f "$shared_lib_dir/libziplock_shared.so" ]; then
+        log_info "Found .so shared library, copying..."
         cp "$shared_lib_dir/libziplock_shared.so" "$install_dir/usr/lib/"
+        log_info "Copied shared library: $(ls -la "$install_dir/usr/lib/libziplock_shared.so")"
+        shared_lib_copied=true
     elif [ -f "$shared_lib_dir/libziplock_shared.dylib" ]; then
+        log_info "Found .dylib shared library, copying..."
         cp "$shared_lib_dir/libziplock_shared.dylib" "$install_dir/usr/lib/"
-    else
+        log_info "Copied shared library: $(ls -la "$install_dir/usr/lib/libziplock_shared.dylib")"
+        shared_lib_copied=true
+    fi
+
+    if [ "$shared_lib_copied" = false ]; then
         log_error "Shared library not found in: $shared_lib_dir"
+        log_info "Available files in shared library directory:"
+        ls -la "$shared_lib_dir/" 2>/dev/null || log_warning "Directory not accessible"
+        log_info "Searching for shared library files:"
+        find "$RUST_TARGET_DIR" -name "libziplock_shared.*" -type f 2>/dev/null || log_warning "No shared library files found"
+        exit 1
+    fi
+
+    # Verify the copied shared library
+    if [ -f "$install_dir/usr/lib/libziplock_shared.so" ]; then
+        log_success "Shared library successfully installed: $(ls -la "$install_dir/usr/lib/libziplock_shared.so")"
+    elif [ -f "$install_dir/usr/lib/libziplock_shared.dylib" ]; then
+        log_success "Shared library successfully installed: $(ls -la "$install_dir/usr/lib/libziplock_shared.dylib")"
+    else
+        log_error "Shared library was not properly copied to install directory"
         exit 1
     fi
 

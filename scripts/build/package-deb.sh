@@ -76,7 +76,6 @@ verify_build() {
     # Check required files
     local required_files=(
         "$install_dir/usr/bin/ziplock"
-        "$install_dir/usr/lib/libziplock_shared.so"
         "$install_dir/etc/ziplock/config.yml"
         "$install_dir/usr/share/applications/ziplock.desktop"
     )
@@ -88,7 +87,26 @@ verify_build() {
         fi
     done
 
-    log_success "Build artifacts verified"
+    # Special check for shared library (could be .so or .dylib)
+    local shared_lib_found=false
+    if [ -f "$install_dir/usr/lib/libziplock_shared.so" ]; then
+        log_info "Found shared library (.so): $(ls -la "$install_dir/usr/lib/libziplock_shared.so")"
+        shared_lib_found=true
+    elif [ -f "$install_dir/usr/lib/libziplock_shared.dylib" ]; then
+        log_info "Found shared library (.dylib): $(ls -la "$install_dir/usr/lib/libziplock_shared.dylib")"
+        shared_lib_found=true
+    fi
+
+    if [ "$shared_lib_found" = false ]; then
+        log_error "Required shared library missing: $install_dir/usr/lib/libziplock_shared.so"
+        log_info "Available files in usr/lib:"
+        ls -la "$install_dir/usr/lib/" 2>/dev/null || log_warning "usr/lib directory not found"
+        log_info "Searching for any ziplock libraries:"
+        find "$install_dir" -name "*ziplock*" -type f 2>/dev/null || log_warning "No ziplock files found"
+        exit 1
+    fi
+
+    log_success "Build artifacts verified including shared library"
 }
 
 calculate_installed_size() {
@@ -364,6 +382,27 @@ build_package() {
     find "$deb_dir" -type f -path "*/bin/*" -exec chmod 755 {} \;
     [ -f "$deb_dir/usr/share/applications/ziplock.desktop" ] && chmod 644 "$deb_dir/usr/share/applications/ziplock.desktop"
     [ -f "$deb_dir/usr/lib/libziplock_shared.so" ] && chmod 644 "$deb_dir/usr/lib/libziplock_shared.so"
+    [ -f "$deb_dir/usr/lib/libziplock_shared.dylib" ] && chmod 644 "$deb_dir/usr/lib/libziplock_shared.dylib"
+
+    # Verify shared library is present before building package
+    log_info "Verifying shared library presence in package structure..."
+    local shared_lib_in_package=false
+    if [ -f "$deb_dir/usr/lib/libziplock_shared.so" ]; then
+        log_info "Shared library (.so) found in package: $(ls -la "$deb_dir/usr/lib/libziplock_shared.so")"
+        shared_lib_in_package=true
+    elif [ -f "$deb_dir/usr/lib/libziplock_shared.dylib" ]; then
+        log_info "Shared library (.dylib) found in package: $(ls -la "$deb_dir/usr/lib/libziplock_shared.dylib")"
+        shared_lib_in_package=true
+    fi
+
+    if [ "$shared_lib_in_package" = false ]; then
+        log_error "Shared library missing from package structure"
+        log_info "Contents of package usr/lib directory:"
+        ls -la "$deb_dir/usr/lib/" 2>/dev/null || log_warning "usr/lib directory not found in package"
+        log_info "All files in package:"
+        find "$deb_dir" -type f | head -20
+        exit 1
+    fi
 
     # Debug: Show package structure before building
     log_info "Package structure summary:"
