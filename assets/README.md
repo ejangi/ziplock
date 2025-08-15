@@ -48,11 +48,11 @@ When adding new icons to the project:
 1. Download the SVG from [Iconoir](https://iconoir.com/)
 2. Place it in the `icons/` directory
 3. Update the frontend theme files to include the new icon
-4. Copy the icon to all frontend resource directories:
-   - `frontend/linux/resources/icons/`
-   - `frontend/windows/resources/icons/`
-   - `frontend/mobile/android/app/src/main/res/drawable/`
-   - `frontend/mobile/ios/ZipLock/Resources/`
+4. Copy the icon to all app resource directories:
+   - `apps/linux/resources/icons/`
+   - `apps/windows/resources/icons/`
+   - `apps/mobile/android/app/src/main/res/drawable/`
+   - `apps/mobile/ios/ZipLock/Resources/`
 5. Update this README to document the new icon
 
 ## Acknowledgments

@@ -270,7 +270,7 @@ ZipLockCore.getInstance().enableDebugLogging(true)
 
 Complete working examples are available in:
 - [Mobile Integration Guide](mobile-integration.md) - Complete iOS and Android integration examples
-- [IPC Client Examples](ipc-client-examples.md) - Backend communication patterns
+- [Mobile Integration](mobile-integration.md) - Platform-specific integration examples
 
 ## Support
 

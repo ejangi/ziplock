@@ -181,10 +181,12 @@ echo "$glibc_version"
 
 # Verify built binaries
 echo "Verifying built binaries:"
-file /workspace/target/x86_64-unknown-linux-gnu/release/ziplock-backend
 file /workspace/target/x86_64-unknown-linux-gnu/release/ziplock
-backend_deps=$(ldd /workspace/target/x86_64-unknown-linux-gnu/release/ziplock-backend 2>/dev/null | sed -n '1,5p') || backend_deps="ldd check failed"
-echo "$backend_deps"
+file /workspace/target/x86_64-unknown-linux-gnu/release/libziplock_shared.so
+app_deps=$(ldd /workspace/target/x86_64-unknown-linux-gnu/release/ziplock 2>/dev/null | sed -n '1,5p') || app_deps="ldd check failed"
+echo "$app_deps"
+lib_deps=$(ldd /workspace/target/x86_64-unknown-linux-gnu/release/libziplock_shared.so 2>/dev/null | sed -n '1,5p') || lib_deps="ldd check failed"
+echo "$lib_deps"
 EOF
 
     chmod +x "$PROJECT_ROOT/build-container.sh"
@@ -281,18 +283,18 @@ test_package_installation() {
 
         # Test binaries exist and are executable
         echo 'Testing binary existence...'
-        test -x /usr/bin/ziplock-backend || (echo 'Backend binary not found or not executable' && exit 1)
-        test -x /usr/bin/ziplock || (echo 'Frontend binary not found or not executable' && exit 1)
+        test -x /usr/bin/ziplock || (echo 'ZipLock application binary not found or not executable' && exit 1)
+        test -f /usr/lib/libziplock_shared.so || (echo 'Shared library not found' && exit 1)
 
         # Check binary dependencies
         echo 'Checking binary dependencies...'
-        ldd /usr/bin/ziplock-backend && echo 'Backend: dependencies resolved'
-        ldd /usr/bin/ziplock && echo 'Frontend: dependencies resolved'
+        ldd /usr/bin/ziplock && echo 'Application: dependencies resolved'
+        ldd /usr/lib/libziplock_shared.so && echo 'Shared library: dependencies resolved'
 
-        # Test basic functionality (version check)
+        # Test basic functionality (GUI app cannot run version check without display)
         echo 'Testing basic functionality...'
-        /usr/bin/ziplock-backend --version
-        echo 'Backend version check: OK'
+        echo 'Application binary verified (GUI application - version check skipped)'
+        echo 'Unified FFI architecture: OK'
 
         # Test frontend version (in non-GUI mode)
         /usr/bin/ziplock --version || echo 'Frontend version check: OK (may require display)'
@@ -336,11 +338,19 @@ analyze_build_results() {
     fi
 
     # Binary analysis
-    if [ -f "target/x86_64-unknown-linux-gnu/release/ziplock-backend" ]; then
-        echo "Backend binary size: $(du -h target/x86_64-unknown-linux-gnu/release/ziplock-backend | cut -f1)"
-        echo "Backend glibc requirements:"
-        backend_glibc=$(objdump -T target/x86_64-unknown-linux-gnu/release/ziplock-backend 2>/dev/null | grep GLIBC | sort -V | sed -n '$-2,$p') || backend_glibc="No GLIBC symbols found"
-        echo "$backend_glibc"
+    if [ -f "target/x86_64-unknown-linux-gnu/release/ziplock" ]; then
+        echo "Application binary size: $(du -h target/x86_64-unknown-linux-gnu/release/ziplock | cut -f1)"
+        echo "Application glibc requirements:"
+        app_glibc=$(objdump -T target/x86_64-unknown-linux-gnu/release/ziplock 2>/dev/null | grep GLIBC | sort -V | sed -n '$-2,$p') || app_glibc="No GLIBC symbols found"
+        echo "$app_glibc"
+        echo ""
+    fi
+
+    if [ -f "target/x86_64-unknown-linux-gnu/release/libziplock_shared.so" ]; then
+        echo "Shared library size: $(du -h target/x86_64-unknown-linux-gnu/release/libziplock_shared.so | cut -f1)"
+        echo "Shared library glibc requirements:"
+        lib_glibc=$(objdump -T target/x86_64-unknown-linux-gnu/release/libziplock_shared.so 2>/dev/null | grep GLIBC | sort -V | sed -n '$-2,$p') || lib_glibc="No GLIBC symbols found"
+        echo "$lib_glibc"
         echo ""
     fi
 

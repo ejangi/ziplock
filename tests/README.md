@@ -172,9 +172,9 @@ Invalid Operations → Verify Graceful Failures → Data Integrity Maintained
 
 ### 1. Check Test Logs
 ```bash
-# Test output is saved to test-results/
-cat test-results/integration-tests.log
-cat test-results/backend.log
+# Test output is saved to tests/results/
+cat tests/results/integration-tests.log
+cat tests/results/backend.log
 ```
 
 ### 2. Check Backend Status

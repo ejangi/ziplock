@@ -1,834 +1,601 @@
-//! C FFI (Foreign Function Interface) bindings for ZipLock shared library
+//! FFI (Foreign Function Interface) layer for ZipLock shared library
 //!
-//! This module provides C-compatible functions that can be called from Swift (iOS)
-//! and Kotlin (Android) to access ZipLock's core functionality. The API is designed
-//! to be safe, efficient, and easy to use from mobile platforms.
-//!
-//! # Safety
-//!
-//! All C functions are marked as `unsafe` but internally use safe Rust patterns.
-//! The caller is responsible for:
-//! - Passing valid pointers
-//! - Not using freed memory
-//! - Proper string encoding (UTF-8)
-//!
-//! # Memory Management
-//!
-//! - All returned pointers must be freed using the appropriate `*_free` functions
-//! - Strings are allocated using `CString` and must be freed with `ziplock_string_free`
-//! - Structs are boxed and must be freed with their respective free functions
-//!
-//! # Error Handling
-//!
-//! Functions return error codes where:
-//! - 0 = Success
-//! - Negative values = Error codes (see `ZipLockError` enum)
+//! This module provides C-compatible bindings for the ZipLock shared library,
+//! enabling integration with mobile platforms (iOS, Android) and other languages
+//! that can interface with C libraries.
 
+#![allow(static_mut_refs)] // FFI requires static mut for C compatibility
+
+use crate::api::{ApiSession, ZipLockApi};
+use crate::archive::ArchiveConfig;
+use crate::models::CredentialRecord;
+use std::collections::HashMap;
 use std::ffi::{CStr, CString};
-use std::os::raw::{c_char, c_int, c_uint};
+use std::os::raw::{c_char, c_int, c_void};
+use std::path::PathBuf;
 use std::ptr;
-use std::slice;
+use std::sync::{Arc, Mutex};
+use tokio::runtime::Runtime;
 
-use crate::models::{CredentialRecord, FieldType};
-use crate::utils::{PasswordOptions, PasswordUtils};
-use crate::validation::PassphraseValidator;
-
-// ============================================================================
-// Error Codes
-// ============================================================================
-
-/// Error codes returned by C API functions
+/// Error codes for FFI operations
 #[repr(C)]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ZipLockError {
     Success = 0,
-    InvalidPointer = -1,
-    InvalidString = -2,
-    InvalidField = -3,
-    ValidationFailed = -4,
-    SerializationFailed = -5,
-    NotFound = -6,
-    AlreadyExists = -7,
-    InternalError = -8,
+    InvalidParameter = 1,
+    NotInitialized = 2,
+    AlreadyInitialized = 3,
+    ArchiveNotFound = 4,
+    ArchiveCorrupted = 5,
+    InvalidPassword = 6,
+    PermissionDenied = 7,
+    OutOfMemory = 8,
+    InternalError = 9,
+    SessionNotFound = 10,
+    SessionExpired = 11,
+    ArchiveNotOpen = 12,
+    CredentialNotFound = 13,
+    ValidationFailed = 14,
+    CryptoError = 15,
+    IoError = 16,
 }
 
-impl From<ZipLockError> for c_int {
-    fn from(error: ZipLockError) -> Self {
-        error as c_int
-    }
-}
-
-// ============================================================================
-// C-Compatible Data Structures
-// ============================================================================
-
-/// C-compatible credential record
+/// C-compatible credential record structure
 #[repr(C)]
 pub struct CCredentialRecord {
     pub id: *mut c_char,
     pub title: *mut c_char,
     pub credential_type: *mut c_char,
     pub notes: *mut c_char,
-    pub field_count: c_uint,
-    pub fields: *mut CCredentialField,
-    pub tag_count: c_uint,
-    pub tags: *mut *mut c_char,
     pub created_at: i64,
     pub updated_at: i64,
+    pub field_count: usize,
+    pub fields: *mut CCredentialField,
+    pub tag_count: usize,
+    pub tags: *mut *mut c_char,
 }
 
-/// C-compatible credential field
+/// C-compatible credential field structure
 #[repr(C)]
 pub struct CCredentialField {
     pub name: *mut c_char,
-    pub field_type: c_int, // Maps to FieldType enum
     pub value: *mut c_char,
+    pub field_type: *mut c_char,
     pub label: *mut c_char,
-    pub sensitive: c_int, // 0 = false, 1 = true
+    pub sensitive: c_int,
+    pub required: c_int,
 }
 
-/// C-compatible password strength result
-#[repr(C)]
-pub struct CPasswordStrength {
-    pub level: c_int, // Maps to PasswordStrength enum
-    pub score: c_uint,
-    pub description: *mut c_char,
-}
-
-/// C-compatible validation result
+/// C-compatible validation result structure
 #[repr(C)]
 pub struct CValidationResult {
-    pub is_valid: c_int, // 0 = false, 1 = true
-    pub error_count: c_uint,
-    pub errors: *mut *mut c_char,
+    pub is_valid: c_int,
+    pub can_auto_repair: c_int,
+    pub issue_count: usize,
+    pub issues: *mut *mut c_char,
 }
 
-/// C-compatible search result
-#[repr(C)]
-pub struct CSearchResult {
-    pub credential_count: c_uint,
-    pub credentials: *mut CCredentialRecord,
+/// Global state for the FFI layer
+struct FFIState {
+    api: Option<Arc<ZipLockApi>>,
+    runtime: Option<Runtime>,
+    sessions: HashMap<String, ApiSession>,
 }
 
-// ============================================================================
-// Helper Functions
-// ============================================================================
+static mut FFI_STATE: Option<Mutex<FFIState>> = None;
 
-/// Convert Rust string to C string (caller must free)
-unsafe fn string_to_c_char(s: &str) -> *mut c_char {
-    match CString::new(s) {
-        Ok(c_string) => c_string.into_raw(),
-        Err(_) => ptr::null_mut(),
-    }
+/// Get access to the global FFI state (for internal use by client module)
+pub unsafe fn get_ffi_state() -> Option<&'static Mutex<FFIState>> {
+    FFI_STATE.as_ref()
 }
-
-/// Convert C string to Rust string
-unsafe fn c_char_to_string(ptr: *const c_char) -> Result<String, ZipLockError> {
-    if ptr.is_null() {
-        return Err(ZipLockError::InvalidPointer);
-    }
-
-    CStr::from_ptr(ptr)
-        .to_str()
-        .map(|s| s.to_string())
-        .map_err(|_| ZipLockError::InvalidString)
-}
-
-/// Convert FieldType to C int
-fn field_type_to_c_int(field_type: &FieldType) -> c_int {
-    match field_type {
-        FieldType::Text => 0,
-        FieldType::Password => 1,
-        FieldType::Email => 2,
-        FieldType::Url => 3,
-        FieldType::Username => 4,
-        FieldType::Phone => 5,
-        FieldType::CreditCardNumber => 6,
-        FieldType::ExpiryDate => 7,
-        FieldType::Cvv => 8,
-        FieldType::TotpSecret => 9,
-        FieldType::TextArea => 10,
-        FieldType::Number => 11,
-        FieldType::Date => 12,
-        FieldType::Custom(_) => 13,
-    }
-}
-
-/// Convert C int to FieldType
-fn c_int_to_field_type(value: c_int) -> FieldType {
-    match value {
-        0 => FieldType::Text,
-        1 => FieldType::Password,
-        2 => FieldType::Email,
-        3 => FieldType::Url,
-        4 => FieldType::Username,
-        5 => FieldType::Phone,
-        6 => FieldType::CreditCardNumber,
-        7 => FieldType::ExpiryDate,
-        8 => FieldType::Cvv,
-        9 => FieldType::TotpSecret,
-        10 => FieldType::TextArea,
-        11 => FieldType::Number,
-        12 => FieldType::Date,
-        _ => FieldType::Text, // Default fallback
-    }
-}
-
-/// Convert CredentialRecord to C structure
-unsafe fn credential_to_c(record: &CredentialRecord) -> Result<CCredentialRecord, ZipLockError> {
-    let id = string_to_c_char(&record.id);
-    let title = string_to_c_char(&record.title);
-    let credential_type = string_to_c_char(&record.credential_type);
-    let notes = string_to_c_char(record.notes.as_deref().unwrap_or(""));
-
-    // Convert fields
-    let field_count = record.fields.len() as c_uint;
-    let fields = if field_count > 0 {
-        let fields_vec: Vec<CCredentialField> = record
-            .fields
-            .iter()
-            .map(|(name, field)| CCredentialField {
-                name: string_to_c_char(name),
-                field_type: field_type_to_c_int(&field.field_type),
-                value: string_to_c_char(&field.value),
-                label: string_to_c_char(field.label.as_deref().unwrap_or("")),
-                sensitive: if field.sensitive { 1 } else { 0 },
-            })
-            .collect();
-
-        let boxed = fields_vec.into_boxed_slice();
-        Box::into_raw(boxed) as *mut CCredentialField
-    } else {
-        ptr::null_mut()
-    };
-
-    // Convert tags
-    let tag_count = record.tags.len() as c_uint;
-    let tags = if tag_count > 0 {
-        let tags_vec: Vec<*mut c_char> = record
-            .tags
-            .iter()
-            .map(|tag| string_to_c_char(tag))
-            .collect();
-
-        let boxed = tags_vec.into_boxed_slice();
-        Box::into_raw(boxed) as *mut *mut c_char
-    } else {
-        ptr::null_mut()
-    };
-
-    Ok(CCredentialRecord {
-        id,
-        title,
-        credential_type,
-        notes,
-        field_count,
-        fields,
-        tag_count,
-        tags,
-        created_at: record
-            .created_at
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs() as i64,
-        updated_at: record
-            .updated_at
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs() as i64,
-    })
-}
-
-// ============================================================================
-// Public C API Functions
-// ============================================================================
 
 /// Initialize the ZipLock library
-/// Returns 0 on success, negative error code on failure
 #[no_mangle]
 pub extern "C" fn ziplock_init() -> c_int {
-    // Initialize logging if needed
-    ZipLockError::Success.into()
-}
-
-/// Free a string allocated by the library
-///
-/// # Safety
-///
-/// The caller must ensure that:
-/// - `ptr` was allocated by this library (e.g., returned from other functions)
-/// - `ptr` is not used after this call
-/// - `ptr` can be null (this function handles null pointers safely)
-#[no_mangle]
-pub unsafe extern "C" fn ziplock_string_free(ptr: *mut c_char) {
-    if !ptr.is_null() {
-        let _ = CString::from_raw(ptr);
-    }
-}
-
-/// Free a credential record allocated by the library
-///
-/// # Safety
-///
-/// The caller must ensure that:
-/// - `credential` was allocated by this library (e.g., from `ziplock_credential_new`)
-/// - `credential` is not used after this call
-/// - `credential` can be null (this function handles null pointers safely)
-#[no_mangle]
-pub unsafe extern "C" fn ziplock_credential_free(credential: *mut CCredentialRecord) {
-    if credential.is_null() {
-        return;
-    }
-
-    let cred = Box::from_raw(credential);
-
-    // Free all owned strings
-    ziplock_string_free(cred.id);
-    ziplock_string_free(cred.title);
-    ziplock_string_free(cred.credential_type);
-    ziplock_string_free(cred.notes);
-
-    // Free fields
-    if !cred.fields.is_null() && cred.field_count > 0 {
-        let fields = slice::from_raw_parts_mut(cred.fields, cred.field_count as usize);
-        for field in fields {
-            ziplock_string_free(field.name);
-            ziplock_string_free(field.value);
-            ziplock_string_free(field.label);
+    unsafe {
+        if FFI_STATE.is_some() {
+            return ZipLockError::AlreadyInitialized as c_int;
         }
-        let _ = Box::from_raw(slice::from_raw_parts_mut(
-            cred.fields,
-            cred.field_count as usize,
-        ));
-    }
 
-    // Free tags
-    if !cred.tags.is_null() && cred.tag_count > 0 {
-        let tags = slice::from_raw_parts_mut(cred.tags, cred.tag_count as usize);
-        for tag in tags {
-            ziplock_string_free(*tag);
-        }
-        let _ = Box::from_raw(slice::from_raw_parts_mut(
-            cred.tags,
-            cred.tag_count as usize,
-        ));
+        let runtime = match Runtime::new() {
+            Ok(rt) => rt,
+            Err(_) => return ZipLockError::InternalError as c_int,
+        };
+
+        let config = ArchiveConfig::default();
+        let api = match ZipLockApi::new(config) {
+            Ok(api) => Arc::new(api),
+            Err(_) => return ZipLockError::InternalError as c_int,
+        };
+
+        let state = FFIState {
+            api: Some(api),
+            runtime: Some(runtime),
+            sessions: HashMap::new(),
+        };
+
+        FFI_STATE = Some(Mutex::new(state));
+        ZipLockError::Success as c_int
     }
 }
 
-/// Create a new credential record
-/// Returns pointer to new credential or null on error
-///
-/// # Safety
-///
-/// The caller must ensure that:
-/// - `title` and `credential_type` are valid, null-terminated C strings
-/// - The returned pointer is freed with `ziplock_credential_free`
+/// Shutdown the ZipLock library
 #[no_mangle]
-pub unsafe extern "C" fn ziplock_credential_new(
-    title: *const c_char,
-    credential_type: *const c_char,
-) -> *mut CCredentialRecord {
-    let title_str = match c_char_to_string(title) {
-        Ok(s) => s,
-        Err(_) => return ptr::null_mut(),
-    };
+pub extern "C" fn ziplock_shutdown() -> c_int {
+    unsafe {
+        if let Some(state_mutex) = FFI_STATE.take() {
+            let mut state = match state_mutex.lock() {
+                Ok(state) => state,
+                Err(_) => return ZipLockError::InternalError as c_int,
+            };
 
-    let type_str = match c_char_to_string(credential_type) {
-        Ok(s) => s,
-        Err(_) => return ptr::null_mut(),
-    };
+            state.api = None;
+            state.runtime = None;
+            state.sessions.clear();
+        }
+    }
+    ZipLockError::Success as c_int
+}
 
-    let record = CredentialRecord::new(title_str, type_str);
+/// Create a new session
+#[no_mangle]
+pub extern "C" fn ziplock_session_create() -> *mut c_char {
+    unsafe {
+        let state_mutex = match FFI_STATE.as_ref() {
+            Some(state) => state,
+            None => return ptr::null_mut(),
+        };
 
-    match credential_to_c(&record) {
-        Ok(c_record) => Box::into_raw(Box::new(c_record)),
-        Err(_) => ptr::null_mut(),
+        let mut state = match state_mutex.lock() {
+            Ok(state) => state,
+            Err(_) => return ptr::null_mut(),
+        };
+
+        let api = match state.api.as_ref() {
+            Some(api) => api,
+            None => return ptr::null_mut(),
+        };
+
+        let _runtime = match state.runtime.as_ref() {
+            Some(rt) => rt,
+            None => return ptr::null_mut(),
+        };
+
+        let session = match api.create_session() {
+            Ok(session) => session,
+            Err(_) => return ptr::null_mut(),
+        };
+
+        let session_id = session.session_id.clone();
+        state.sessions.insert(session_id.clone(), session);
+
+        match CString::new(session_id) {
+            Ok(cstring) => cstring.into_raw(),
+            Err(_) => ptr::null_mut(),
+        }
     }
 }
 
-/// Add a field to a credential record
-///
-/// # Safety
-///
-/// The caller must ensure that:
-/// - `credential` is a valid pointer to a CCredentialRecord
-/// - `name`, `value`, and `label` are valid, null-terminated C strings
-/// - `field_type` corresponds to a valid CredentialFieldType
-pub unsafe extern "C" fn ziplock_credential_add_field(
-    credential: *mut CCredentialRecord,
-    name: *const c_char,
-    field_type: c_int,
-    value: *const c_char,
-    label: *const c_char,
-    _sensitive: c_int,
+/// Create a new archive
+#[no_mangle]
+pub extern "C" fn ziplock_archive_create(
+    path: *const c_char,
+    master_password: *const c_char,
 ) -> c_int {
-    if credential.is_null() {
-        return ZipLockError::InvalidPointer.into();
+    if path.is_null() || master_password.is_null() {
+        return ZipLockError::InvalidParameter as c_int;
     }
 
-    let _name_str = match c_char_to_string(name) {
-        Ok(s) => s,
-        Err(e) => return e.into(),
-    };
+    unsafe {
+        let state_mutex = match FFI_STATE.as_ref() {
+            Some(state) => state,
+            None => return ZipLockError::NotInitialized as c_int,
+        };
 
-    let _value_str = match c_char_to_string(value) {
-        Ok(s) => s,
-        Err(e) => return e.into(),
-    };
+        let state = match state_mutex.lock() {
+            Ok(state) => state,
+            Err(_) => return ZipLockError::InternalError as c_int,
+        };
 
-    let _label_str = if label.is_null() {
-        None
-    } else {
-        c_char_to_string(label).ok()
-    };
+        let api = match state.api.as_ref() {
+            Some(api) => api,
+            None => return ZipLockError::NotInitialized as c_int,
+        };
 
-    let _field_type = c_int_to_field_type(field_type);
+        let runtime = match state.runtime.as_ref() {
+            Some(rt) => rt,
+            None => return ZipLockError::InternalError as c_int,
+        };
 
-    // This is a simplified version - in a real implementation,
-    // you'd need to convert back from C struct to Rust struct,
-    // modify it, and convert back to C struct
-    ZipLockError::Success.into()
-}
+        let path_str = match CStr::from_ptr(path).to_str() {
+            Ok(s) => s,
+            Err(_) => return ZipLockError::InvalidParameter as c_int,
+        };
 
-/// Validate a password and return strength information
-///
-/// # Safety
-///
-/// The caller must ensure that:
-/// - `password` is a valid, null-terminated C string
-/// - The returned pointer is freed with `ziplock_password_strength_free`
-pub unsafe extern "C" fn ziplock_validate_password(
-    password: *const c_char,
-) -> *mut CPasswordStrength {
-    let password_str = match c_char_to_string(password) {
-        Ok(s) => s,
-        Err(_) => return ptr::null_mut(),
-    };
+        let password_str = match CStr::from_ptr(master_password).to_str() {
+            Ok(s) => s,
+            Err(_) => return ZipLockError::InvalidParameter as c_int,
+        };
 
-    let validator = PassphraseValidator::default();
-    let result = validator.validate(&password_str);
+        let path_buf = PathBuf::from(path_str);
 
-    let level_description = match result.level {
-        crate::validation::StrengthLevel::VeryWeak => "Very Weak",
-        crate::validation::StrengthLevel::Weak => "Weak",
-        crate::validation::StrengthLevel::Fair => "Fair",
-        crate::validation::StrengthLevel::Good => "Good",
-        crate::validation::StrengthLevel::Strong => "Strong",
-        crate::validation::StrengthLevel::VeryStrong => "Very Strong",
-    };
-
-    let strength = CPasswordStrength {
-        level: match result.level {
-            crate::validation::StrengthLevel::VeryWeak => 0,
-            crate::validation::StrengthLevel::Weak => 1,
-            crate::validation::StrengthLevel::Fair => 2,
-            crate::validation::StrengthLevel::Good => 3,
-            crate::validation::StrengthLevel::Strong => 4,
-            crate::validation::StrengthLevel::VeryStrong => 5,
-        },
-        score: result.score as c_uint,
-        description: string_to_c_char(level_description),
-    };
-
-    Box::into_raw(Box::new(strength))
-}
-
-/// Free a password strength result
-///
-/// # Safety
-///
-/// The caller must ensure that:
-/// - `strength` was allocated by this library (e.g., from `ziplock_validate_password`)
-/// - `strength` is not used after this call
-/// - `strength` can be null (this function handles null pointers safely)
-#[no_mangle]
-pub unsafe extern "C" fn ziplock_password_strength_free(strength: *mut CPasswordStrength) {
-    if !strength.is_null() {
-        let strength = Box::from_raw(strength);
-        ziplock_string_free(strength.description);
+        match runtime.block_on(api.create_archive(path_buf, password_str.to_string())) {
+            Ok(_) => ZipLockError::Success as c_int,
+            Err(_) => ZipLockError::InternalError as c_int,
+        }
     }
 }
 
-/// Generate a secure password
+/// Open an existing archive
 #[no_mangle]
-/// Generate a random password with specified criteria
-///
-/// # Safety
-///
-/// The caller must ensure that:
-/// - The returned C string is freed with `ziplock_string_free`
-/// - `length` is a reasonable value (not excessively large)
-pub unsafe extern "C" fn ziplock_generate_password(
-    length: c_uint,
-    include_uppercase: c_int,
-    include_lowercase: c_int,
-    include_numbers: c_int,
-    include_symbols: c_int,
-) -> *mut c_char {
-    let options = PasswordOptions {
-        length: length as usize,
-        include_uppercase: include_uppercase != 0,
-        include_lowercase: include_lowercase != 0,
-        include_numbers: include_numbers != 0,
-        include_symbols: include_symbols != 0,
-    };
+pub extern "C" fn ziplock_archive_open(
+    path: *const c_char,
+    master_password: *const c_char,
+) -> c_int {
+    if path.is_null() || master_password.is_null() {
+        return ZipLockError::InvalidParameter as c_int;
+    }
 
-    match PasswordUtils::generate_password(options) {
-        Ok(password) => string_to_c_char(&password),
-        Err(_) => ptr::null_mut(),
+    unsafe {
+        let state_mutex = match FFI_STATE.as_ref() {
+            Some(state) => state,
+            None => return ZipLockError::NotInitialized as c_int,
+        };
+
+        let state = match state_mutex.lock() {
+            Ok(state) => state,
+            Err(_) => return ZipLockError::InternalError as c_int,
+        };
+
+        let api = match state.api.as_ref() {
+            Some(api) => api,
+            None => return ZipLockError::NotInitialized as c_int,
+        };
+
+        let runtime = match state.runtime.as_ref() {
+            Some(rt) => rt,
+            None => return ZipLockError::InternalError as c_int,
+        };
+
+        let path_str = match CStr::from_ptr(path).to_str() {
+            Ok(s) => s,
+            Err(_) => return ZipLockError::InvalidParameter as c_int,
+        };
+
+        let password_str = match CStr::from_ptr(master_password).to_str() {
+            Ok(s) => s,
+            Err(_) => return ZipLockError::InvalidParameter as c_int,
+        };
+
+        let path_buf = PathBuf::from(path_str);
+
+        match runtime.block_on(api.open_archive(path_buf, password_str.to_string())) {
+            Ok(_) => ZipLockError::Success as c_int,
+            Err(_) => ZipLockError::InternalError as c_int,
+        }
     }
 }
 
-/// Validate an email address
-///
-/// # Safety
-///
-/// The caller must ensure that:
-/// - `email` is a valid, null-terminated C string
+/// Close the current archive
 #[no_mangle]
-pub unsafe extern "C" fn ziplock_validate_email(email: *const c_char) -> c_int {
-    let email_str = match c_char_to_string(email) {
-        Ok(s) => s,
-        Err(_) => return 0, // Invalid
-    };
+pub extern "C" fn ziplock_archive_close() -> c_int {
+    unsafe {
+        let state_mutex = match FFI_STATE.as_ref() {
+            Some(state) => state,
+            None => return ZipLockError::NotInitialized as c_int,
+        };
 
-    if crate::models::field::FieldUtils::is_valid_email(&email_str) {
-        1 // Valid
-    } else {
-        0 // Invalid
+        let state = match state_mutex.lock() {
+            Ok(state) => state,
+            Err(_) => return ZipLockError::InternalError as c_int,
+        };
+
+        let api = match state.api.as_ref() {
+            Some(api) => api,
+            None => return ZipLockError::NotInitialized as c_int,
+        };
+
+        let runtime = match state.runtime.as_ref() {
+            Some(rt) => rt,
+            None => return ZipLockError::InternalError as c_int,
+        };
+
+        match runtime.block_on(api.close_archive()) {
+            Ok(_) => ZipLockError::Success as c_int,
+            Err(_) => ZipLockError::InternalError as c_int,
+        }
     }
 }
 
-/// Validate a URL
-///
-/// # Safety
-///
-/// The caller must ensure that:
-/// - `url` is a valid, null-terminated C string
+/// Save the current archive
 #[no_mangle]
-pub unsafe extern "C" fn ziplock_validate_url(url: *const c_char) -> c_int {
-    let url_str = match c_char_to_string(url) {
-        Ok(s) => s,
-        Err(_) => return 0, // Invalid
-    };
+pub extern "C" fn ziplock_archive_save() -> c_int {
+    unsafe {
+        let state_mutex = match FFI_STATE.as_ref() {
+            Some(state) => state,
+            None => return ZipLockError::NotInitialized as c_int,
+        };
 
-    if crate::models::field::FieldUtils::is_valid_url(&url_str) {
-        1 // Valid
-    } else {
-        0 // Invalid
+        let state = match state_mutex.lock() {
+            Ok(state) => state,
+            Err(_) => return ZipLockError::InternalError as c_int,
+        };
+
+        let api = match state.api.as_ref() {
+            Some(api) => api,
+            None => return ZipLockError::NotInitialized as c_int,
+        };
+
+        let runtime = match state.runtime.as_ref() {
+            Some(rt) => rt,
+            None => return ZipLockError::InternalError as c_int,
+        };
+
+        match runtime.block_on(api.save_archive()) {
+            Ok(_) => ZipLockError::Success as c_int,
+            Err(_) => ZipLockError::InternalError as c_int,
+        }
     }
 }
 
-/// Search credentials by query string
-/// Returns search result structure or null on error
+/// List all credentials
 #[no_mangle]
-/// Search credentials (placeholder implementation)
-///
-/// # Safety
-///
-/// The caller must ensure that:
-/// - `_credentials` points to a valid array of CCredentialRecord with `_credential_count` elements
-/// - `_query` is a valid, null-terminated C string
-/// - The returned pointer is freed with `ziplock_search_result_free`
-pub unsafe extern "C" fn ziplock_search_credentials(
-    _credentials: *const CCredentialRecord,
-    _credential_count: c_uint,
-    _query: *const c_char,
-) -> *mut CSearchResult {
-    // This is a simplified version - in a real implementation,
-    // you'd convert C structs back to Rust structs, perform the search,
-    // and convert results back to C structs
-    ptr::null_mut()
+pub extern "C" fn ziplock_credential_list(
+    credentials: *mut *mut CCredentialRecord,
+    count: *mut usize,
+) -> c_int {
+    if credentials.is_null() || count.is_null() {
+        return ZipLockError::InvalidParameter as c_int;
+    }
+
+    unsafe {
+        let state_mutex = match FFI_STATE.as_ref() {
+            Some(state) => state,
+            None => return ZipLockError::NotInitialized as c_int,
+        };
+
+        let state = match state_mutex.lock() {
+            Ok(state) => state,
+            Err(_) => return ZipLockError::InternalError as c_int,
+        };
+
+        let api = match state.api.as_ref() {
+            Some(api) => api,
+            None => return ZipLockError::NotInitialized as c_int,
+        };
+
+        let runtime = match state.runtime.as_ref() {
+            Some(rt) => rt,
+            None => return ZipLockError::InternalError as c_int,
+        };
+
+        let credential_list = match runtime.block_on(api.list_credentials()) {
+            Ok(list) => list,
+            Err(_) => return ZipLockError::InternalError as c_int,
+        };
+
+        *count = credential_list.len();
+
+        if credential_list.is_empty() {
+            *credentials = ptr::null_mut();
+            return ZipLockError::Success as c_int;
+        }
+
+        // Allocate array for C credential records
+        let c_credentials =
+            libc::malloc(credential_list.len() * std::mem::size_of::<CCredentialRecord>())
+                as *mut CCredentialRecord;
+
+        if c_credentials.is_null() {
+            return ZipLockError::OutOfMemory as c_int;
+        }
+
+        // Convert each credential record
+        for (i, credential) in credential_list.iter().enumerate() {
+            let c_cred = c_credentials.add(i);
+            if convert_credential_to_c(credential, c_cred).is_err() {
+                // Clean up on error
+                ziplock_credential_list_free(c_credentials, i);
+                return ZipLockError::InternalError as c_int;
+            }
+        }
+
+        *credentials = c_credentials;
+        ZipLockError::Success as c_int
+    }
 }
 
-/// Free a search result
-///
-/// # Safety
-///
-/// The caller must ensure that:
-/// - `result` was allocated by this library (e.g., from `ziplock_search_credentials`)
-/// - `result` is not used after this call
-/// - `result` can be null (this function handles null pointers safely)
+/// Free credential list memory
 #[no_mangle]
-pub unsafe extern "C" fn ziplock_search_result_free(result: *mut CSearchResult) {
-    if result.is_null() {
+pub extern "C" fn ziplock_credential_list_free(credentials: *mut CCredentialRecord, count: usize) {
+    if credentials.is_null() {
         return;
     }
 
-    let result = Box::from_raw(result);
-
-    if !result.credentials.is_null() && result.credential_count > 0 {
-        let credentials =
-            slice::from_raw_parts_mut(result.credentials, result.credential_count as usize);
-
-        for credential in credentials {
-            ziplock_credential_free(credential as *mut CCredentialRecord);
+    unsafe {
+        for i in 0..count {
+            let c_cred = credentials.add(i);
+            free_c_credential(&mut *c_cred);
         }
+        libc::free(credentials as *mut c_void);
+    }
+}
 
-        let _ = Box::from_raw(slice::from_raw_parts_mut(
-            result.credentials,
-            result.credential_count as usize,
-        ));
+/// Free a C string allocated by the library
+#[no_mangle]
+pub extern "C" fn ziplock_string_free(ptr: *mut c_char) {
+    if !ptr.is_null() {
+        unsafe {
+            let _ = CString::from_raw(ptr);
+        }
     }
 }
 
 /// Get library version
-///
-/// # Safety
-///
-/// The caller must ensure that:
-/// - The returned C string is freed with `ziplock_string_free`
 #[no_mangle]
-pub unsafe extern "C" fn ziplock_get_version() -> *mut c_char {
-    string_to_c_char(crate::VERSION)
-}
-
-/// Validate a credential record
-///
-/// # Safety
-///
-/// The caller must ensure that:
-/// - `credential` is a valid pointer to a CCredentialRecord
-/// - The returned pointer is freed with `ziplock_validation_result_free`
-pub unsafe extern "C" fn ziplock_validate_credential(
-    credential: *const CCredentialRecord,
-) -> *mut CValidationResult {
-    if credential.is_null() {
-        return ptr::null_mut();
-    }
-
-    // This is a simplified version - in a real implementation,
-    // you'd convert the C struct back to a Rust struct and validate it
-    let result = CValidationResult {
-        is_valid: 1,
-        error_count: 0,
-        errors: ptr::null_mut(),
-    };
-
-    Box::into_raw(Box::new(result))
-}
-
-/// Free a validation result
-///
-/// # Safety
-///
-/// The caller must ensure that:
-/// - `result` was allocated by this library (e.g., from `ziplock_validate_credential`)
-/// - `result` is not used after this call
-/// - `result` can be null (this function handles null pointers safely)
-#[no_mangle]
-pub unsafe extern "C" fn ziplock_validation_result_free(result: *mut CValidationResult) {
-    if result.is_null() {
-        return;
-    }
-
-    let result = Box::from_raw(result);
-
-    if !result.errors.is_null() && result.error_count > 0 {
-        let errors = slice::from_raw_parts_mut(result.errors, result.error_count as usize);
-        for error in errors {
-            ziplock_string_free(*error);
-        }
-        let _ = Box::from_raw(slice::from_raw_parts_mut(
-            result.errors,
-            result.error_count as usize,
-        ));
-    }
-}
-
-// ============================================================================
-// Utility Functions
-// ============================================================================
-
-/// Generate a TOTP code from a base32-encoded secret
-///
-/// # Safety
-///
-/// The caller must ensure that:
-/// - `secret` is a valid, null-terminated C string containing a base32-encoded TOTP secret
-/// - The returned C string is freed with `ziplock_string_free`
-///
-/// # Arguments
-/// - `secret`: Base32-encoded TOTP secret (e.g., "JBSWY3DPEHPK3PXP")
-/// - `time_step`: Time step in seconds (typically 30)
-///
-/// # Returns
-/// - Valid C string containing 6-digit TOTP code on success
-/// - null pointer on error (invalid secret, etc.)
-#[no_mangle]
-pub unsafe extern "C" fn ziplock_totp_generate(
-    secret: *const c_char,
-    time_step: c_uint,
-) -> *mut c_char {
-    let secret_str = match c_char_to_string(secret) {
-        Ok(s) => s,
-        Err(_) => return ptr::null_mut(),
-    };
-
-    match crate::utils::totp::generate_totp(&secret_str, time_step as u64) {
-        Ok(code) => string_to_c_char(&code),
+pub extern "C" fn ziplock_get_version() -> *mut c_char {
+    match CString::new(crate::VERSION) {
+        Ok(cstring) => cstring.into_raw(),
         Err(_) => ptr::null_mut(),
     }
 }
 
-/// Format a credit card number with spaces
-///
-/// # Safety
-///
-/// The caller must ensure that:
-/// - `card_number` is a valid, null-terminated C string
-/// - The returned C string is freed with `ziplock_string_free`
+/// Check if an archive is currently open
 #[no_mangle]
-pub unsafe extern "C" fn ziplock_credit_card_format(card_number: *const c_char) -> *mut c_char {
-    let card_str = match c_char_to_string(card_number) {
-        Ok(s) => s,
-        Err(_) => return ptr::null_mut(),
-    };
+pub extern "C" fn ziplock_is_archive_open() -> c_int {
+    unsafe {
+        let state_mutex = match FFI_STATE.as_ref() {
+            Some(state) => state,
+            None => return 0,
+        };
 
-    // Simple credit card formatting - remove non-digits and add spaces every 4 digits
-    let digits_only: String = card_str.chars().filter(|c| c.is_ascii_digit()).collect();
+        let state = match state_mutex.lock() {
+            Ok(state) => state,
+            Err(_) => return 0,
+        };
 
-    if digits_only.is_empty() {
-        return ptr::null_mut();
+        let api = match state.api.as_ref() {
+            Some(api) => api,
+            None => return 0,
+        };
+
+        let runtime = match state.runtime.as_ref() {
+            Some(rt) => rt,
+            None => return 0,
+        };
+
+        if runtime.block_on(api.is_archive_open()) {
+            1
+        } else {
+            0
+        }
     }
+}
 
-    let formatted = digits_only
-        .chars()
-        .enumerate()
-        .fold(String::new(), |mut acc, (i, c)| {
-            if i > 0 && i % 4 == 0 {
-                acc.push(' ');
+/// Helper function to convert CredentialRecord to C structure
+fn convert_credential_to_c(
+    credential: &CredentialRecord,
+    c_cred: *mut CCredentialRecord,
+) -> Result<(), Box<dyn std::error::Error>> {
+    unsafe {
+        // Convert basic fields
+        (*c_cred).id = CString::new(credential.id.clone())?.into_raw();
+        (*c_cred).title = CString::new(credential.title.clone())?.into_raw();
+        (*c_cred).credential_type = CString::new(credential.credential_type.clone())?.into_raw();
+
+        (*c_cred).notes = if let Some(ref notes) = credential.notes {
+            CString::new(notes.clone())?.into_raw()
+        } else {
+            ptr::null_mut()
+        };
+
+        (*c_cred).created_at = credential
+            .created_at
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs() as i64;
+
+        (*c_cred).updated_at = credential
+            .updated_at
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs() as i64;
+
+        // Convert fields
+        (*c_cred).field_count = credential.fields.len();
+        if !credential.fields.is_empty() {
+            let fields =
+                libc::malloc(credential.fields.len() * std::mem::size_of::<CCredentialField>())
+                    as *mut CCredentialField;
+
+            if fields.is_null() {
+                return Err("Failed to allocate memory for fields".into());
             }
-            acc.push(c);
-            acc
-        });
 
-    string_to_c_char(&formatted)
+            for (i, (name, field)) in credential.fields.iter().enumerate() {
+                let c_field = fields.add(i);
+                (*c_field).name = CString::new(name.clone())?.into_raw();
+                (*c_field).value = CString::new(field.value.clone())?.into_raw();
+                (*c_field).field_type = CString::new(field.field_type.to_string())?.into_raw();
+                (*c_field).label = if let Some(ref label) = field.label {
+                    CString::new(label.clone())?.into_raw()
+                } else {
+                    ptr::null_mut()
+                };
+                (*c_field).sensitive = if field.sensitive { 1 } else { 0 };
+                (*c_field).required = 0; // CredentialField doesn't have a required property, default to false
+            }
+            (*c_cred).fields = fields;
+        } else {
+            (*c_cred).fields = ptr::null_mut();
+        }
+
+        // Convert tags
+        (*c_cred).tag_count = credential.tags.len();
+        if !credential.tags.is_empty() {
+            let tags = libc::malloc(credential.tags.len() * std::mem::size_of::<*mut c_char>())
+                as *mut *mut c_char;
+
+            if tags.is_null() {
+                return Err("Failed to allocate memory for tags".into());
+            }
+
+            for (i, tag) in credential.tags.iter().enumerate() {
+                let tag_ptr = tags.add(i);
+                *tag_ptr = CString::new(tag.clone())?.into_raw();
+            }
+            (*c_cred).tags = tags;
+        } else {
+            (*c_cred).tags = ptr::null_mut();
+        }
+
+        Ok(())
+    }
 }
 
-// ============================================================================
-// Test Functions
-// ============================================================================
-
-/// Test function to verify FFI is working
-///
-/// # Safety
-///
-/// The caller must ensure that:
-/// - `input` is a valid, null-terminated C string
-/// - The returned C string is freed with `ziplock_string_free`
-#[no_mangle]
-pub unsafe extern "C" fn ziplock_test_echo(input: *const c_char) -> *mut c_char {
-    match c_char_to_string(input) {
-        Ok(s) => string_to_c_char(&format!("Echo: {}", s)),
-        Err(_) => string_to_c_char("Error: Invalid input"),
+/// Helper function to free C credential structure
+unsafe fn free_c_credential(c_cred: &mut CCredentialRecord) {
+    if !c_cred.id.is_null() {
+        let _ = CString::from_raw(c_cred.id);
     }
-}
+    if !c_cred.title.is_null() {
+        let _ = CString::from_raw(c_cred.title);
+    }
+    if !c_cred.credential_type.is_null() {
+        let _ = CString::from_raw(c_cred.credential_type);
+    }
+    if !c_cred.notes.is_null() {
+        let _ = CString::from_raw(c_cred.notes);
+    }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::ffi::CString;
-
-    #[test]
-    fn test_string_conversion() {
-        unsafe {
-            let test_str = "Hello, World!";
-            let c_str = string_to_c_char(test_str);
-            assert!(!c_str.is_null());
-
-            let rust_str = c_char_to_string(c_str).unwrap();
-            assert_eq!(rust_str, test_str);
-
-            ziplock_string_free(c_str);
+    // Free fields
+    if !c_cred.fields.is_null() {
+        for i in 0..c_cred.field_count {
+            let field = c_cred.fields.add(i);
+            if !(*field).name.is_null() {
+                let _ = CString::from_raw((*field).name);
+            }
+            if !(*field).value.is_null() {
+                let _ = CString::from_raw((*field).value);
+            }
+            if !(*field).field_type.is_null() {
+                let _ = CString::from_raw((*field).field_type);
+            }
+            if !(*field).label.is_null() {
+                let _ = CString::from_raw((*field).label);
+            }
         }
+        libc::free(c_cred.fields as *mut c_void);
     }
 
-    #[test]
-    fn test_field_type_conversion() {
-        assert_eq!(field_type_to_c_int(&FieldType::Password), 1);
-        assert_eq!(field_type_to_c_int(&FieldType::Email), 2);
-
-        assert!(matches!(c_int_to_field_type(1), FieldType::Password));
-        assert!(matches!(c_int_to_field_type(2), FieldType::Email));
-    }
-
-    #[test]
-    fn test_credential_creation() {
-        unsafe {
-            let title = CString::new("Test Credential").unwrap();
-            let cred_type = CString::new("login").unwrap();
-
-            let credential = ziplock_credential_new(title.as_ptr(), cred_type.as_ptr());
-            assert!(!credential.is_null());
-
-            ziplock_credential_free(credential);
+    // Free tags
+    if !c_cred.tags.is_null() {
+        for i in 0..c_cred.tag_count {
+            let tag_ptr = c_cred.tags.add(i);
+            if !(*tag_ptr).is_null() {
+                let _ = CString::from_raw(*tag_ptr);
+            }
         }
-    }
-
-    #[test]
-    fn test_password_validation() {
-        unsafe {
-            let password = CString::new("StrongPassword123!").unwrap();
-            let strength = ziplock_validate_password(password.as_ptr());
-            assert!(!strength.is_null());
-
-            let strength_ref = &*strength;
-            assert!(strength_ref.score > 0);
-
-            ziplock_password_strength_free(strength);
-        }
-    }
-
-    #[test]
-    fn test_echo_function() {
-        unsafe {
-            let input = CString::new("Test").unwrap();
-            let output = ziplock_test_echo(input.as_ptr());
-            assert!(!output.is_null());
-
-            let output_str = c_char_to_string(output).unwrap();
-            assert!(output_str.contains("Test"));
-
-            ziplock_string_free(output);
-        }
-    }
-
-    #[test]
-    fn test_totp_generate() {
-        unsafe {
-            let secret = CString::new("JBSWY3DPEHPK3PXP").unwrap();
-            let code = ziplock_totp_generate(secret.as_ptr(), 30);
-            assert!(!code.is_null());
-
-            let code_str = c_char_to_string(code).unwrap();
-            assert_eq!(code_str.len(), 6);
-            assert!(code_str.chars().all(|c| c.is_ascii_digit()));
-
-            ziplock_string_free(code);
-        }
-    }
-
-    #[test]
-    fn test_totp_generate_invalid_secret() {
-        unsafe {
-            let secret = CString::new("invalid!@#").unwrap();
-            let code = ziplock_totp_generate(secret.as_ptr(), 30);
-            assert!(code.is_null());
-        }
-    }
-
-    #[test]
-    fn test_credit_card_format() {
-        unsafe {
-            let card = CString::new("1234567890123456").unwrap();
-            let formatted = ziplock_credit_card_format(card.as_ptr());
-            assert!(!formatted.is_null());
-
-            let formatted_str = c_char_to_string(formatted).unwrap();
-            assert_eq!(formatted_str, "1234 5678 9012 3456");
-
-            ziplock_string_free(formatted);
-        }
+        libc::free(c_cred.tags as *mut c_void);
     }
 }

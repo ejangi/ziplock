@@ -684,6 +684,64 @@ pub fn sanitize_identifier(input: &str) -> String {
         .collect()
 }
 
+/// Validation utilities for consolidating passphrase validation functionality
+pub struct ValidationUtils;
+
+impl ValidationUtils {
+    /// Create a validator from backend configuration
+    pub fn from_config(min_password_length: usize) -> PassphraseValidator {
+        let requirements = PassphraseRequirements {
+            min_length: min_password_length,
+            ..PassphraseRequirements::default()
+        };
+        PassphraseValidator::new(requirements)
+    }
+
+    /// Create a validator for repository creation (production requirements)
+    pub fn for_creation() -> PassphraseValidator {
+        PassphraseValidator::new(ValidationPresets::production())
+    }
+
+    /// Create a minimal validator for repository opening
+    /// Note: For opening, any passphrase that can decrypt is valid
+    pub fn for_opening() -> PassphraseValidator {
+        PassphraseValidator::minimal()
+    }
+
+    /// Validate passphrase and return detailed result
+    pub fn validate_with_details(
+        passphrase: &str,
+        validator: &PassphraseValidator,
+    ) -> PassphraseStrength {
+        validator.validate(passphrase)
+    }
+
+    /// Validate passphrase and return boolean result
+    pub fn validate_meets_requirements(passphrase: &str, validator: &PassphraseValidator) -> bool {
+        validator.meets_requirements(passphrase)
+    }
+
+    /// Validate passphrase strictly (for backend API usage)
+    /// Returns error if requirements not met
+    pub fn validate_strict(
+        passphrase: &str,
+        validator: &PassphraseValidator,
+    ) -> crate::SharedResult<()> {
+        let strength = validator.validate(passphrase);
+
+        if !strength.meets_requirements {
+            return Err(crate::SharedError::Validation {
+                message: format!(
+                    "Master passphrase does not meet requirements: {}",
+                    strength.violations.join("; ")
+                ),
+            });
+        }
+
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -913,5 +971,100 @@ mod tests {
         assert!(StrengthLevel::Good.is_acceptable());
         assert!(StrengthLevel::Strong.is_acceptable());
         assert!(StrengthLevel::VeryStrong.is_acceptable());
+    }
+
+    #[test]
+    fn test_validation_utils_from_config() {
+        let validator = ValidationUtils::from_config(8);
+        let requirements = validator.requirements();
+        assert_eq!(requirements.min_length, 8);
+        assert!(requirements.require_lowercase);
+        assert!(requirements.require_uppercase);
+        assert!(requirements.require_numeric);
+        assert!(requirements.require_special);
+    }
+
+    #[test]
+    fn test_validation_utils_for_creation() {
+        let validator = ValidationUtils::for_creation();
+        let requirements = validator.requirements();
+        // Should match production requirements
+        assert_eq!(requirements.min_length, 12);
+        assert!(requirements.require_lowercase);
+        assert!(requirements.require_uppercase);
+        assert!(requirements.require_numeric);
+        assert!(requirements.require_special);
+    }
+
+    #[test]
+    fn test_validation_utils_for_opening() {
+        let validator = ValidationUtils::for_opening();
+        let requirements = validator.requirements();
+        // Should match minimal requirements
+        assert_eq!(requirements.min_length, 6);
+        assert!(!requirements.require_lowercase);
+        assert!(!requirements.require_uppercase);
+        assert!(!requirements.require_numeric);
+        assert!(!requirements.require_special);
+    }
+
+    #[test]
+    fn test_validation_utils_validate_with_details() {
+        let validator = ValidationUtils::for_creation();
+        let result = ValidationUtils::validate_with_details("StrongPassphrase123!", &validator);
+        assert!(result.meets_requirements);
+        assert!(result.level.is_acceptable());
+        assert!(result.score > 0);
+        assert!(result.violations.is_empty());
+        assert!(!result.satisfied.is_empty());
+    }
+
+    #[test]
+    fn test_validation_utils_validate_meets_requirements() {
+        let validator = ValidationUtils::for_creation();
+
+        // Strong passphrase should meet requirements
+        assert!(ValidationUtils::validate_meets_requirements(
+            "StrongPassphrase123!",
+            &validator
+        ));
+
+        // Weak passphrase should not meet requirements
+        assert!(!ValidationUtils::validate_meets_requirements(
+            "weak", &validator
+        ));
+    }
+
+    #[test]
+    fn test_validation_utils_validate_strict() {
+        let validator = ValidationUtils::for_creation();
+
+        // Strong passphrase should pass strict validation
+        let result = ValidationUtils::validate_strict("StrongPassphrase123!", &validator);
+        assert!(result.is_ok());
+
+        // Weak passphrase should fail strict validation
+        let result = ValidationUtils::validate_strict("weak", &validator);
+        assert!(result.is_err());
+
+        if let Err(error) = result {
+            assert!(error.to_string().contains("does not meet requirements"));
+        }
+    }
+
+    #[test]
+    fn test_validation_utils_consistency() {
+        // Test that all ValidationUtils methods work consistently
+        let validator = ValidationUtils::for_creation();
+        let test_passphrase = "MySecurePassphrase123!";
+
+        let detailed_result = ValidationUtils::validate_with_details(test_passphrase, &validator);
+        let boolean_result =
+            ValidationUtils::validate_meets_requirements(test_passphrase, &validator);
+        let strict_result = ValidationUtils::validate_strict(test_passphrase, &validator);
+
+        // All methods should agree on whether the passphrase is valid
+        assert_eq!(detailed_result.meets_requirements, boolean_result);
+        assert_eq!(boolean_result, strict_result.is_ok());
     }
 }

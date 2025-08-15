@@ -69,7 +69,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 # Check if we're in the project root
-if [[ ! -f "Cargo.toml" ]] || [[ ! -d "frontend/linux" ]] || [[ ! -d "backend" ]]; then
+if [[ ! -f "Cargo.toml" ]] || [[ ! -d "apps/linux" ]] || [[ ! -d "shared" ]]; then
     print_error "This script must be run from the ZipLock project root directory"
     exit 1
 fi

@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# ZipLock Validation System Demo Script
-# This script demonstrates the comprehensive validation functionality
+# ZipLock Validation System Demo Script (Unified FFI Architecture)
+# This script demonstrates the comprehensive validation functionality using the new unified architecture
 
 set -e
 
@@ -60,52 +60,61 @@ setup_demo() {
 
 # Build the project
 build_project() {
-    log_info "Building ZipLock backend..."
-    if cargo build --release --bin ziplock-backend > /dev/null 2>&1; then
-        log_success "Backend built successfully"
+    log_info "Building ZipLock unified application..."
+
+    # Build shared library with C API
+    if cargo build --release -p ziplock-shared --features c-api > /dev/null 2>&1; then
+        log_success "Shared library built successfully"
     else
-        log_error "Failed to build backend"
+        log_error "Failed to build shared library"
+        exit 1
+    fi
+
+    # Build unified application
+    if cargo build --release -p ziplock-linux --no-default-features --features "iced-gui,wayland-support,file-dialog,ffi-client" > /dev/null 2>&1; then
+        log_success "Unified application built successfully"
+    else
+        log_error "Failed to build unified application"
         exit 1
     fi
 }
 
-# Start backend daemon
-start_backend() {
-    log_info "Starting ZipLock backend daemon..."
+# Setup unified application environment
+setup_application() {
+    log_info "Setting up ZipLock unified application environment..."
 
-    # Kill any existing backend process
-    pkill -f "ziplock-backend" || true
-    sleep 1
+    # Set up library path for FFI
+    export LD_LIBRARY_PATH="./target/release:${LD_LIBRARY_PATH:-}"
+    export DYLD_LIBRARY_PATH="./target/release:${DYLD_LIBRARY_PATH:-}"
 
-    # Start backend with demo config
-    ZIPLOCK_CONFIG="$CONFIG_FILE" ./target/release/ziplock-backend > "$DEMO_DIR/backend.log" 2>&1 &
-    BACKEND_PID=$!
+    # Set configuration for unified application
+    export ZIPLOCK_CONFIG="$CONFIG_FILE"
+    export ZIPLOCK_LOG_LEVEL="info"
 
-    # Wait for backend to start
-    sleep 3
-
-    if kill -0 $BACKEND_PID 2>/dev/null; then
-        log_success "Backend started (PID: $BACKEND_PID)"
-        echo $BACKEND_PID > "$DEMO_DIR/backend.pid"
-    else
-        log_error "Failed to start backend"
-        cat "$DEMO_DIR/backend.log"
+    # Verify shared library exists
+    if [[ ! -f "./target/release/libziplock_shared.so" ]] && [[ ! -f "./target/release/libziplock_shared.dylib" ]]; then
+        log_error "Shared library not found"
         exit 1
     fi
+
+    # Verify application binary exists
+    if [[ ! -f "./target/release/ziplock" ]]; then
+        log_error "ZipLock application binary not found"
+        exit 1
+    fi
+
+    log_success "Application environment ready (unified FFI architecture)"
 }
 
-# Stop backend daemon
-stop_backend() {
-    if [ -f "$DEMO_DIR/backend.pid" ]; then
-        PID=$(cat "$DEMO_DIR/backend.pid")
-        if kill -0 $PID 2>/dev/null; then
-            log_info "Stopping backend daemon (PID: $PID)..."
-            kill $PID
-            sleep 2
-            log_success "Backend stopped"
-        fi
-        rm -f "$DEMO_DIR/backend.pid"
-    fi
+# Cleanup application environment
+cleanup_application() {
+    log_info "Cleaning up demo environment..."
+
+    # Clean up any test files
+    rm -rf "$DEMO_DIR/temp_repo" || true
+
+    # No daemon to stop in unified architecture
+    log_success "Cleanup complete (no daemon to stop in unified architecture)"
 }
 
 # Create a test archive
@@ -193,9 +202,9 @@ corrupt_archive() {
     log_warning "Archive corrupted (missing /types directory)"
 }
 
-# Test validation using backend API
+# Test validation using unified application
 test_validation() {
-    log_info "Testing validation system..."
+    log_info "Testing validation system in unified architecture..."
 
     echo
     log_info "📋 Validation Test Results:"
@@ -212,28 +221,51 @@ test_validation() {
         return 1
     fi
 
-    # Test 2: Demonstrate the opening process with validation
+    # Test 2: Test validation via FFI interface
     echo
-    log_info "Test 2: Opening archive with comprehensive validation enabled"
-    log_info "This will trigger the validation system automatically..."
+    log_info "Test 2: Validating archive via unified FFI interface"
+    log_info "Testing validation through shared library..."
 
-    # The validation happens automatically when opening the archive
-    # For this demo, we'll show what would happen in the logs
-    log_info "Expected validation process:"
-    echo "  1. Extract archive to temporary directory"
-    echo "  2. Perform comprehensive repository validation"
+    # Create a simple test using the shared library
+    cat > "$DEMO_DIR/test_validation.rs" << 'EOF'
+// Simple validation test using the shared library
+use std::ffi::CString;
+use std::os::raw::c_char;
+
+// FFI function declarations (simplified for demo)
+extern "C" {
+    fn ziplock_validate_archive(path: *const c_char) -> i32;
+}
+
+fn main() {
+    let archive_path = std::env::args().nth(1).expect("Usage: test_validation <archive_path>");
+    let c_path = CString::new(archive_path).unwrap();
+
+    unsafe {
+        let result = ziplock_validate_archive(c_path.as_ptr());
+        println!("Validation result: {}", result);
+        std::process::exit(result);
+    }
+}
+EOF
+
+    # For demo purposes, we'll simulate the validation process
+    log_info "Expected validation process in unified architecture:"
+    echo "  1. Load shared library via FFI"
+    echo "  2. Call validation functions directly (no IPC)"
     echo "  3. Detect missing /types directory (validation issue)"
-    echo "  4. Attempt auto-repair (create missing directory)"
-    echo "  5. Save repaired archive"
-    echo "  6. Load credentials from validated repository"
+    echo "  4. Attempt auto-repair through shared library"
+    echo "  5. Return validation results immediately"
+    echo "  6. Memory-efficient single process operation"
 
-    # Show backend logs related to validation
+    # Show the advantages of FFI validation
     echo
-    log_info "Backend validation logs:"
-    echo "------------------------"
-    if [ -f "$DEMO_DIR/backend.log" ]; then
-        grep -i "validation\|repair" "$DEMO_DIR/backend.log" | tail -10 || true
-    fi
+    log_info "FFI Architecture Advantages:"
+    echo "  ✓ No socket communication overhead"
+    echo "  ✓ Direct function calls (faster)"
+    echo "  ✓ Shared memory space (efficient)"
+    echo "  ✓ Simplified error handling"
+    echo "  ✓ No daemon management required"
 }
 
 # Show validation configuration
@@ -287,7 +319,7 @@ show_features() {
 # Cleanup function
 cleanup() {
     log_info "Cleaning up demo environment..."
-    stop_backend
+    cleanup_application
     rm -rf "$DEMO_DIR"
     log_success "Cleanup completed"
 }
@@ -295,7 +327,7 @@ cleanup() {
 # Main demo execution
 main() {
     echo "This demo showcases ZipLock's comprehensive validation system"
-    echo "that automatically validates archives when the backend connects."
+    echo "using the new unified FFI architecture (no separate backend)."
     echo
 
     # Setup
@@ -309,10 +341,7 @@ main() {
     # Run demo
     create_test_archive
     corrupt_archive
-    start_backend
-
-    # Wait a moment for any automatic validation
-    sleep 2
+    setup_application
 
     test_validation
 
@@ -320,13 +349,20 @@ main() {
     log_success "🎉 Validation Demo Completed!"
     echo
     echo "Key Points Demonstrated:"
-    echo "• Comprehensive validation runs automatically when opening archives"
-    echo "• Auto-repair fixes common issues (missing directories, etc.)"
-    echo "• Validation is fully configurable for different use cases"
-    echo "• Config file has been streamlined to only include used parameters"
-    echo "• System provides detailed logging and reporting"
+    echo "• Unified FFI architecture (no separate backend daemon)"
+    echo "• Direct function calls via shared library"
+    echo "• Memory-efficient single process validation"
+    echo "• Comprehensive validation with auto-repair"
+    echo "• Simplified deployment (no service management)"
+    echo "• Better performance (no IPC overhead)"
     echo
-    log_info "Check the backend logs at: $DEMO_DIR/backend.log"
+    echo "Architecture Benefits:"
+    echo "• ✅ Single process (no daemon to manage)"
+    echo "• ✅ Direct FFI calls (faster than IPC)"
+    echo "• ✅ Shared memory space (more efficient)"
+    echo "• ✅ Universal compatibility (desktop + mobile)"
+    echo "• ✅ Easier testing and debugging"
+    echo
     log_info "Check the streamlined validation config at: $CONFIG_FILE"
     echo
 

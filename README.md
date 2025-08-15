@@ -86,48 +86,46 @@ ZipLock is designed to be intuitive and efficient for both new users and power u
 
 ## 📱 Platform Support
 
-ZipLock follows a client-server architecture with native applications for each platform:
+ZipLock follows a unified architecture with native applications calling a shared core library directly:
 
 | Platform | Status | Technology | Features |
 |----------|--------|------------|----------|
 | **Linux** | 🚧 In Development | Rust + iced/GTK4 | Full desktop experience, Wayland support |
 | **Windows** | 📋 Planned | Rust + Tauri | Native Windows integration |
-| **iOS** | 📋 Planned | Swift + SwiftUI | iOS-native backend service |
-| **Android** | 📋 Planned | Kotlin + Jetpack Compose | Android-native backend service |
+| **iOS** | 📋 Planned | Swift + SwiftUI | Direct FFI integration with shared core |
+| **Android** | 📋 Planned | Kotlin + Jetpack Compose | Direct FFI integration with shared core |
 | **macOS** | 📋 Planned | Swift + SwiftUI | Native macOS experience |
 
 ### Architecture Benefits
-- **Thin Clients**: Lightweight, responsive user interfaces
-- **Secure Backend**: All cryptographic operations handled by secure backend service
-- **Consistent Experience**: Shared data models ensure consistency across platforms
-- **Platform Native**: Each client uses platform-specific technologies for optimal performance
+- **Direct Integration**: Lightweight apps with direct access to core functionality
+- **Secure Core**: All cryptographic operations handled by memory-safe Rust library
+- **Consistent Experience**: Single implementation ensures identical behavior across platforms
+- **Platform Native**: Each client uses platform-specific UI technologies with shared business logic
 
 ## 🏗️ Architecture
 
-ZipLock follows a secure client-server architecture designed for maximum security and portability:
+ZipLock follows a unified architecture with direct FFI integration for maximum portability and simplicity:
 
 ```
-┌─────────────────┐     IPC     ┌─────────────────┐    File I/O   ┌─────────────────┐
-│  Frontend UI    │ ◄─────────► │ Backend Service │ ◄────────────► │ Encrypted 7z    │
-│  (Platform      │             │ (Rust/Swift/    │               │ Archive         │
-│   Native)       │             │  Kotlin)        │               │                 │
-└─────────────────┘             └─────────────────┘               └─────────────────┘
-        │                               │
-        │                               │
-        └─────────────┬─────────────────┘
-                      │
-              ┌─────────────────┐
-              │ Shared Library  │
-              │ (Data Models &  │
-              │  Utilities)     │
-              └─────────────────┘
+┌─────────────────┐    Direct    ┌─────────────────┐    File I/O   ┌─────────────────┐
+│  Application    │    FFI       │   Shared Core   │ ◄────────────► │ Encrypted 7z    │
+│                 │ ◄─────────► │    Library      │               │ Archive         │
+│ • Linux (Rust)  │             │     (Rust)      │               │                 │
+│ • Windows(Rust) │             │                 │               │                 │
+│ • iOS (Swift)   │             │ • Archive Ops   │               │                 │
+│ • Android(Kotlin│             │ • Cryptography  │               │                 │
+│ • macOS (Swift) │             │ • Validation    │               │                 │
+│                 │             │ • C FFI API     │               │                 │
+└─────────────────┘             │ • Data Models   │               └─────────────────┘
+                                │ • Session Mgmt  │
+                                └─────────────────┘
 ```
 
 ### Key Architectural Principles
-- **Separation of Concerns**: UI and cryptography are completely separated
-- **Zero Trust Frontend**: Frontend clients are treated as untrusted components
-- **Secure Communication**: All sensitive operations happen in the backend
-- **Modular Design**: Shared components enable consistent behavior across platforms
+- **Unified Implementation**: Single core library serves all platforms through FFI
+- **Direct Integration**: No IPC overhead, direct function calls for optimal performance
+- **Memory Safety**: Rust's guarantees protect against common security vulnerabilities
+- **Platform Native UI**: Each platform uses native UI technologies with shared business logic
 
 ## 🚀 Getting Started
 
@@ -169,14 +167,13 @@ wget -O- https://github.com/ejangi/ziplock/releases/latest/download/ziplock-0.1.
 git clone https://github.com/ejangi/ziplock.git
 cd ziplock
 
-# Build the backend service
-cargo build --release --bin ziplock-backend
+# Build the shared library
+cargo build --release --manifest-path shared/Cargo.toml
 
-# Build the frontend (Linux example)
-cargo build --release --bin ziplock --manifest-path frontend/linux/Cargo.toml
+# Build the app (Linux example)
+cargo build --release --bin ziplock --manifest-path apps/linux/Cargo.toml
 
 # Run ZipLock
-./target/release/ziplock-backend &
 ./target/release/ziplock
 ```
 
@@ -203,9 +200,8 @@ For complete configuration documentation and examples, see the [Configuration Gu
 ### Technical Documentation
 - [Architecture Overview](docs/architecture.md) - Detailed system architecture
 - [Design Guidelines](docs/design.md) - UI/UX design principles
-- [IPC Client Examples](docs/technical/ipc-client-examples.md) - Backend service API examples and integration patterns
-- [Configuration Guide](docs/technical/configuration.md) - Complete configuration reference with examples
 - [Mobile Integration](docs/technical/mobile-integration.md) - iOS and Android integration examples
+- [Configuration Guide](docs/technical/configuration.md) - Complete configuration reference with examples
 - [Repository Detection Implementation](docs/technical/repository-detection-implementation.md) - Technical implementation details
 - [Validation Implementation](docs/technical/validation-implementation.md) - Comprehensive validation system details
 

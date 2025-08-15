@@ -1,6 +1,6 @@
 # ZipLock Scripts
 
-This directory contains utility scripts for ZipLock development and maintenance, organized into functional subdirectories.
+This directory contains utility scripts for ZipLock development and maintenance, organized into functional subdirectories. These scripts support the unified FFI architecture (no separate backend daemon).
 
 ## Directory Structure
 
@@ -18,10 +18,8 @@ Scripts for compiling, building, and packaging ZipLock for distribution.
 ### `dev/` - Development Scripts
 Scripts for development workflow, testing, and debugging.
 
-- **`run-linux.sh`** - Launches both backend service and frontend GUI for development
-- **`run-integration-tests.sh`** - Executes the full integration test suite
-- **`run-tests-with-existing-backend.sh`** - Runs tests against an existing backend instance
-- **`test-backend-connection.sh`** - Tests backend service connectivity
+- **`run-linux.sh`** - Launches the unified ZipLock application for development
+- **`run-integration-tests.sh`** - Executes the full integration test suite (FFI architecture)
 - **`run-ci-checks.sh`** - Runs complete GitHub CI test suite locally (format, clippy, tests)
 - **`run-clippy.sh`** - Quick Clippy linting check (same as GitHub CI)
 - **`run-format.sh`** - Quick code formatting check and fix
@@ -63,14 +61,11 @@ Reserved for future deployment automation scripts.
 
 ### Development
 ```bash
-# Start development environment
+# Start unified development application
 ./scripts/dev/run-linux.sh
 
-# Run integration tests
+# Run integration tests (FFI architecture)
 ./scripts/dev/run-integration-tests.sh
-
-# Test backend connectivity
-./scripts/dev/test-backend-connection.sh
 
 # Run CI checks locally before pushing
 ./scripts/dev/run-ci-checks.sh
@@ -180,20 +175,23 @@ Comprehensive local build testing using Docker containers.
 ## Development Scripts Details
 
 ### `dev/run-linux.sh`
-Launches both backend service and frontend GUI for development testing.
+Launches the unified ZipLock application for development testing.
 
 **Features:**
-- Automatically starts backend service
-- Waits for backend to be ready
-- Launches frontend GUI
+- Builds and launches unified application (FFI architecture)
+- No separate backend daemon required
 - Provides colored output for better debugging
-- Handles cleanup on exit
+- Supports debug mode for verbose logging
+- Memory-efficient single process operation
 
 ### `dev/run-integration-tests.sh`
-Executes comprehensive integration tests across all components.
+Executes comprehensive integration tests for the unified FFI architecture.
 
-### `dev/test-backend-connection.sh`
-Tests backend service connectivity and basic functionality.
+**Features:**
+- Tests shared library C API functionality
+- Validates FFI client integration
+- No backend daemon management required
+- Memory-efficient single process testing
 
 ### `dev/run-ci-checks.sh`
 Runs the complete GitHub CI test suite locally before pushing.
@@ -431,6 +429,16 @@ The GitHub Actions workflow will automatically:
 - `MINOR`: New features, backwards-compatible functionality
 - `PATCH`: Bug fixes, documentation updates, minor improvements
 
+## FFI Architecture Notes
+
+The scripts in this directory have been updated for ZipLock's unified FFI architecture:
+
+- **No Backend Daemon**: Scripts no longer manage separate backend processes
+- **Shared Library**: Applications use libziplock_shared via FFI calls
+- **Single Process**: More memory-efficient operation
+- **Simplified Testing**: No IPC/socket connectivity concerns
+- **Universal Compatibility**: Same architecture works on desktop and mobile
+
 ## Script Maintenance
 
 When adding new scripts:
@@ -438,9 +446,10 @@ When adding new scripts:
 2. Make them executable: `chmod +x script-name.sh`
 3. Add proper error handling with `set -e`
 4. Include colored output for better UX
-5. Document usage with `--help` or usage functions
-6. Update this README with the new script
-7. Test scripts on clean environment before committing
+5. Consider FFI architecture (no backend daemon assumptions)
+6. Document usage with `--help` or usage functions
+7. Update this README with the new script
+8. Test scripts on clean environment before committing
 
 ### Script Categories
 - **Build**: Compilation, packaging, distribution

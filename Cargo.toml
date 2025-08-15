@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["backend", "shared", "frontend/linux"]
+members = ["shared", "apps/linux"]
 
 [workspace.package]
 version = "0.1.8"
@@ -23,11 +23,8 @@ thiserror = "1.0"
 tracing = "0.1"
 tracing-subscriber = "0.3"
 
-# Cryptography
-aes-gcm = "0.10"
-argon2 = "0.5"
+# Random number generation (still needed for password generation)
 rand = "0.8"
-zeroize = "1.7"
 
 # 7z archive handling
 sevenz-rust2 = { version = "0.17", features = ["aes256", "compress", "util"] }
@@ -44,9 +41,6 @@ image = "0.24"
 # Testing dependencies
 tempfile = "3.8"
 
-# IPC and communication
-tonic = "0.10"
-prost = "0.12"
 
 # GUI frameworks (conditional)
 iced = { version = "0.12" }

@@ -58,13 +58,13 @@ package() {
     install -Dm644 config/config.yml "$pkgdir/etc/ziplock/config.yml"
 
     # Install desktop file if it exists
-    if [ -f frontend/linux/resources/ziplock.desktop ]; then
-        install -Dm644 frontend/linux/resources/ziplock.desktop "$pkgdir/usr/share/applications/ziplock.desktop"
+    if [ -f apps/linux/resources/ziplock.desktop ]; then
+        install -Dm644 apps/linux/resources/ziplock.desktop "$pkgdir/usr/share/applications/ziplock.desktop"
     fi
 
     # Install icon
-    if [ -f frontend/linux/resources/icons/ziplock.svg ]; then
-        install -Dm644 frontend/linux/resources/icons/ziplock.svg "$pkgdir/usr/share/icons/hicolor/scalable/apps/ziplock.svg"
+    if [ -f apps/linux/resources/icons/ziplock.svg ]; then
+        install -Dm644 apps/linux/resources/icons/ziplock.svg "$pkgdir/usr/share/icons/hicolor/scalable/apps/ziplock.svg"
     elif [ -f assets/icons/ziplock-logo.svg ]; then
         install -Dm644 assets/icons/ziplock-logo.svg "$pkgdir/usr/share/icons/hicolor/scalable/apps/ziplock.svg"
     fi

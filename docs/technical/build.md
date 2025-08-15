@@ -52,7 +52,7 @@ This will create:
 
 Before building, you may want to review:
 - [Configuration Guide](configuration.md) - Understanding configuration options for deployment
-- [IPC Client Examples](ipc-client-examples.md) - Examples for integrating with the built backend service
+- [Mobile Integration](mobile-integration.md) - Examples for integrating with mobile platforms
 
 ### Development Dependencies
 
@@ -375,7 +375,7 @@ sudo cp target/release/ziplock-backend /usr/local/bin/
 sudo cp target/release/ziplock /usr/local/bin/
 
 # Install desktop file
-sudo cp frontend/linux/resources/ziplock.desktop /usr/share/applications/
+sudo cp apps/linux/resources/ziplock.desktop /usr/share/applications/
 
 # Update desktop database
 sudo update-desktop-database

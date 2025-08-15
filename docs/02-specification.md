@@ -8,26 +8,27 @@
 
 ## **2\. Core Architecture**
 
-The application will follow a client-server architecture where a backend service manages the encrypted storage and a thin frontend client provides the user interface.
+The application follows a unified architecture where frontend clients communicate directly with a shared core library through FFI (Foreign Function Interface) bindings. This eliminates the complexity of separate backend services while providing consistent functionality across all platforms.
 
-### **2.1 Backend Daemon/Service**
+### **2.1 Shared Core Library**
 
 * **Language:** Rust
-* **Functionality:** The backend will be a persistent service or daemon that runs in the background. Its primary responsibility is to manage the encrypted 7z file containing the user's credentials.
-  * **Platform-Specific Backend:** The Rust backend is the primary choice for platforms that support it (e.g., Linux, Windows). For platforms where a Rust-based daemon is not a viable option, such as iOS and Android, the backend functionality will be re-implemented using a platform-native language (e.g., Swift for iOS, Kotlin for Android).
-  * **Storage Management:** It will handle all read, write, and encryption operations on the ZIP file. The file will be locked when in use to prevent data corruption from concurrent access (e.g., by a cloud sync service).
-  * **Security:** The backend will hold the master key in a secure, in-memory state only after the user has authenticated. It will not persist the master key to disk.
-  * **User Data:** The service will save a minimal amount of configuration data, such as the path to the user's encrypted ZIP file. This data will be stored in platform-specific locations:
+* **Functionality:** The core library is responsible for managing the encrypted 7z file containing the user's credentials. It provides a C FFI interface that all platform clients can use.
+  * **Universal Implementation:** A single Rust implementation serves all platforms through FFI bindings, ensuring consistent behavior across desktop and mobile platforms.
+  * **Storage Management:** It handles all read, write, and encryption operations on the 7z file. The file is locked when in use to prevent data corruption from concurrent access (e.g., by a cloud sync service).
+  * **Security:** The core library holds the master key in a secure, in-memory state only after the user has authenticated. It never persists the master key to disk.
+  * **Configuration:** The library manages minimal configuration data, such as the path to the user's encrypted 7z file. This data is stored in platform-specific locations:
     * **Linux:** \~/.config/ziplock/config.yml
     * **Windows:** %APPDATA%/ZipLock/config.yml
-    * The service will also store the user's preferred time period before the app automatically locks itself, which will be saved in the configuration file.
-* **Encryption:** The 7z file will be encrypted using **AES-256** with the user-provided master key.
+    * **macOS:** ~/Library/Application Support/ZipLock/config.yml
+    * The library also manages user preferences like auto-lock timeout.
+* **Encryption:** The 7z file is encrypted using **AES-256** with the user-provided master key.
 
 ### **2.2 Frontend Clients**
 
-The frontend clients will be thin, lightweight applications that communicate with the backend daemon via a defined API. They are responsible for rendering the user interface and translating user actions into requests for the backend.
+The frontend clients are native applications that communicate with the shared core library via direct FFI calls. They are responsible for rendering the user interface and translating user actions into library function calls.
 
-* **Linux:** Written in **Rust** using a GUI framework like gtk-rs or iced to ensure native look and feel and compatibility with the **Wayland** display server.
+* **Linux:** Written in **Rust** using a GUI framework like gtk-rs or iced to ensure native look and feel and compatibility with the **Wayland** display server. Communicates with the shared core library through direct FFI calls.
 * **Windows:** Written in **Rust** using a framework like tauri or winrt-rs to provide a native application experience. If this proves too complex, a fallback to a C\# application using WPF or WinForms is an acceptable alternative.
 * **Other Platforms:** The architecture is designed to support other platforms in the future. The specification should be extended to include clients for macOS (Swift/SwiftUI), iOS (Swift/SwiftUI), and Android (Kotlin/Jetpack Compose).
 
@@ -48,15 +49,9 @@ The project will follow a modular, workspace-based folder structure to facilitat
 │   │   └── models/
 │   │   └── utils/
 │   └── Cargo.toml
-├── backend/                       \# Rust backend daemon/service
-│   ├── src/                       \# Source code for the backend
-│   │   ├── main.rs
-│   │   └── api/
-│   │   └── storage/
-│   │   └── config.rs
-│   └── Cargo.toml
-├── frontend/                      \# Root directory for all frontend applications
-│   ├── linux/                     \# Linux frontend (Rust \+ GTK/Iced)
+
+├── apps/                          \# Root directory for all applications
+│   ├── linux/                     \# Linux app (Rust \+ GTK/Iced)
 │   │   ├── src/
 │   │   └── Cargo.toml
 │   ├── windows/                   \# Windows frontend (Rust \+ Tauri/winrt-rs)

@@ -14,6 +14,8 @@ NC='\033[0m' # No Color
 
 echo -e "${BLUE}🔐 ZipLock Configuration Migration${NC}"
 echo -e "${BLUE}===================================${NC}"
+echo -e "${YELLOW}Note: ZipLock now uses unified FFI architecture (no separate backend daemon)${NC}"
+echo
 
 # Get config directory
 CONFIG_DIR=""
@@ -36,12 +38,14 @@ if [[ ! -d "$CONFIG_DIR" ]]; then
     exit 0
 fi
 
-# Backend config migration
+# Legacy backend config migration (for unified FFI architecture)
 BACKEND_TOML="$CONFIG_DIR/backend.toml"
 BACKEND_YAML="$CONFIG_DIR/backend.yml"
+APP_CONFIG_YAML="$CONFIG_DIR/config.yml"
 
 if [[ -f "$BACKEND_TOML" ]]; then
-    echo -e "${YELLOW}🔄 Found backend.toml, migrating to backend.yml...${NC}"
+    echo -e "${YELLOW}🔄 Found legacy backend.toml, migrating to unified config...${NC}"
+    echo -e "${BLUE}Note: Backend-specific settings will be integrated into main config${NC}"
 
     if [[ -f "$BACKEND_YAML" ]]; then
         echo -e "${YELLOW}⚠️  backend.yml already exists. Creating backup...${NC}"

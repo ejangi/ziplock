@@ -49,12 +49,12 @@ pub async fn validate_repository(&self, archive_path: PathBuf) -> BackendResult<
 - **Permission checking**: Prevents cross-user repository access
 - **Lightweight validation**: No master password required
 
-#### IPC Integration
-- Added `ValidateRepository` request variant
+#### FFI Integration
+- Added `ValidateRepository` function to FFI interface
 - Added `RepositoryValidated` response variant
 - Integrated with existing session management
 
-### 3. Frontend Repository Selection (`frontend/linux/src/`)
+### 3. Frontend Repository Selection (`apps/linux/src/`)
 
 #### Enhanced Application Flow
 1. **Configuration Loading**: Load user config and detect repositories
@@ -154,22 +154,26 @@ repository:
 
 ## Integration Points
 
-### 1. Backend IPC Protocol
+### 1. FFI Interface
 ```rust
-// Request
-Request::ValidateRepository { archive_path: PathBuf }
+// FFI function
+#[no_mangle]
+pub extern "C" fn ziplock_validate_repository(
+    archive_path: *const c_char
+) -> *mut RepositoryInfo;
 
-// Response  
-ResponseData::RepositoryValidated {
-    path: PathBuf,
-    size: u64,
-    last_modified: SystemTime,
-    is_valid_format: bool,
-    display_name: String,
+// Response structure
+#[repr(C)]
+pub struct RepositoryInfo {
+    pub path: *mut c_char,
+    pub size: u64,
+    pub last_modified: u64,
+    pub is_valid_format: bool,
+    pub display_name: *mut c_char,
 }
 ```
 
-### 2. Frontend Message Flow
+### 2. Frontend Integration Flow
 ```rust
 ConfigLoaded → ConfigReady → RepositoriesDetected → RepositorySelection/OpenRepository
 ```

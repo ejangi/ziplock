@@ -23,19 +23,8 @@ Starting with version 0.2.0, ZipLock uses YAML format for all configuration file
 Here's a comprehensive example configuration file showing all available options:
 
 ```yaml
-# ZipLock Backend Configuration Example
+# ZipLock Configuration Example
 # Copy to ~/.config/ziplock/config.yml (Linux) or %APPDATA%/ZipLock/config.yml (Windows)
-
-# IPC Communication Settings
-ipc:
-  # Unix socket path for backend communication
-  socket_path: "/tmp/ziplock/backend.sock"
-  # Maximum concurrent connections
-  max_connections: 10
-  # Connection timeout in seconds
-  connection_timeout: 30
-  # Request timeout in seconds
-  request_timeout: 60
 
 # Storage and Archive Settings
 storage:
@@ -201,15 +190,6 @@ logging:
 
 ## Configuration Sections
 
-### IPC Settings
-
-Controls how the frontend communicates with the backend service:
-
-- `socket_path`: Location of the Unix domain socket for communication
-- `max_connections`: Prevents resource exhaustion by limiting concurrent connections
-- `connection_timeout`: Prevents hanging connections
-- `request_timeout`: Maximum time for a single request
-
 ### Storage Settings
 
 Controls how archives are stored and managed:
@@ -327,7 +307,6 @@ Some configuration options can be overridden with environment variables:
 
 - `ZIPLOCK_CONFIG_PATH`: Override the default configuration file location
 - `ZIPLOCK_LOG_LEVEL`: Override the logging level (trace, debug, info, warn, error)
-- `ZIPLOCK_SOCKET_PATH`: Override the IPC socket path
 - `ZIPLOCK_AUTO_LOCK_TIMEOUT`: Override the auto-lock timeout
 
 Example:
@@ -351,7 +330,6 @@ ZIPLOCK_LOG_LEVEL=debug ZIPLOCK_AUTO_LOCK_TIMEOUT=0 ziplock
 
 **Permission denied errors**:
 - Ensure the config directory is writable
-- Check that socket paths are in writable directories
 - Verify file permissions match security requirements
 
 ### Validation
@@ -366,15 +344,9 @@ python3 -c "import yaml; yaml.safe_load(open('~/.config/ziplock/config.yml'))"
 ziplock --validate-config
 ```
 
-
-
 ## Related Documentation
 
 - [Validation Implementation](validation-implementation.md) - Technical details about repository validation
 - [Build Guide](build.md) - Build-time configuration options
 - [Architecture Overview](../architecture.md) - How configuration fits into the overall system
-- [IPC Client Examples](ipc-client-examples.md) - Examples of using configured backend services
 - [Mobile Integration](mobile-integration.md) - Configuration considerations for mobile platforms
-```
-
-Now let me update the demo validation script to reflect the new config format:

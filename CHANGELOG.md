@@ -47,7 +47,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - **BREAKING**: Configuration files now use YAML format instead of TOML
   - Backend configuration: `~/.config/ziplock/backend.yml` (was `backend.toml`)
-  - Frontend configuration: `~/.config/ziplock/config.yml` (was `config.toml`)
+  - App configuration: `~/.config/ziplock/config.yml` (was `config.toml`)
   - All sample configuration files have been updated to YAML format
   - Migration script provided: `./scripts/migrations/migrate-config-from-toml-to-yaml.sh`
 
@@ -78,7 +78,7 @@ The migration script will:
 ### Added
 - Initial release of ZipLock password manager
 - Encrypted 7z archive storage for credentials
-- Linux frontend with GTK4/iced interface
+- Linux app with GTK4/iced interface
 - Backend service with IPC communication
 - Full-text search across all credential fields
 - Built-in credential templates (Login, Secure Note, Credit Card, etc.)

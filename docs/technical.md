@@ -6,14 +6,7 @@ This document serves as the central index for all technical documentation in the
 
 **ALL TECHNICAL DOCUMENTATION MUST BE PLACED IN THE `docs/technical/` DIRECTORY.**
 
-This includes but is not limited to:
-- Implementation guides and technical specifications
-- Architecture documentation
-- API documentation
-- Mobile integration guides
-- Platform-specific implementation details
-- Security implementation details
-- Performance optimization guides
+ZipLock uses a unified FFI-based architecture where all platform implementations communicate directly with a shared core library. This approach provides consistent functionality across all platforms while eliminating the complexity of separate backend services.
 
 Do not place technical documentation in the root `docs/` directory or other locations. The `docs/technical/` directory is the designated location for all technical content to maintain organization and discoverability.
 
@@ -23,7 +16,7 @@ Do not place technical documentation in the root `docs/` directory or other loca
 - [Design Guidelines](design.md) - UI/UX design principles and visual standards
 - [Repository Detection Implementation](technical/repository-detection-implementation.md) - Technical implementation details for repository detection
 - [Configuration Guide](technical/configuration.md) - Complete configuration reference with examples and profiles
-- [IPC Client Examples](technical/ipc-client-examples.md) - Backend service API examples and integration patterns
+
 - [Mobile Integration Guide](technical/mobile-integration.md) - Complete mobile platform integration documentation with examples
 - [Mobile Shared Implementation](technical/mobile-shared-implementation.md) - Shared library integration for mobile platforms
 
@@ -41,25 +34,22 @@ Do not place technical documentation in the root `docs/` directory or other loca
 - Backup and recovery mechanisms
 - File locking and concurrent access prevention
 
-## Inter-Process Communication
+## Client Integration
 
-- [IPC Client Examples](technical/ipc-client-examples.md) - Complete examples for frontend-backend communication
-- Frontend-backend communication protocols
-- API specifications and data formats
-- Error handling and message passing
-- Session management across components
+- Unified FFI client interface for all platforms
+- Direct function call integration patterns
+- Error handling and memory management
+- Session management within shared library
 
 ## Platform-Specific Implementation
 
-### Desktop Platforms
-- Linux implementation details (Rust + iced/GTK4)
-- Windows implementation details (Rust + Tauri)
-- macOS implementation planning (Swift + SwiftUI)
-
-### Mobile Platforms
-- [Mobile Integration Guide](technical/mobile-integration.md) - iOS and Android implementation with complete examples
-- iOS implementation planning (Swift + SwiftUI)
-- Android implementation planning (Kotlin + Jetpack Compose)
+### All Platforms (Unified Architecture)
+- [Mobile Integration Guide](technical/mobile-integration.md) - Complete FFI integration examples for all platforms
+- Linux implementation (Rust + iced/GTK4) with direct FFI calls
+- Windows implementation (Rust + Tauri) with direct FFI calls
+- iOS implementation (Swift + SwiftUI) with C interop
+- Android implementation (Kotlin + Jetpack Compose) with JNI
+- macOS implementation (Swift + SwiftUI) with C interop
 
 ## Development and Testing
 
@@ -152,7 +142,7 @@ When adding new technical documentation:
 
 ## Example Documentation and Integration Patterns
 
-**Note**: As of the latest update, all example files have been reorganized from the `examples/` directory into relevant technical documentation for better discoverability and maintenance. This includes configuration examples, IPC client implementations, and mobile platform integration code.
+**Note**: As of the latest update, all example files have been reorganized from the `examples/` directory into relevant technical documentation for better discoverability and maintenance. This includes configuration examples, FFI client implementations, and mobile platform integration code.
 
 The ZipLock project includes comprehensive examples and integration patterns distributed across focused technical guides:
 
@@ -164,12 +154,6 @@ The ZipLock project includes comprehensive examples and integration patterns dis
   - YAML migration from TOML
 
 ### Client Integration Examples
-- [IPC Client Examples](technical/ipc-client-examples.md) - Complete Rust client implementation
-  - Full protocol implementation
-  - Error handling patterns
-  - Async integration patterns
-  - Connection management and session handling
-
 ### Mobile Platform Examples
 - [Mobile Integration Guide](technical/mobile-integration.md) - iOS and Android integration examples
   - Complete iOS Swift implementation with SwiftUI integration

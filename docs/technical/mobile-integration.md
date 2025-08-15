@@ -1,36 +1,42 @@
 # ZipLock Mobile Integration Guide
 
-This document provides a comprehensive guide for integrating ZipLock's core functionality into iOS and Android applications using the C FFI (Foreign Function Interface) bindings.
+This document provides a comprehensive guide for integrating ZipLock's core functionality into iOS and Android applications using the unified FFI architecture. This is the same approach used by all ZipLock platforms for maximum consistency and maintainability.
 
 ## Overview
 
-ZipLock provides a C-compatible API that allows mobile applications to access the core password manager functionality written in Rust. This approach enables:
+ZipLock uses a **unified architecture** where all platforms (desktop and mobile) communicate directly with a shared Rust core library through C FFI bindings. This eliminates platform-specific backend services and provides:
 
-- **Code Reuse**: Share core logic between desktop and mobile platforms
-- **Security**: Benefit from Rust's memory safety and the proven cryptographic implementation
-- **Performance**: Native performance without the overhead of cross-platform frameworks
-- **Consistency**: Identical data models and validation logic across all platforms
+- **True Code Reuse**: Identical core implementation across ALL platforms
+- **Security**: Rust's memory safety with isolated cryptographic operations
+- **Performance**: Direct function calls eliminate IPC overhead
+- **Consistency**: Same business logic, validation, and behavior everywhere
+- **Simplicity**: No background services, sockets, or complex communication protocols
 
-## Architecture
+## Unified Architecture
+
+All ZipLock platforms use the same direct FFI integration pattern:
 
 ```
-┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
-│   iOS App       │    │   Android App    │    │  Desktop Apps   │
-│ (Swift/SwiftUI) │    │(Kotlin/Compose)  │    │     (Rust)      │
-└─────────────────┘    └──────────────────┘    └─────────────────┘
-         │                       │                       │
-         └───────────────────────┼───────────────────────┘
-                                 │
-                    ┌──────────────────┐
-                    │  C FFI Bindings  │
-                    │   (ziplock.h)    │
-                    └──────────────────┘
-                                 │
-                    ┌──────────────────┐
-                    │  Shared Library  │
-                    │     (Rust)       │
-                    └──────────────────┘
+┌─────────────────┐    Direct    ┌─────────────────┐    File I/O   ┌─────────────────┐
+│  Frontend UI    │    FFI       │   Shared Core   │ ◄────────────► │ Encrypted 7z    │
+│                 │ ◄─────────► │    Library      │               │ Archive         │
+│ • Linux (Rust)  │             │     (Rust)      │               │                 │
+│ • Windows(Rust) │             │                 │               │                 │
+│ • iOS (Swift)   │             │ • Archive Ops   │               │                 │
+│ • Android(Kotlin│             │ • Cryptography  │               │                 │
+│ • macOS (Swift) │             │ • Validation    │               │                 │
+│                 │             │ • C FFI API     │               │                 │
+└─────────────────┘             │ • Data Models   │               └─────────────────┘
+                                │ • Session Mgmt  │
+                                └─────────────────┘
 ```
+
+### Key Benefits of Unified Architecture
+
+- **No Platform-Specific Backends**: Mobile apps work exactly like desktop apps
+- **Consistent Behavior**: Same archive format, validation, and operations everywhere
+- **Simplified Testing**: One implementation to test across all platforms
+- **Faster Development**: Mobile platforms benefit from all desktop improvements automatically
 
 ## Building the Shared Library
 

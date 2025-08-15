@@ -4,54 +4,63 @@ This document describes the comprehensive architecture of the ZipLock password m
 
 ## **1\. Overview**
 
-The core of the application is a **backend service** that manages the encrypted 7z file. All read and write operations to the credential database are funneled through this service. On top of this, **frontend clients** are built for each platform to provide a native user experience. A **shared library** is used to house common data models and logic, ensuring consistency and reducing code duplication.
+ZipLock uses a **unified architecture** where **frontend clients** communicate directly with a **shared core library** through C FFI (Foreign Function Interface) bindings. This eliminates the complexity of separate backend services while providing consistent functionality across all platforms.
 
-This modular approach provides several key benefits:
+This unified approach provides several key benefits:
 
-* **Security:** The master key is held exclusively by the backend service in memory, never exposed to the frontend.
-* **Portability:** The core logic is isolated in a shared library and the backend service, making it easier to adapt to new platforms.
-* **Maintainability:** Separating concerns into distinct modules simplifies debugging and feature development.
+* **Security:** The master key is held securely within the shared library's memory space, with cryptographic operations isolated from UI code.
+* **Portability:** A single shared library implementation works across all platforms (Linux, Windows, iOS, Android, macOS) through FFI bindings.
+* **Maintainability:** One implementation to maintain, test, and debug across all platforms.
+* **Performance:** Direct function calls eliminate overhead and serialization costs.
+* **Simplicity:** No background services or complex communication protocols.
 
 ## **2\. Component Breakdown**
 
 ### **2.1 Backend Service**
 
-The backend is a long-running, persistent service or daemon responsible for all low-level operations.
+The shared core library provides all cryptographic and file operations through a C FFI interface.
 
-* **Technology:** Written in **Rust** for performance and memory safety on desktop platforms (Linux, Windows). For mobile platforms like iOS and Android, this functionality will be reimplemented in a platform-native language (e.g., Swift or Kotlin) to align with platform constraints.
+* **Technology:** Written in **Rust** and compiled as a shared library with C FFI bindings for universal platform compatibility.
 * **Responsibilities:**
   * **Secure Storage:** Opens, encrypts, and decrypts the 7z file containing credentials.
-  * **Master Key Management:** Receives the master key from the frontend during initial unlock and holds it securely in a temporary, in-memory state.
-  * **File Locking:** Manages file locks to prevent external processes or sync services from corrupting the ZIP file during operations.
-  * **API Endpoint:** Exposes a well-defined API for frontend clients to interact with.
+  * **Master Key Management:** Securely manages master keys in memory with automatic cleanup.
+  * **File Locking:** Manages file locks to prevent corruption during sync operations.
+  * **FFI Interface:** Exposes a comprehensive C API for all credential and archive operations.
   * **Repository Validation:** Performs comprehensive validation and auto-repair of repository format and structure.
-  * **Session Management:** Maintains secure session state for authenticated clients.
+  * **Session Management:** Maintains secure session state within the library context.
+  * **Memory Safety:** Rust's memory safety guarantees protect against common security vulnerabilities.
 
 ### **2.2 Frontend Clients**
 
-The frontend clients are the user-facing part of the application. They are designed to be thin and simple, focusing solely on the user experience.
+The frontend clients are platform-native applications that provide the user interface while delegating all security-critical operations to the shared library.
 
 * **Technology:**
-  * **Linux:** Written in **Rust** using a native GUI toolkit like gtk-rs or iced, with a strong focus on Wayland compatibility.
-  * **Windows:** Written in **Rust** using a framework like tauri or winrt-rs, with a fallback to C\# if needed.
-  * **Mobile:** Future clients for iOS and Android will be developed in **SwiftUI** and **Jetpack Compose**, respectively.
+  * **Linux:** **Rust** using iced/GTK4 with direct FFI calls to the shared library.
+  * **Windows:** **Rust** using Tauri with direct FFI calls to the shared library.
+  * **iOS:** **Swift + SwiftUI** calling the shared library through Swift C interop.
+  * **Android:** **Kotlin + Jetpack Compose** calling the shared library through JNI.
+  * **macOS:** **Swift + SwiftUI** calling the shared library through Swift C interop.
 * **Responsibilities:**
-  * **User Interface:** Displays credentials, provides search functionality, and handles user input.
-  * **Authentication:** Prompts the user for the master key and sends it to the backend for authentication.
-  * **Communication:** Interacts with the backend service through a platform-appropriate communication channel (e.g., local IPC, gRPC, etc.).
-  * **Error Display:** Presents user-friendly error messages and status information.
-  * **Input Validation:** Provides real-time validation feedback using shared validation logic.
+  * **User Interface:** Platform-native UI components for optimal user experience.
+  * **Authentication:** Prompts for master key and passes it securely to the shared library.
+  * **FFI Integration:** Direct function calls to the shared library's C API.
+  * **Error Display:** Converts library error codes to user-friendly messages.
+  * **Input Validation:** Uses shared validation logic through FFI calls.
 
 ### **2.3 Shared Library**
 
-The shared library is a critical component that houses the common logic required by both the backend and frontend.
+The shared library is the core of ZipLock, containing all business logic and providing a C FFI interface for universal platform compatibility.
 
-* **Technology:** A **Rust crate** that is a dependency for both the backend and Rust-based frontend projects.
+* **Technology:** A **Rust crate** compiled as a shared library (.so/.dll/.dylib) with C header files for FFI integration.
 * **Contents:**
-  * **Data Models:** Defines the data structures for credentials, fields, and custom types, ensuring a consistent data format across the entire application.
-  * **YAML Parsing:** Contains the logic for reading and writing data to the record.yml files.
-  * **Validation Logic:** Centralized passphrase validation requirements and logic.
-  * **Core Logic:** Includes shared utility functions for file path sanitization and other non-critical logic that doesn't need to be reimplemented.
+  * **Data Models:** Credential, field, and archive data structures with C-compatible representations.
+  * **Archive Operations:** Complete 7z file creation, opening, saving, and validation logic.
+  * **Cryptographic Operations:** All encryption, decryption, and key derivation functions.
+  * **Validation Logic:** Comprehensive passphrase and credential validation.
+  * **C FFI Interface:** Complete API for archive management, credential operations, and validation.
+  * **Memory Management:** Safe memory allocation and cleanup for cross-language compatibility.
+  * **Session Management:** Secure session handling within the library context.
+  * **Utility Functions:** File operations, search, and other shared functionality.
 
 ## **3\. Security Architecture**
 
@@ -67,9 +76,9 @@ The foundation of ZipLock's security is its encryption model, designed to protec
 
 ZipLock follows a strict client-server security model to ensure that sensitive operations are handled in a protected environment.
 
-* **Trusted Backend:** The backend service is the single point of trust. It is the only component that ever handles the unencrypted master key and performs cryptographic operations. It holds the master key in a secure, in-memory state only after the user has successfully authenticated and it will be wiped from memory when the application is locked.
-* **Untrusted Frontend:** Frontend clients are considered untrusted from a security perspective. Their sole purpose is to present the user interface and pass the master key to the backend during the unlock process. They never store or process the master key or unencrypted credentials.
-* **Secure Communication:** Communication between the frontend client and the backend service will be secured via a platform-appropriate Inter-Process Communication (IPC) mechanism to prevent eavesdropping by other processes on the system.
+* **Trusted Core Library:** The shared core library is the single point of trust. It is the only component that ever handles the unencrypted master key and performs cryptographic operations. It holds the master key in a secure, in-memory state only after the user has successfully authenticated and it will be wiped from memory when the application is locked.
+* **Untrusted Frontend:** Frontend clients are considered untrusted from a security perspective. Their sole purpose is to present the user interface and pass the master key to the core library during the unlock process. They never store or process the master key or unencrypted credentials.
+* **Direct Integration:** Communication between the frontend client and the core library uses direct FFI calls within the same process, eliminating external communication channels and reducing attack surface.
 
 ### **3.3 Data Integrity and Storage**
 
@@ -77,7 +86,7 @@ The data storage mechanism is designed for both security and portability.
 
 * **File Format:** The password database is a single encrypted ziplock.7z file. This portable format allows users to store the file on local disk, a USB drive, or a cloud sync folder of their choice.
 * **Record Integrity:** Each credential is stored as a record.yml file within the archive. The structured YAML format helps ensure data integrity and makes it easy to read and parse.
-* **File Locking:** To prevent data corruption, the backend service will employ file locking mechanisms to ensure only one process can access the 7z file at a time, especially important for preventing issues with concurrent cloud synchronization.
+* **File Locking:** To prevent data corruption, the core library employs file locking mechanisms to ensure only one process can access the 7z file at a time, especially important for preventing issues with concurrent cloud synchronization.
 
 ### **3.4 Threat Model and Mitigations**
 
@@ -169,20 +178,20 @@ PassphraseRequirements {
 
 ### **5.1 Session-Based Authentication**
 
-The backend implements a session-based authentication system for secure multi-request operations:
+The core library implements a session-based authentication system for secure multi-request operations:
 
 * **Session Creation:** Clients must establish a session before database operations
-* **Session Tracking:** Backend tracks session state internally with unique session IDs
-* **Session Security:** Sessions are cleared on disconnect for security
-* **Automatic Session Management:** IPC client automatically creates sessions when needed
+* **Session Tracking:** Core library tracks session state internally with unique session IDs
+* **Session Security:** Sessions are cleared when the application is locked for security
+* **Automatic Session Management:** FFI client automatically creates sessions when needed
 
 ### **5.2 Session Flow**
 
-1. Client connects to backend via Unix socket
+1. Client initializes connection to core library via FFI
 2. `CreateSession` request sent (no session ID required)
-3. Backend responds with unique session ID
+3. Core library responds with unique session ID
 4. All subsequent requests include session ID
-5. Session cleared on disconnect or error
+5. Session cleared on lock or error
 
 ## **6\. Open Repository Implementation Architecture**
 
@@ -215,59 +224,57 @@ pub enum OpenState {
 
 ## **7\. Communication Architecture**
 
-Frontend clients communicate with the backend service via a platform-specific Inter-Process Communication (IPC) mechanism. This API defines a set of requests and responses for all supported operations, such as:
+Frontend clients communicate with the shared library through direct C FFI function calls. This provides a clean, efficient interface for all supported operations, such as:
 
 * Creating and managing sessions
-* Unlocking the database with a master key
+* Creating and unlocking archives with master keys
 * Creating, reading, updating, and deleting credentials
 * Searching for credentials by title, tags, or content
-* Creating and managing custom credential types
-* Retrieving user configuration data
+* Password generation and validation
 * Repository validation and repair operations
 
-### **7.1 IPC Protocol**
+### **7.1 FFI Interface**
 
-* **Transport:** Unix domain sockets on Linux, named pipes on Windows
-* **Message Format:** JSON-based request/response protocol
-* **Session Management:** Session IDs required for database operations
-* **Error Handling:** Comprehensive error codes and user-friendly messages
+* **Transport:** Direct function calls through C FFI
+* **Data Format:** C-compatible structures with proper memory management
+* **Session Management:** Session state maintained within the library
+* **Error Handling:** Return codes and error structures for comprehensive error reporting
+* **Memory Safety:** Automatic cleanup and explicit free functions for safe memory management
 
 ## **8\. Error Handling Architecture**
 
 ### **8.1 Error Classification**
 
-* **IPC Errors:** Connection failures, protocol errors, backend communication issues
+* **FFI Errors:** Invalid pointers, parameter validation, memory allocation issues
 * **Authentication Errors:** Invalid passphrases, session failures
 * **Validation Errors:** Input validation, repository format issues
 * **Storage Errors:** File access, corruption, permission issues
+* **Cryptographic Errors:** Encryption/decryption failures, key derivation issues
 
 ### **8.2 Error Message Conversion**
 
-The system includes intelligent error message conversion from technical backend errors to user-friendly messages:
+The system includes intelligent error message conversion from technical library errors to user-friendly messages:
 
-* "Failed to bind to socket" → "Unable to start the backend service..."
+* "Invalid pointer" → "Internal error occurred. Please restart the application..."
 * "Authentication failed" → "Incorrect passphrase. Please check..."
 * "Archive not found" → "The password archive file could not be found..."
+* "Cryptographic error" → "Unable to decrypt data. The file may be corrupted..."
 
 ## **9\. Architectural Diagram**
 
 ```
-┌----------------┐          ┌-------------------┐          ┌--------------┐
-|                | <------> |  Backend Service  | <------> |  Encrypted   |
-| Frontend Client|          |  (Rust, Swift,    |          |  Data Store  |
-| (Rust, C#, etc.)|          |   Kotlin)         |          |  (7z file)   |
-|                |          └-------------------┘          |              |
-└----------------┘                ^                        └--------------┘
-                                  |
-                                  | Uses
-                                  |
-                           ┌-------------------┐
-                           |  Shared Library   |
-                           |  (Rust Crate)     |
-                           |  - Data Models    |
-                           |  - Validation     |
-                           |  - Utilities      |
-                           └-------------------┘
+┌─────────────────┐    Direct    ┌─────────────────┐    File I/O   ┌─────────────────┐
+│  Frontend UI    │    FFI       │   Shared Core   │ ◄────────────► │ Encrypted 7z    │
+│                 │ ◄─────────► │    Library      │               │ Archive         │
+│ • Linux (Rust)  │             │     (Rust)      │               │                 │
+│ • Windows(Rust) │             │                 │               │                 │
+│ • iOS (Swift)   │             │ • Archive Ops   │               │                 │
+│ • Android(Kotlin│             │ • Cryptography  │               │                 │
+│ • macOS (Swift) │             │ • Validation    │               │                 │
+│                 │             │ • C FFI API     │               │                 │
+└─────────────────┘             │ • Data Models   │               └─────────────────┘
+                                │ • Session Mgmt  │
+                                └─────────────────┘
 ```
 
 ## **10\. Development Architecture**

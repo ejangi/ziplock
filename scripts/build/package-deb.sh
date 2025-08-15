@@ -75,9 +75,8 @@ verify_build() {
 
     # Check required files
     local required_files=(
-        "$install_dir/usr/bin/ziplock-backend"
         "$install_dir/usr/bin/ziplock"
-        "$install_dir/lib/systemd/system/ziplock-backend.service"
+        "$install_dir/usr/lib/libziplock_shared.so"
         "$install_dir/etc/ziplock/config.yml"
         "$install_dir/usr/share/applications/ziplock.desktop"
     )
@@ -165,16 +164,9 @@ chmod 750 /etc/ziplock
 chown root:ziplock /etc/ziplock/config.yml
 chmod 640 /etc/ziplock/config.yml
 
-# Enable and start the backend service (only if systemd is available)
-if [ -d /run/systemd/system ]; then
-    systemctl daemon-reload
-    systemctl enable ziplock-backend.service
-    systemctl start ziplock-backend.service || true
-    echo "Backend service enabled and started."
-else
-    echo "systemd not available - service will need to be started manually."
-    echo "To start the service later: sudo systemctl start ziplock-backend.service"
-fi
+# No service to enable - unified FFI architecture
+echo "ZipLock unified application ready to use."
+echo "No background service required with the new FFI architecture."
 
 # Update desktop database (only if frontend is installed)
 if [ -f /usr/share/applications/ziplock.desktop ]; then
@@ -192,7 +184,7 @@ fi
 
 echo "ZipLock has been installed successfully!"
 echo "You can now launch ZipLock from your applications menu or run 'ziplock' in terminal."
-echo "The backend service will start automatically on boot."
+echo "No background service is required - ZipLock uses a unified FFI architecture."
 
 #DEBHELPER#
 
@@ -214,18 +206,10 @@ set -e
 
 case "$1" in
     remove|upgrade|deconfigure)
-        # Stop the backend service (only if systemd is available)
-        if [ -d /run/systemd/system ]; then
-            if systemctl is-active --quiet ziplock-backend.service; then
-                systemctl stop ziplock-backend.service || true
-            fi
-
-            # Disable the service on removal (not upgrade)
-            if [ "$1" = "remove" ]; then
-                systemctl disable ziplock-backend.service || true
-            fi
-        fi
+        # No service to stop - unified FFI architecture
+        echo "Preparing to remove ZipLock unified application..."
         ;;
+esac
     failed-upgrade)
         ;;
     *)
@@ -278,10 +262,8 @@ case "$1" in
         fi
         ;;
     remove|upgrade|failed-upgrade|abort-install|abort-upgrade|disappear)
-        # Reload systemd on any removal (only if systemd is available)
-        if [ -d /run/systemd/system ]; then
-            systemctl daemon-reload || true
-        fi
+        # No systemd service to reload - unified FFI architecture
+        echo "ZipLock removal completed."
         ;;
     *)
         echo "postrm called with unknown argument \`$1'" >&2
@@ -381,7 +363,7 @@ build_package() {
     find "$deb_dir" -type f -name "*.so*" -exec chmod 644 {} \; 2>/dev/null || true
     find "$deb_dir" -type f -path "*/bin/*" -exec chmod 755 {} \;
     [ -f "$deb_dir/usr/share/applications/ziplock.desktop" ] && chmod 644 "$deb_dir/usr/share/applications/ziplock.desktop"
-    chmod 644 "$deb_dir/lib/systemd/system/ziplock-backend.service"
+    [ -f "$deb_dir/usr/lib/libziplock_shared.so" ] && chmod 644 "$deb_dir/usr/lib/libziplock_shared.so"
 
     # Debug: Show package structure before building
     log_info "Package structure summary:"

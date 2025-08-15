@@ -31,7 +31,11 @@
 //! assert!(credential.validate().is_ok());
 //! ```
 
+pub mod api;
+pub mod archive;
+pub mod client;
 pub mod config;
+
 pub mod models;
 pub mod utils;
 pub mod validation;
@@ -53,6 +57,9 @@ pub use config::{
     UiConfig,
 };
 
+// Re-export client functionality
+pub use client::ZipLockClient;
+
 // Re-export utilities
 pub use utils::*;
 
@@ -61,11 +68,17 @@ pub use validation::{
     is_valid_credential_id, sanitize_identifier, validate_credential, validate_master_passphrase,
     validate_master_passphrase_strict, CommonPatterns, EnhancedPassphraseValidator,
     PassphraseRequirements, PassphraseStrength, PassphraseValidationResult, PassphraseValidator,
-    StrengthLevel, ValidationPresets,
+    StrengthLevel, ValidationPresets, ValidationUtils,
 };
 
 // Re-export YAML functionality
 pub use yaml::*;
+
+// Re-export API functionality
+pub use api::{ApiError, ApiResult, ApiSession, ZipLockApi};
+
+// Re-export archive functionality
+pub use archive::{ArchiveConfig, ArchiveError, ArchiveManager, ArchiveResult};
 
 /// Current library version
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -100,6 +113,29 @@ pub mod error {
 
         #[error("Internal error: {message}")]
         Internal { message: String },
+
+        #[error("Archive error: {0}")]
+        Archive(#[from] crate::archive::ArchiveError),
+
+        #[error("API error: {message}")]
+        Api { message: String },
+
+        #[error("IO error: {0}")]
+        Io(#[from] std::io::Error),
+
+        #[error("Configuration error: {message}")]
+        Config { message: String },
+
+        #[error("Authentication error: {message}")]
+        Auth { message: String },
+    }
+
+    impl From<anyhow::Error> for SharedError {
+        fn from(error: anyhow::Error) -> Self {
+            SharedError::Internal {
+                message: error.to_string(),
+            }
+        }
     }
 
     /// Result type alias for shared library operations

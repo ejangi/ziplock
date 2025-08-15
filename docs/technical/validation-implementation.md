@@ -74,38 +74,42 @@ These methods now use the previously unused:
 - `validate_repository_format_detailed()`
 - `auto_repair_repository_format()`
 
-### 4. Extended IPC Protocol (`backend/src/ipc/mod.rs`)
+### 4. Extended FFI Interface (`shared/src/ffi.rs`)
 
-Added new request/response types:
+Added new FFI functions for validation:
 
-#### New Requests:
+#### New Functions:
 ```rust
-ValidateArchiveComprehensive {
-    archive_path: PathBuf,
-    master_password: String,
-},
-RepairArchive {
-    archive_path: PathBuf,
-    master_password: String,
-},
+#[no_mangle]
+pub extern "C" fn ziplock_validate_archive_comprehensive(
+    archive_path: *const c_char,
+    master_password: *const c_char,
+) -> *mut ValidationReport;
+
+#[no_mangle]
+pub extern "C" fn ziplock_repair_archive(
+    archive_path: *const c_char,
+    master_password: *const c_char,
+) -> *mut ValidationReport;
 ```
 
-#### New Responses:
+#### Return Types:
 ```rust
-ValidationReport {
-    report: crate::storage::validation::ValidationReport,
-},
-ArchiveRepaired {
-    report: crate::storage::validation::ValidationReport,
-},
+#[repr(C)]
+pub struct ValidationReport {
+    pub success: bool,
+    pub report_json: *mut c_char,
+}
 ```
 
-### 5. Frontend Integration (`frontend/linux/src/ipc.rs`)
+### 5. Frontend Integration (`apps/linux/src/client.rs`)
 
-Extended frontend IPC client with validation methods:
+Extended frontend FFI client with validation methods:
 - `validate_repository()` - Lightweight format validation
 - `validate_archive_comprehensive()` - Full validation 
 - `repair_archive()` - Archive repair functionality
+
+These methods call the shared library directly through FFI bindings.
 
 ## Resolved "Unused Method" Warnings
 

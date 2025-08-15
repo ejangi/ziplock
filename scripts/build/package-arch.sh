@@ -80,9 +80,8 @@ verify_build() {
 
     # Check required files
     local required_files=(
-        "$install_dir/usr/bin/ziplock-backend"
         "$install_dir/usr/bin/ziplock"
-        "$install_dir/lib/systemd/system/ziplock-backend.service"
+        "$install_dir/usr/lib/libziplock_shared.so"
         "$install_dir/etc/ziplock/config.yml"
     )
 
@@ -111,7 +110,7 @@ create_source_archive() {
     rsync -av \
         --exclude='.git/' \
         --exclude='target/' \
-        --exclude='test-results/' \
+        --exclude='tests/results/' \
         --exclude='*.deb' \
         --exclude='*.pkg.tar.*' \
         --exclude='.DS_Store' \

@@ -498,6 +498,12 @@ impl FieldType {
     }
 }
 
+impl std::fmt::Display for FieldType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.display_name())
+    }
+}
+
 /// Common credential templates
 pub struct CommonTemplates;
 

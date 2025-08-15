@@ -98,15 +98,15 @@ test_individual_components() {
         return 1
     fi
 
-    # Test backend
-    if ! cargo build --release -p ziplock-backend; then
-        log_error "Backend build failed"
+    # Test shared library with C API
+    if ! cargo build --release -p ziplock-shared --features c-api; then
+        log_error "Shared library build failed"
         return 1
     fi
 
-    # Test frontend
-    if ! cargo build --release -p ziplock-linux; then
-        log_error "Frontend build failed"
+    # Test unified application
+    if ! cargo build --release -p ziplock-linux --no-default-features --features "iced-gui,wayland-support,file-dialog,ffi-client"; then
+        log_error "Unified application build failed"
         return 1
     fi
 
@@ -171,18 +171,13 @@ test_build_script() {
     fi
 
     # Verify build script output
-    if [ ! -f "target/test-build/install/usr/bin/ziplock-backend" ]; then
-        log_error "Build script didn't create backend binary in install directory"
-        return 1
-    fi
-
     if [ ! -f "target/test-build/install/usr/bin/ziplock" ]; then
-        log_error "Build script didn't create frontend binary in install directory"
+        log_error "Build script didn't create ZipLock application binary in install directory"
         return 1
     fi
 
-    if [ ! -f "target/test-build/install/lib/systemd/system/ziplock-backend.service" ]; then
-        log_error "Build script didn't create systemd service file"
+    if [ ! -f "target/test-build/install/usr/lib/libziplock_shared.so" ]; then
+        log_error "Build script didn't create shared library in install directory"
         return 1
     fi
 

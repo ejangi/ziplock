@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # ZipLock Linux Build Script
-# Builds both backend and frontend binaries for Linux distribution
+# Builds unified ZipLock application with FFI shared library for Linux distribution
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
@@ -117,46 +117,48 @@ build_shared_library() {
     log_success "Shared library built successfully"
 }
 
-build_backend() {
-    log_info "Building backend service..."
+build_shared_library_with_capi() {
+    log_info "Building shared library with C API..."
 
     cd "$PROJECT_ROOT"
-    $CARGO_CMD build --profile "$PROFILE" --target "$TARGET_ARCH" -p ziplock-backend
+    $CARGO_CMD build --profile "$PROFILE" --target "$TARGET_ARCH" -p ziplock-shared --features c-api
 
-    local backend_binary="$RUST_TARGET_DIR/$TARGET_ARCH/$PROFILE/ziplock-backend"
-    if [ ! -f "$backend_binary" ]; then
-        log_error "Backend binary not found at: $backend_binary"
+    local shared_lib_dir="$RUST_TARGET_DIR/$TARGET_ARCH/$PROFILE"
+    local shared_lib_so="$shared_lib_dir/libziplock_shared.so"
+    local shared_lib_dylib="$shared_lib_dir/libziplock_shared.dylib"
+
+    if [ ! -f "$shared_lib_so" ] && [ ! -f "$shared_lib_dylib" ]; then
+        log_error "Shared library not found at: $shared_lib_dir"
         exit 1
     fi
 
-    log_success "Backend service built successfully"
+    log_success "Shared library with C API built successfully"
 }
 
-build_frontend() {
-    log_info "Building frontend client..."
+build_unified_application() {
+    log_info "Building unified ZipLock application..."
 
     cd "$PROJECT_ROOT"
-    $CARGO_CMD build --profile "$PROFILE" --target "$TARGET_ARCH" -p ziplock-linux --no-default-features --features "iced-gui,wayland-support,file-dialog"
+    $CARGO_CMD build --profile "$PROFILE" --target "$TARGET_ARCH" -p ziplock-linux --no-default-features --features "iced-gui,wayland-support,file-dialog,ffi-client"
 
-    local frontend_binary="$RUST_TARGET_DIR/$TARGET_ARCH/$PROFILE/ziplock"
-    if [ ! -f "$frontend_binary" ]; then
-        log_error "Frontend binary not found at: $frontend_binary"
+    local app_binary="$RUST_TARGET_DIR/$TARGET_ARCH/$PROFILE/ziplock"
+    if [ ! -f "$app_binary" ]; then
+        log_error "ZipLock application binary not found at: $app_binary"
         exit 1
     fi
 
-    log_success "Frontend client built successfully"
+    log_success "Unified ZipLock application built successfully"
 }
 
 run_tests() {
     log_info "Running tests..."
 
     cd "$PROJECT_ROOT"
-    # Test backend and shared libraries
-    $CARGO_CMD test --profile "$PROFILE" --target "$TARGET_ARCH" -p ziplock-backend
-    $CARGO_CMD test --profile "$PROFILE" --target "$TARGET_ARCH" -p ziplock-shared
+    # Test shared library with FFI features
+    $CARGO_CMD test --profile "$PROFILE" --target "$TARGET_ARCH" -p ziplock-shared --features c-api
 
-    # Test frontend with iced-gui features only
-    $CARGO_CMD test --profile "$PROFILE" --target "$TARGET_ARCH" -p ziplock-linux --no-default-features --features "iced-gui,wayland-support,file-dialog"
+    # Test unified application with FFI client
+    $CARGO_CMD test --profile "$PROFILE" --target "$TARGET_ARCH" -p ziplock-linux --no-default-features --features "iced-gui,wayland-support,file-dialog,ffi-client"
 
     log_success "All tests passed"
 }
@@ -165,11 +167,18 @@ strip_binaries() {
     if [ "$PROFILE" = "release" ]; then
         log_info "Stripping debug symbols from binaries..."
 
-        local backend_binary="$RUST_TARGET_DIR/$TARGET_ARCH/$PROFILE/ziplock-backend"
-        local frontend_binary="$RUST_TARGET_DIR/$TARGET_ARCH/$PROFILE/ziplock"
+        local app_binary="$RUST_TARGET_DIR/$TARGET_ARCH/$PROFILE/ziplock"
+        local shared_lib_dir="$RUST_TARGET_DIR/$TARGET_ARCH/$PROFILE"
 
-        strip "$backend_binary" || log_warning "Failed to strip backend binary"
-        strip "$frontend_binary" || log_warning "Failed to strip frontend binary"
+        strip "$app_binary" || log_warning "Failed to strip application binary"
+
+        # Strip shared library if it exists
+        if [ -f "$shared_lib_dir/libziplock_shared.so" ]; then
+            strip "$shared_lib_dir/libziplock_shared.so" || log_warning "Failed to strip shared library (.so)"
+        fi
+        if [ -f "$shared_lib_dir/libziplock_shared.dylib" ]; then
+            strip "$shared_lib_dir/libziplock_shared.dylib" || log_warning "Failed to strip shared library (.dylib)"
+        fi
 
         log_success "Binaries stripped"
     fi
@@ -178,35 +187,37 @@ strip_binaries() {
 verify_binaries() {
     log_info "Verifying built binaries..."
 
-    local backend_binary="$RUST_TARGET_DIR/$TARGET_ARCH/$PROFILE/ziplock-backend"
+    local app_binary="$RUST_TARGET_DIR/$TARGET_ARCH/$PROFILE/ziplock"
+    local shared_lib_dir="$RUST_TARGET_DIR/$TARGET_ARCH/$PROFILE"
 
-    # Check if backend binary exists and is executable
-    if [ ! -x "$backend_binary" ]; then
-        log_error "Backend binary is not executable: $backend_binary"
+    # Check if application binary exists and is executable
+    if [ ! -x "$app_binary" ]; then
+        log_error "ZipLock application binary is not executable: $app_binary"
         exit 1
     fi
 
-    # Quick version check for backend
-    log_info "Backend version: $("$backend_binary" --version 2>/dev/null || echo "Version check failed")"
-
-    # Check backend binary size
-    local backend_size=$(du -h "$backend_binary" | cut -f1)
-    log_info "Binary sizes - Backend: $backend_size"
-
-    # Check frontend binary
-    local frontend_binary="$RUST_TARGET_DIR/$TARGET_ARCH/$PROFILE/ziplock"
-
-    if [ ! -x "$frontend_binary" ]; then
-        log_error "Frontend binary is not executable: $frontend_binary"
+    # Check shared library exists
+    if [ ! -f "$shared_lib_dir/libziplock_shared.so" ] && [ ! -f "$shared_lib_dir/libziplock_shared.dylib" ]; then
+        log_error "Shared library not found in: $shared_lib_dir"
         exit 1
     fi
 
-    # Frontend is a GUI application and cannot be run without a display
+    # Application is a GUI and cannot be run without a display
     # so we skip the version check and just verify it's executable
-    log_info "Frontend binary verified (GUI application - version check skipped)"
+    log_info "ZipLock application verified (GUI application - version check skipped)"
 
-    local frontend_size=$(du -h "$frontend_binary" | cut -f1)
-    log_info "Frontend size: $frontend_size"
+    local app_size=$(du -h "$app_binary" | cut -f1)
+    log_info "Application size: $app_size"
+
+    # Check shared library size
+    if [ -f "$shared_lib_dir/libziplock_shared.so" ]; then
+        local lib_size=$(du -h "$shared_lib_dir/libziplock_shared.so" | cut -f1)
+        log_info "Shared library size (.so): $lib_size"
+    fi
+    if [ -f "$shared_lib_dir/libziplock_shared.dylib" ]; then
+        local lib_size=$(du -h "$shared_lib_dir/libziplock_shared.dylib" | cut -f1)
+        log_info "Shared library size (.dylib): $lib_size"
+    fi
 
     log_success "Binary verification completed"
 }
@@ -220,58 +231,50 @@ create_install_structure() {
 
     # Create directory structure
     mkdir -p "$install_dir/usr/bin"
-    mkdir -p "$install_dir/lib/systemd/system"
+    mkdir -p "$install_dir/usr/lib"
     mkdir -p "$install_dir/etc/ziplock"
-    mkdir -p "$install_dir/var/lib/ziplock"
-
-    # Create GUI directories
     mkdir -p "$install_dir/usr/share/applications"
     mkdir -p "$install_dir/usr/share/icons/hicolor/scalable/apps"
 
-    # Copy binaries
-    local backend_binary="$RUST_TARGET_DIR/$TARGET_ARCH/$PROFILE/ziplock-backend"
-    if [ -f "$backend_binary" ]; then
-        cp "$backend_binary" "$install_dir/usr/bin/"
+    # Copy application binary
+    local app_binary="$RUST_TARGET_DIR/$TARGET_ARCH/$PROFILE/ziplock"
+    if [ -f "$app_binary" ]; then
+        cp "$app_binary" "$install_dir/usr/bin/"
     else
-        log_error "Backend binary not found: $backend_binary"
+        log_error "ZipLock application binary not found: $app_binary"
         exit 1
     fi
 
-    local frontend_binary="$RUST_TARGET_DIR/$TARGET_ARCH/$PROFILE/ziplock"
-    if [ -f "$frontend_binary" ]; then
-        cp "$frontend_binary" "$install_dir/usr/bin/"
+    # Copy shared library
+    local shared_lib_dir="$RUST_TARGET_DIR/$TARGET_ARCH/$PROFILE"
+    if [ -f "$shared_lib_dir/libziplock_shared.so" ]; then
+        cp "$shared_lib_dir/libziplock_shared.so" "$install_dir/usr/lib/"
+    elif [ -f "$shared_lib_dir/libziplock_shared.dylib" ]; then
+        cp "$shared_lib_dir/libziplock_shared.dylib" "$install_dir/usr/lib/"
     else
-        log_error "Frontend binary not found: $frontend_binary"
+        log_error "Shared library not found in: $shared_lib_dir"
         exit 1
     fi
 
     # Copy desktop file and icon
-    if [ -f "$PROJECT_ROOT/frontend/linux/resources/ziplock.desktop" ]; then
-        cp "$PROJECT_ROOT/frontend/linux/resources/ziplock.desktop" "$install_dir/usr/share/applications/"
+    if [ -f "$PROJECT_ROOT/apps/linux/resources/ziplock.desktop" ]; then
+        cp "$PROJECT_ROOT/apps/linux/resources/ziplock.desktop" "$install_dir/usr/share/applications/"
     else
         log_warning "Desktop file not found"
     fi
 
     # Copy icon
-    if [ -f "$PROJECT_ROOT/frontend/linux/resources/icons/ziplock.svg" ]; then
-        cp "$PROJECT_ROOT/frontend/linux/resources/icons/ziplock.svg" "$install_dir/usr/share/icons/hicolor/scalable/apps/"
+    if [ -f "$PROJECT_ROOT/apps/linux/resources/icons/ziplock.svg" ]; then
+        cp "$PROJECT_ROOT/apps/linux/resources/icons/ziplock.svg" "$install_dir/usr/share/icons/hicolor/scalable/apps/"
     elif [ -f "$PROJECT_ROOT/assets/icons/ziplock-logo.svg" ]; then
         cp "$PROJECT_ROOT/assets/icons/ziplock-logo.svg" "$install_dir/usr/share/icons/hicolor/scalable/apps/ziplock.svg"
     else
         log_warning "No application icon found"
     fi
 
-    # Copy systemd service
-    if [ -f "$PACKAGING_DIR/ziplock-backend.service" ]; then
-        cp "$PACKAGING_DIR/ziplock-backend.service" "$install_dir/lib/systemd/system/"
-    else
-        log_error "Systemd service file not found: $PACKAGING_DIR/ziplock-backend.service"
-        exit 1
-    fi
-
-    # Create default config
+    # Create default config for unified application
     cat > "$install_dir/etc/ziplock/config.yml" << EOF
-# ZipLock Configuration
+# ZipLock Configuration (Unified FFI Architecture)
 storage:
   backup_count: 5
   auto_backup: true
@@ -285,15 +288,14 @@ security:
   min_master_key_length: 12
   enforce_strong_master_key: true
 
-backend:
-  bind_address: "127.0.0.1:0"  # Random port
-  log_level: "info"
-  max_sessions: 10
-
 ui:
   theme: "auto"  # auto, light, dark
   font_size: 14
   show_password_strength: true
+
+logging:
+  level: "info"  # debug, info, warn, error
+  file: null     # null for console only, or path to log file
 EOF
 
     log_success "Installation structure created at: $install_dir"
@@ -302,21 +304,27 @@ EOF
 display_build_summary() {
     log_success "Build completed successfully!"
     echo
-    echo "Build Summary:"
-    echo "=============="
+    echo "Build Summary (Unified FFI Architecture):"
+    echo "========================================="
     echo "Profile: $PROFILE"
     echo "Target: $TARGET_ARCH"
     echo "Version: $VERSION"
     echo
     echo "Binaries:"
-    echo "  Backend: $RUST_TARGET_DIR/$TARGET_ARCH/$PROFILE/ziplock-backend"
-    echo "  Frontend: $RUST_TARGET_DIR/$TARGET_ARCH/$PROFILE/ziplock"
+    echo "  Application: $RUST_TARGET_DIR/$TARGET_ARCH/$PROFILE/ziplock"
+    local shared_lib_dir="$RUST_TARGET_DIR/$TARGET_ARCH/$PROFILE"
+    if [ -f "$shared_lib_dir/libziplock_shared.so" ]; then
+        echo "  Shared Library: $shared_lib_dir/libziplock_shared.so"
+    elif [ -f "$shared_lib_dir/libziplock_shared.dylib" ]; then
+        echo "  Shared Library: $shared_lib_dir/libziplock_shared.dylib"
+    fi
     echo
     echo "Installation structure: $BUILD_DIR/install"
     echo
     echo "Next steps:"
     echo "  1. Run './scripts/build/package-deb.sh' to create .deb package"
     echo "  2. Or manually install with 'sudo cp -r $BUILD_DIR/install/* /'"
+    echo "  3. Run with: LD_LIBRARY_PATH=/usr/lib ziplock"
 }
 
 print_usage() {
@@ -395,8 +403,8 @@ main() {
     check_dependencies
     setup_build_environment
     build_shared_library
-    build_backend
-    build_frontend
+    build_shared_library_with_capi
+    build_unified_application
 
     if [ "$skip_tests" = false ]; then
         run_tests
