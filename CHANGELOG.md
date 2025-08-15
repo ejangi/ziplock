@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.2] - 2025-08-15
+
+### Changed
+- Complete the full list of common credential types and expand the add credential screen to make it easier to work with.
+
 ## [0.2.1] - 2025-08-15
 
 ### Fixed
