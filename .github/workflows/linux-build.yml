@@ -354,12 +354,19 @@ jobs:
 
       - name: Create Debian package in container
         run: |
+          # Clean up old package files first
+          echo "Cleaning up old package files..."
+          rm -f target/ziplock_*.deb || true
+
           docker run --rm \
             -v $PWD:/workspace \
             -e PACKAGE_ARCH=amd64 \
             ziplock-builder bash -c "
               set -euo pipefail
               trap 'echo \"ERROR: Packaging failed at line \$LINENO. Exit code: \$?\"' ERR
+
+              # Clean up any old packages in container as well
+              rm -f /workspace/target/ziplock_*.deb || true
 
               # Verify installation structure exists
               if [ ! -d '/workspace/target/install' ]; then
@@ -555,19 +562,23 @@ jobs:
           ls -la target/install/usr/lib/ 2>/dev/null || echo "Install directory not accessible"
 
           # Check package file exists and has reasonable size
-          PACKAGE_FILE=$(ls target/ziplock_*_amd64.deb 2>/dev/null | sed -n '1p') || PACKAGE_FILE=""
-          if [ -z "$PACKAGE_FILE" ]; then
-            echo "ERROR: Package file not found"
+          # Get the most recently created package file
+          PACKAGE_FILE=$(ls -t target/ziplock_*_amd64.deb 2>/dev/null | head -n1) || PACKAGE_FILE=""
+
+          if [ -z "$PACKAGE_FILE" ] || [ ! -f "$PACKAGE_FILE" ]; then
+            echo "ERROR: No package file found"
             echo "DEBUG: Available files in target directory:"
             ls -la target/
             exit 1
           fi
-          if [ ! -f "$PACKAGE_FILE" ]; then
-            echo "ERROR: Package file not found"
-            exit 1
-          fi
 
           echo "DEBUG: Using package file: $PACKAGE_FILE"
+          echo "DEBUG: Package file details:"
+          ls -la "$PACKAGE_FILE"
+          echo "DEBUG: Package creation time verification:"
+          stat "$PACKAGE_FILE" | grep -E "(Modify|Birth)" || echo "Could not get file timestamps"
+          echo "DEBUG: Current time for reference:"
+          date
           PACKAGE_SIZE=$(stat -c%s "$PACKAGE_FILE")
           echo "Package size: $PACKAGE_SIZE bytes"
           if [ "$PACKAGE_SIZE" -lt 1000000 ]; then  # Less than 1MB
