@@ -6972,7 +6972,7 @@ dependencies = [
 
 [[package]]
 name = "ziplock-linux"
-version = "0.1.8"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "arboard",
@@ -7004,7 +7004,7 @@ dependencies = [
 
 [[package]]
 name = "ziplock-shared"
-version = "0.1.8"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "assert_matches",
