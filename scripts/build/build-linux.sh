@@ -123,7 +123,13 @@ build_shared_library_with_capi() {
     cd "$PROJECT_ROOT"
     $CARGO_CMD build --profile "$PROFILE" --target "$TARGET_ARCH" -p ziplock-shared --features c-api
 
-    local shared_lib_dir="$RUST_TARGET_DIR/$TARGET_ARCH/$PROFILE"
+    # Map profile name to actual directory name
+    local cargo_profile="$PROFILE"
+    if [ "$PROFILE" = "dev" ]; then
+        cargo_profile="debug"
+    fi
+
+    local shared_lib_dir="$RUST_TARGET_DIR/$TARGET_ARCH/$cargo_profile"
     local shared_lib_so="$shared_lib_dir/libziplock_shared.so"
     local shared_lib_dylib="$shared_lib_dir/libziplock_shared.dylib"
 
@@ -139,9 +145,15 @@ build_unified_application() {
     log_info "Building unified ZipLock application..."
 
     cd "$PROJECT_ROOT"
-    $CARGO_CMD build --profile "$PROFILE" --target "$TARGET_ARCH" -p ziplock-linux --no-default-features --features "iced-gui,wayland-support,file-dialog,ffi-client"
+    $CARGO_CMD build --profile "$PROFILE" --target "$TARGET_ARCH" -p ziplock-linux --no-default-features --features "iced-gui,wayland-support,file-dialog"
 
-    local app_binary="$RUST_TARGET_DIR/$TARGET_ARCH/$PROFILE/ziplock"
+    # Map profile name to actual directory name
+    local cargo_profile="$PROFILE"
+    if [ "$PROFILE" = "dev" ]; then
+        cargo_profile="debug"
+    fi
+
+    local app_binary="$RUST_TARGET_DIR/$TARGET_ARCH/$cargo_profile/ziplock"
     if [ ! -f "$app_binary" ]; then
         log_error "ZipLock application binary not found at: $app_binary"
         exit 1
@@ -158,7 +170,7 @@ run_tests() {
     $CARGO_CMD test --profile "$PROFILE" --target "$TARGET_ARCH" -p ziplock-shared --features c-api
 
     # Test unified application with FFI client
-    $CARGO_CMD test --profile "$PROFILE" --target "$TARGET_ARCH" -p ziplock-linux --no-default-features --features "iced-gui,wayland-support,file-dialog,ffi-client"
+    $CARGO_CMD test --profile "$PROFILE" --target "$TARGET_ARCH" -p ziplock-linux --no-default-features --features "iced-gui,wayland-support,file-dialog"
 
     log_success "All tests passed"
 }
@@ -167,8 +179,14 @@ strip_binaries() {
     if [ "$PROFILE" = "release" ]; then
         log_info "Stripping debug symbols from binaries..."
 
-        local app_binary="$RUST_TARGET_DIR/$TARGET_ARCH/$PROFILE/ziplock"
-        local shared_lib_dir="$RUST_TARGET_DIR/$TARGET_ARCH/$PROFILE"
+        # Map profile name to actual directory name
+        local cargo_profile="$PROFILE"
+        if [ "$PROFILE" = "dev" ]; then
+            cargo_profile="debug"
+        fi
+
+        local app_binary="$RUST_TARGET_DIR/$TARGET_ARCH/$cargo_profile/ziplock"
+        local shared_lib_dir="$RUST_TARGET_DIR/$TARGET_ARCH/$cargo_profile"
 
         strip "$app_binary" || log_warning "Failed to strip application binary"
 
@@ -187,8 +205,14 @@ strip_binaries() {
 verify_binaries() {
     log_info "Verifying built binaries..."
 
-    local app_binary="$RUST_TARGET_DIR/$TARGET_ARCH/$PROFILE/ziplock"
-    local shared_lib_dir="$RUST_TARGET_DIR/$TARGET_ARCH/$PROFILE"
+    # Map profile name to actual directory name
+    local cargo_profile="$PROFILE"
+    if [ "$PROFILE" = "dev" ]; then
+        cargo_profile="debug"
+    fi
+
+    local app_binary="$RUST_TARGET_DIR/$TARGET_ARCH/$cargo_profile/ziplock"
+    local shared_lib_dir="$RUST_TARGET_DIR/$TARGET_ARCH/$cargo_profile"
 
     # Check if application binary exists and is executable
     if [ ! -x "$app_binary" ]; then
@@ -236,8 +260,14 @@ create_install_structure() {
     mkdir -p "$install_dir/usr/share/applications"
     mkdir -p "$install_dir/usr/share/icons/hicolor/scalable/apps"
 
+    # Map profile name to actual directory name
+    local cargo_profile="$PROFILE"
+    if [ "$PROFILE" = "dev" ]; then
+        cargo_profile="debug"
+    fi
+
     # Copy application binary
-    local app_binary="$RUST_TARGET_DIR/$TARGET_ARCH/$PROFILE/ziplock"
+    local app_binary="$RUST_TARGET_DIR/$TARGET_ARCH/$cargo_profile/ziplock"
     if [ -f "$app_binary" ]; then
         cp "$app_binary" "$install_dir/usr/bin/"
     else
@@ -246,7 +276,7 @@ create_install_structure() {
     fi
 
     # Copy shared library
-    local shared_lib_dir="$RUST_TARGET_DIR/$TARGET_ARCH/$PROFILE"
+    local shared_lib_dir="$RUST_TARGET_DIR/$TARGET_ARCH/$cargo_profile"
     if [ -f "$shared_lib_dir/libziplock_shared.so" ]; then
         cp "$shared_lib_dir/libziplock_shared.so" "$install_dir/usr/lib/"
     elif [ -f "$shared_lib_dir/libziplock_shared.dylib" ]; then
@@ -310,9 +340,16 @@ display_build_summary() {
     echo "Target: $TARGET_ARCH"
     echo "Version: $VERSION"
     echo
+
+    # Map profile name to actual directory name
+    local cargo_profile="$PROFILE"
+    if [ "$PROFILE" = "dev" ]; then
+        cargo_profile="debug"
+    fi
+
     echo "Binaries:"
-    echo "  Application: $RUST_TARGET_DIR/$TARGET_ARCH/$PROFILE/ziplock"
-    local shared_lib_dir="$RUST_TARGET_DIR/$TARGET_ARCH/$PROFILE"
+    echo "  Application: $RUST_TARGET_DIR/$TARGET_ARCH/$cargo_profile/ziplock"
+    local shared_lib_dir="$RUST_TARGET_DIR/$TARGET_ARCH/$cargo_profile"
     if [ -f "$shared_lib_dir/libziplock_shared.so" ]; then
         echo "  Shared Library: $shared_lib_dir/libziplock_shared.so"
     elif [ -f "$shared_lib_dir/libziplock_shared.dylib" ]; then
