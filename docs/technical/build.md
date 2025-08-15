@@ -173,22 +173,12 @@ export PROFILE=debug
 cargo build --profile release -p ziplock-shared
 ```
 
-#### 2. Backend Service
+#### 2. Unified Application
 ```bash
-# Build the backend service
-cargo build --profile release -p ziplock-backend
-
-# Test the backend
-./target/release/ziplock-backend --version
-./target/release/ziplock-backend --help
-```
-
-#### 3. Frontend Application
-```bash
-# Build the Linux frontend
+# Build the unified ZipLock application (includes FFI client)
 cargo build --profile release -p ziplock-linux
 
-# Test the frontend
+# Test the application (GUI app - may require display)
 ./target/release/ziplock --version
 ./target/release/ziplock --help
 ```
@@ -234,13 +224,11 @@ ZipLock supports packaging for multiple Linux distributions:
 The Debian package includes:
 
 ```
-/usr/bin/ziplock-backend          # Backend service binary
-/usr/bin/ziplock                  # Frontend GUI binary
+/usr/bin/ziplock                  # Unified GUI application binary
+/usr/lib/libziplock_shared.so     # Shared library (FFI)
 /usr/share/applications/ziplock.desktop  # Desktop entry
 /usr/share/icons/hicolor/scalable/apps/ziplock.svg  # Application icon
-/lib/systemd/system/ziplock-backend.service  # Systemd service
 /etc/ziplock/config.yml           # Default configuration
-/var/lib/ziplock/                 # Service state directory
 ```
 
 ### Arch Linux Package Structure
@@ -248,13 +236,11 @@ The Debian package includes:
 The Arch package includes the same files as Debian, but follows Arch conventions:
 
 ```
-/usr/bin/ziplock-backend          # Backend service binary
-/usr/bin/ziplock                  # Frontend GUI binary
+/usr/bin/ziplock                  # Unified GUI application binary
+/usr/lib/libziplock_shared.so     # Shared library (FFI)
 /usr/share/applications/ziplock.desktop  # Desktop entry
 /usr/share/icons/hicolor/scalable/apps/ziplock.svg  # Application icon
-/usr/lib/systemd/system/ziplock-backend.service  # Systemd service (note: /usr/lib)
 /etc/ziplock/config.yml           # Default configuration
-/var/lib/ziplock/                 # Service state directory
 /usr/share/licenses/ziplock/LICENSE  # License file
 /usr/share/doc/ziplock/           # Documentation
 ```
@@ -344,8 +330,8 @@ sudo dpkg -i target/ziplock_*.deb
 sudo apt-get install -f
 
 # Verify installation
-systemctl status ziplock-backend
 ziplock --version
+ldconfig -p | grep ziplock
 ```
 
 #### Arch Linux
@@ -359,11 +345,10 @@ yay -S ziplock
 # or
 paru -S ziplock
 
-# Enable and start service
-sudo systemctl enable --now ziplock-backend.service
+# Launch the application
+ziplock
 
 # Verify installation
-systemctl status ziplock-backend
 ziplock --version
 ```
 
@@ -384,18 +369,12 @@ sudo update-desktop-database
 ### Testing Installation
 
 ```bash
-# Test backend service
-ziplock-backend --version
-ziplock-backend --help
-
-# Test frontend application
+# Test unified application
 ziplock --version
 ziplock --help
 
-# Test systemd service (if installed via .deb)
-sudo systemctl status ziplock-backend
-sudo systemctl start ziplock-backend
-sudo systemctl stop ziplock-backend
+# Test shared library is available
+ldconfig -p | grep ziplock
 ```
 
 ### Package Removal
@@ -648,14 +627,12 @@ No display available
    docker run --rm -e DISPLAY=$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix:rw ziplock
    ```
 
-#### Backend Service Won't Start
+#### Application Won't Start
 
 **Symptoms:**
 ```
-systemctl status ziplock-backend
-● ziplock-backend.service - ZipLock Password Manager Backend Service
-   Loaded: loaded (/lib/systemd/system/ziplock-backend.service; enabled; vendor preset: enabled)
-   Active: failed (Result: exit-code) since ...
+# ZipLock is now a unified GUI application, no systemd service required
+ziplock --version
 ```
 
 **Solutions:**
@@ -693,7 +670,7 @@ cd /workspace
 apt-get update
 apt-get install -y ./target/ziplock_*_amd64.deb
 ziplock --version
-systemctl status ziplock-backend
+ldconfig -p | grep ziplock
 ```
 
 ### Arch Linux Specific Issues
@@ -795,25 +772,26 @@ error while loading shared libraries: libfontconfig.so.1
 
 **Symptoms:**
 ```
-Failed to enable unit: Unit file ziplock-backend.service does not exist
+ziplock: command not found
 ```
 
 **Solutions:**
 
 1. **Check service file location (Arch uses /usr/lib):**
    ```bash
-   ls -la /usr/lib/systemd/system/ziplock-backend.service
+   ls -la /usr/bin/ziplock /usr/lib/libziplock_shared.so
    ```
 
 2. **Reload systemd if service was just installed:**
    ```bash
-   sudo systemctl daemon-reload
-   sudo systemctl enable ziplock-backend.service
+   # Verify installation
+   which ziplock
+   ldd /usr/bin/ziplock
    ```
 
 3. **Check service file syntax:**
    ```bash
-   systemd-analyze verify /usr/lib/systemd/system/ziplock-backend.service
+   ldd /usr/bin/ziplock
    ```
 
 ### Docker Testing for Arch
@@ -827,7 +805,7 @@ cd /workspace
 pacman -Syu --noconfirm
 pacman -U --noconfirm ziplock-*.pkg.tar.xz
 ziplock --version
-systemctl status ziplock-backend
+ldconfig -p | grep ziplock
 ```
 
 ## CI/CD and GitHub Actions
@@ -1048,8 +1026,9 @@ Before submitting PRs:
 
 #### Runtime Performance
 
-- Backend service uses minimal resources when idle
-- Frontend UI is optimized for responsiveness
+- Unified application uses minimal resources when idle
+- GUI is optimized for responsiveness
+- Shared library enables efficient memory usage
 - 7z compression can be tuned via configuration
 - Memory usage scales with vault size
 

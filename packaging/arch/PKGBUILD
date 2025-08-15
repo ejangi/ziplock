@@ -6,7 +6,7 @@ pkgdesc="A secure, portable password manager using encrypted 7z archives"
 arch=('x86_64')
 url="https://github.com/ejangi/ziplock"
 license=('Apache')
-depends=('glibc' 'fontconfig' 'freetype2' 'libx11' 'libxft' 'xz' 'systemd' 'gcc-libs')
+depends=('glibc' 'fontconfig' 'freetype2' 'libx11' 'libxft' 'xz' 'gcc-libs')
 optdepends=('gnome-keyring: for GNOME keyring integration'
            'kwallet: for KDE wallet integration'
            'firejail: for additional sandboxing')
@@ -48,11 +48,10 @@ package() {
     cd "$pkgname-$pkgver"
 
     # Install binaries
-    install -Dm755 target/release/ziplock-backend "$pkgdir/usr/bin/ziplock-backend"
     install -Dm755 target/release/ziplock "$pkgdir/usr/bin/ziplock"
 
-    # Install systemd service
-    install -Dm644 packaging/linux/ziplock-backend.service "$pkgdir/usr/lib/systemd/system/ziplock-backend.service"
+    # Install shared library
+    install -Dm755 target/release/libziplock_shared.so "$pkgdir/usr/lib/libziplock_shared.so"
 
     # Install configuration
     install -Dm644 config/config.yml "$pkgdir/etc/ziplock/config.yml"
@@ -76,6 +75,5 @@ package() {
     install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
     install -Dm644 CHANGELOG.md "$pkgdir/usr/share/doc/$pkgname/CHANGELOG.md"
 
-    # Create state directory
-    install -dm755 "$pkgdir/var/lib/ziplock"
+
 }

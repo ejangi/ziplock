@@ -85,16 +85,6 @@ if ! rustup component list --installed | grep -q "clippy"; then
     rustup component add clippy
 fi
 
-# Backend clippy check
-print_step "Checking backend..."
-if cargo clippy -p ziplock-backend $CLIPPY_ARGS; then
-    print_success "Backend Clippy check passed"
-else
-    print_error "Backend Clippy check failed"
-    exit 1
-fi
-echo ""
-
 # Shared library clippy check
 print_step "Checking shared library..."
 if cargo clippy -p ziplock-shared $CLIPPY_ARGS; then
@@ -105,12 +95,12 @@ else
 fi
 echo ""
 
-# Frontend clippy check
-print_step "Checking frontend (iced-gui features only)..."
+# Application clippy check (iced-gui features only)
+print_step "Checking unified application (iced-gui features only)..."
 if cargo clippy -p ziplock-linux --no-default-features --features "iced-gui,wayland-support,file-dialog" $CLIPPY_ARGS; then
-    print_success "Frontend Clippy check passed"
+    print_success "Application Clippy check passed"
 else
-    print_error "Frontend Clippy check failed"
+    print_error "Application Clippy check failed"
     exit 1
 fi
 echo ""

@@ -105,20 +105,18 @@ jobs:
 
       - name: Run clippy
         run: |
-          # Run clippy on backend and shared libraries (no GUI dependencies)
-          cargo clippy -p ziplock-backend --all-targets -- -D warnings -A clippy::uninlined-format-args -A unused-imports -A dead-code
+          # Run clippy on shared library (no GUI dependencies)
           cargo clippy -p ziplock-shared --all-targets -- -D warnings -A clippy::uninlined-format-args -A unused-imports -A dead-code
 
-          # Run clippy on frontend with only iced-gui features (avoiding GTK)
+          # Run clippy on unified application with only iced-gui features (avoiding GTK)
           cargo clippy -p ziplock-linux --no-default-features --features "iced-gui,wayland-support,file-dialog" --all-targets -- -D warnings -A clippy::uninlined-format-args -A unused-imports -A dead-code
 
       - name: Run tests
         run: |
-          # Run tests on backend and shared libraries
-          cargo test --verbose -p ziplock-backend
+          # Run tests on shared library
           cargo test --verbose -p ziplock-shared
 
-          # Run tests on frontend with only iced-gui features (avoiding GTK)
+          # Run tests on unified application with only iced-gui features (avoiding GTK)
           cargo test --verbose -p ziplock-linux --no-default-features --features "iced-gui,wayland-support,file-dialog"
 
   security-audit:
@@ -255,32 +253,32 @@ jobs:
 
               # Verify built binaries exist
               echo 'Verifying built binaries:'
-              backend_path='/workspace/target/x86_64-unknown-linux-gnu/release/ziplock-backend'
-              frontend_path='/workspace/target/x86_64-unknown-linux-gnu/release/ziplock'
+              app_path='/workspace/target/x86_64-unknown-linux-gnu/release/ziplock'
+              shared_lib_path='/workspace/target/x86_64-unknown-linux-gnu/release/libziplock_shared.so'
 
-              if [ -f \"\$backend_path\" ]; then
-                echo 'Backend binary found:'
-                file \"\$backend_path\"
-                echo 'Backend binary dependencies (first 5):'
-                backend_deps=\$(ldd \"\$backend_path\" 2>/dev/null | sed -n '1,5p') || backend_deps='dependency check failed'
-                echo \"\$backend_deps\"
+              if [ -f \"\$app_path\" ]; then
+                echo 'ZipLock application binary found:'
+                file \"\$app_path\"
+                echo 'Application binary dependencies (first 5):'
+                app_deps=\$(ldd \"\$app_path\" 2>/dev/null | sed -n '1,5p') || app_deps='dependency check failed'
+                echo \"\$app_deps\"
               else
-                echo 'ERROR: Backend binary not found at:' \"\$backend_path\"
+                echo 'ERROR: ZipLock application binary not found at:' \"\$app_path\"
                 echo 'Available files in target directory:'
                 find /workspace/target -name 'ziplock*' -type f || echo 'No ziplock files found'
                 exit 1
               fi
 
-              if [ -f \"\$frontend_path\" ]; then
-                echo 'Frontend binary found:'
-                file \"\$frontend_path\"
-                echo 'Frontend binary dependencies (first 5):'
-                frontend_deps=\$(ldd \"\$frontend_path\" 2>/dev/null | sed -n '1,5p') || frontend_deps='dependency check failed'
-                echo \"\$frontend_deps\"
+              if [ -f \"\$shared_lib_path\" ]; then
+                echo 'Shared library found:'
+                file \"\$shared_lib_path\"
+                echo 'Shared library dependencies (first 5):'
+                lib_deps=\$(ldd \"\$shared_lib_path\" 2>/dev/null | sed -n '1,5p') || lib_deps='dependency check failed'
+                echo \"\$lib_deps\"
               else
-                echo 'ERROR: Frontend binary not found at:' \"\$frontend_path\"
+                echo 'ERROR: Shared library not found at:' \"\$shared_lib_path\"
                 echo 'Available files in target directory:'
-                find /workspace/target -name 'ziplock*' -type f || echo 'No ziplock files found'
+                find /workspace/target -name 'libziplock*' -type f || echo 'No shared library files found'
                 exit 1
               fi
 
@@ -377,18 +375,17 @@ jobs:
 
             # Test binaries exist and are executable
             echo 'Testing binary existence...'
-            test -x /usr/bin/ziplock-backend || (echo 'Backend binary not found or not executable' && exit 1)
-            test -x /usr/bin/ziplock || (echo 'Frontend binary not found or not executable' && exit 1)
+            test -x /usr/bin/ziplock || (echo 'ZipLock application binary not found or not executable' && exit 1)
+            test -f /usr/lib/libziplock_shared.so || (echo 'Shared library not found' && exit 1)
 
             # Check binary dependencies
             echo 'Checking binary dependencies...'
-            ldd /usr/bin/ziplock-backend && echo 'Backend: dependencies resolved'
-            ldd /usr/bin/ziplock && echo 'Frontend: dependencies resolved'
+            ldd /usr/bin/ziplock && echo 'Application: dependencies resolved'
+            ldd /usr/lib/libziplock_shared.so && echo 'Shared library: dependencies resolved'
 
-            # Test basic functionality (version check)
+            # Test basic functionality (GUI app, skip version check as it requires display)
             echo 'Testing basic functionality...'
-            /usr/bin/ziplock-backend --version
-            echo 'Backend version check: OK'
+            echo 'ZipLock is a GUI application - skipping version check (requires display)'
 
             # Test frontend version (in non-GUI mode)
             /usr/bin/ziplock --version || echo 'Frontend version check: OK (may require display)'
@@ -414,21 +411,21 @@ jobs:
           glibc_version=$(docker run --rm ziplock-builder bash -c "ldd --version 2>/dev/null | sed -n '1p'") || glibc_version='glibc version check failed'
           echo "$glibc_version"
           echo ""
-          echo "Backend binary glibc requirements:"
-          backend_glibc=$(objdump -T target/x86_64-unknown-linux-gnu/release/ziplock-backend 2>/dev/null | grep GLIBC | sort -V | sed -n '$-4,$p') || backend_glibc="No GLIBC symbols found"
-          echo "$backend_glibc"
+          echo "Application binary glibc requirements:"
+          app_glibc=$(objdump -T target/x86_64-unknown-linux-gnu/release/ziplock 2>/dev/null | grep GLIBC | sort -V | sed -n '$-4,$p') || app_glibc="No GLIBC symbols found"
+          echo "$app_glibc"
           echo ""
-          echo "Frontend binary glibc requirements:"
-          frontend_glibc=$(objdump -T target/x86_64-unknown-linux-gnu/release/ziplock 2>/dev/null | grep GLIBC | sort -V | sed -n '$-4,$p') || frontend_glibc="No GLIBC symbols found"
-          echo "$frontend_glibc"
+          echo "Shared library glibc requirements:"
+          lib_glibc=$(objdump -T target/x86_64-unknown-linux-gnu/release/libziplock_shared.so 2>/dev/null | grep GLIBC | sort -V | sed -n '$-4,$p') || lib_glibc="No GLIBC symbols found"
+          echo "$lib_glibc"
           echo ""
           echo "Maximum glibc version required:"
-          echo "Backend:"
-          backend_version=$(readelf -V target/x86_64-unknown-linux-gnu/release/ziplock-backend 2>/dev/null | grep GLIBC | sort -V | sed -n '$p') || backend_version="No version info"
-          echo "$backend_version"
-          echo "Frontend:"
-          frontend_version=$(readelf -V target/x86_64-unknown-linux-gnu/release/ziplock 2>/dev/null | grep GLIBC | sort -V | sed -n '$p') || frontend_version="No version info"
-          echo "$frontend_version"
+          echo "Application:"
+          app_version=$(readelf -V target/x86_64-unknown-linux-gnu/release/ziplock 2>/dev/null | grep GLIBC | sort -V | sed -n '$p') || app_version="No version info"
+          echo "$app_version"
+          echo "Shared Library:"
+          lib_version=$(readelf -V target/x86_64-unknown-linux-gnu/release/libziplock_shared.so 2>/dev/null | grep GLIBC | sort -V | sed -n '$p') || lib_version="No version info"
+          echo "$lib_version"
           echo "================================="
 
       - name: Comprehensive package validation
@@ -458,22 +455,21 @@ jobs:
           # Use safer approach to avoid SIGPIPE errors
           set +e  # Temporarily disable exit on error for pipe operations
 
-          backend_found=$(dpkg-deb --contents "$PACKAGE_FILE" 2>/dev/null | grep "usr/bin/ziplock-backend" | wc -l)
-          if [ "$backend_found" -eq 0 ]; then
-            echo "ERROR: Backend binary not found in package"
+          app_found=$(dpkg-deb --contents "$PACKAGE_FILE" 2>/dev/null | grep "usr/bin/ziplock" | wc -l)
+          if [ "$app_found" -eq 0 ]; then
+            echo "ERROR: ZipLock application binary not found in package"
             exit 1
           fi
 
-          frontend_found=$(dpkg-deb --contents "$PACKAGE_FILE" 2>/dev/null | grep "usr/bin/ziplock" | grep -v "ziplock-backend" | wc -l)
-          if [ "$frontend_found" -eq 0 ]; then
-            echo "ERROR: Frontend binary not found in package"
+          lib_found=$(dpkg-deb --contents "$PACKAGE_FILE" 2>/dev/null | grep "usr/lib/libziplock_shared.so" | wc -l)
+          if [ "$lib_found" -eq 0 ]; then
+            echo "ERROR: Shared library not found in package"
             exit 1
           fi
 
-          service_found=$(dpkg-deb --contents "$PACKAGE_FILE" 2>/dev/null | grep "lib/systemd/system/ziplock-backend.service" | wc -l)
-          if [ "$service_found" -eq 0 ]; then
-            echo "ERROR: Systemd service file not found in package"
-            exit 1
+          desktop_found=$(dpkg-deb --contents "$PACKAGE_FILE" 2>/dev/null | grep "usr/share/applications/ziplock.desktop" | wc -l)
+          if [ "$desktop_found" -eq 0 ]; then
+            echo "WARNING: Desktop file not found in package"
           fi
 
           set -e  # Re-enable exit on error
@@ -493,17 +489,17 @@ jobs:
             PACKAGE_FILE=\$(ls ./target/ziplock_*_amd64.deb | head -n1)
             dpkg-deb --extract \"\$PACKAGE_FILE\" /tmp/extract
 
-            # Check backend binary architecture
-            backend_arch=\$(file /tmp/extract/usr/bin/ziplock-backend 2>/dev/null | grep 'x86-64') || backend_arch=''
-            if [ -z \"\$backend_arch\" ]; then
-              echo 'ERROR: Backend binary is not x86-64'
+            # Check application binary architecture
+            app_arch=\$(file /tmp/extract/usr/bin/ziplock 2>/dev/null | grep 'x86-64') || app_arch=''
+            if [ -z \"\$app_arch\" ]; then
+              echo 'ERROR: Application binary is not x86-64'
               exit 1
             fi
 
-            # Check frontend binary architecture
-            frontend_arch=\$(file /tmp/extract/usr/bin/ziplock 2>/dev/null | grep 'x86-64') || frontend_arch=''
-            if [ -z \"\$frontend_arch\" ]; then
-              echo 'ERROR: Frontend binary is not x86-64'
+            # Check shared library architecture
+            lib_arch=\$(file /tmp/extract/usr/lib/libziplock_shared.so 2>/dev/null | grep 'x86-64') || lib_arch=''
+            if [ -z \"\$lib_arch\" ]; then
+              echo 'ERROR: Shared library is not x86-64'
               exit 1
             fi
 
@@ -541,10 +537,10 @@ jobs:
           echo "" >> build-report.txt
 
           echo "=== Binary Analysis ===" >> build-report.txt
-          echo "Backend binary size: $(du -h target/x86_64-unknown-linux-gnu/release/ziplock-backend | cut -f1)" >> build-report.txt
-          echo "Frontend binary size: $(du -h target/x86_64-unknown-linux-gnu/release/ziplock | cut -f1)" >> build-report.txt
+          echo "Application binary size: $(du -h target/x86_64-unknown-linux-gnu/release/ziplock | cut -f1)" >> build-report.txt
+          echo "Shared library size: $(du -h target/x86_64-unknown-linux-gnu/release/libziplock_shared.so | cut -f1)" >> build-report.txt
           echo "Max glibc version required:" >> build-report.txt
-          max_glibc=$(objdump -T target/x86_64-unknown-linux-gnu/release/ziplock-backend 2>/dev/null | grep GLIBC | sort -V | sed -n '$p') || max_glibc="No GLIBC info available"
+          max_glibc=$(objdump -T target/x86_64-unknown-linux-gnu/release/ziplock 2>/dev/null | grep GLIBC | sort -V | sed -n '$p') || max_glibc="No GLIBC info available"
           echo "$max_glibc" >> build-report.txt
           echo "" >> build-report.txt
 
@@ -576,8 +572,8 @@ jobs:
           name: ziplock-linux-amd64
           path: |
             target/ziplock_*_amd64.deb
-            target/x86_64-unknown-linux-gnu/release/ziplock-backend
             target/x86_64-unknown-linux-gnu/release/ziplock
+            target/x86_64-unknown-linux-gnu/release/libziplock_shared.so
           retention-days: 30
 
   build-arch:
@@ -939,8 +935,8 @@ jobs:
           echo "## Binary Sizes" >> benchmark-results.md
           echo "| Binary | Size |" >> benchmark-results.md
           echo "|--------|------|" >> benchmark-results.md
-          echo "| ziplock-backend | $(du -h target/release/ziplock-backend | cut -f1) |" >> benchmark-results.md
           echo "| ziplock | $(du -h target/release/ziplock | cut -f1) |" >> benchmark-results.md
+          echo "| libziplock_shared.so | $(du -h target/release/libziplock_shared.so | cut -f1) |" >> benchmark-results.md
 
       - name: Upload benchmark results
         uses: actions/upload-artifact@v4

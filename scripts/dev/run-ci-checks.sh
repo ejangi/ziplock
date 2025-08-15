@@ -151,15 +151,6 @@ fi
 if [[ "$SKIP_CLIPPY" == "false" ]]; then
     print_step "Running Clippy linting..."
 
-    # Backend clippy check
-    print_step "  Checking backend..."
-    if cargo clippy -p ziplock-backend --all-targets -- -D warnings -A clippy::uninlined-format-args -A unused-imports -A dead-code; then
-        print_success "Backend Clippy check passed"
-    else
-        print_error "Backend Clippy check failed"
-        exit 1
-    fi
-
     # Shared library clippy check
     print_step "  Checking shared library..."
     if cargo clippy -p ziplock-shared --all-targets -- -D warnings -A clippy::uninlined-format-args -A unused-imports -A dead-code; then
@@ -169,12 +160,12 @@ if [[ "$SKIP_CLIPPY" == "false" ]]; then
         exit 1
     fi
 
-    # Frontend clippy check
-    print_step "  Checking frontend (iced-gui features only)..."
+    # Application clippy check (with iced-gui features only to avoid GTK dependencies)
+    print_step "  Checking unified application..."
     if cargo clippy -p ziplock-linux --no-default-features --features "iced-gui,wayland-support,file-dialog" --all-targets -- -D warnings -A clippy::uninlined-format-args -A unused-imports -A dead-code; then
-        print_success "Frontend Clippy check passed"
+        print_success "Application Clippy check passed"
     else
-        print_error "Frontend Clippy check failed"
+        print_error "Application Clippy check failed"
         exit 1
     fi
 
@@ -189,15 +180,6 @@ fi
 if [[ "$SKIP_TESTS" == "false" ]]; then
     print_step "Running tests..."
 
-    # Backend tests
-    print_step "  Testing backend..."
-    if cargo test --verbose -p ziplock-backend; then
-        print_success "Backend tests passed"
-    else
-        print_error "Backend tests failed"
-        exit 1
-    fi
-
     # Shared library tests
     print_step "  Testing shared library..."
     if cargo test --verbose -p ziplock-shared; then
@@ -207,12 +189,12 @@ if [[ "$SKIP_TESTS" == "false" ]]; then
         exit 1
     fi
 
-    # Frontend tests
-    print_step "  Testing frontend (iced-gui features only)..."
+    # Application tests (with iced-gui features only)
+    print_step "  Testing unified application..."
     if cargo test --verbose -p ziplock-linux --no-default-features --features "iced-gui,wayland-support,file-dialog"; then
-        print_success "Frontend tests passed"
+        print_success "Application tests passed"
     else
-        print_error "Frontend tests failed"
+        print_error "Application tests failed"
         exit 1
     fi
 

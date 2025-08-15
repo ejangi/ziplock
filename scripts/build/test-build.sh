@@ -119,36 +119,28 @@ test_binary_functionality() {
 
     cd "$PROJECT_ROOT"
 
-    local backend_binary="target/release/ziplock-backend"
-    local frontend_binary="target/release/ziplock"
+    local app_binary="target/release/ziplock"
+    local shared_lib="target/release/libziplock_shared.so"
 
     # Check if binaries exist
-    if [ ! -f "$backend_binary" ]; then
-        log_error "Backend binary not found: $backend_binary"
+    if [ ! -f "$app_binary" ]; then
+        log_error "ZipLock application binary not found: $app_binary"
         return 1
     fi
 
-    if [ ! -f "$frontend_binary" ]; then
-        log_error "Frontend binary not found: $frontend_binary"
+    if [ ! -f "$shared_lib" ]; then
+        log_error "Shared library not found: $shared_lib"
         return 1
     fi
 
-    # Test version commands
-    if ! "$backend_binary" --version &> /dev/null; then
-        log_warning "Backend --version command failed"
+    # Test version commands (GUI app may require display, so allow failure)
+    if ! "$app_binary" --version &> /dev/null; then
+        log_warning "Application --version command failed (expected for GUI app without display)"
     fi
 
-    if ! "$frontend_binary" --version &> /dev/null; then
-        log_warning "Frontend --version command failed"
-    fi
-
-    # Test help commands
-    if ! "$backend_binary" --help &> /dev/null; then
-        log_warning "Backend --help command failed"
-    fi
-
-    if ! "$frontend_binary" --help &> /dev/null; then
-        log_warning "Frontend --help command failed"
+    # Test help commands (GUI app may require display, so allow failure)
+    if ! "$app_binary" --help &> /dev/null; then
+        log_warning "Application --help command failed (expected for GUI app without display)"
     fi
 
     log_success "Binary functionality tests completed"
