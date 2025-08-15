@@ -545,6 +545,15 @@ impl ApiHandlers {
             "login" => crate::models::CommonTemplates::login(),
             "credit_card" => crate::models::CommonTemplates::credit_card(),
             "secure_note" => crate::models::CommonTemplates::secure_note(),
+            "identity" => crate::models::CommonTemplates::identity(),
+            "password" => crate::models::CommonTemplates::password(),
+            "document" => crate::models::CommonTemplates::document(),
+            "ssh_key" => crate::models::CommonTemplates::ssh_key(),
+            "bank_account" => crate::models::CommonTemplates::bank_account(),
+            "api_credentials" => crate::models::CommonTemplates::api_credentials(),
+            "crypto_wallet" => crate::models::CommonTemplates::crypto_wallet(),
+            "database" => crate::models::CommonTemplates::database(),
+            "software_license" => crate::models::CommonTemplates::software_license(),
             _ => {
                 return Err(ValidationError::InvalidFieldData {
                     field: "template".to_string(),

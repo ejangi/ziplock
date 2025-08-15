@@ -256,6 +256,106 @@ mod tests {
         let note_template = CommonTemplates::secure_note();
         assert_eq!(note_template.name, "secure_note");
         assert!(!note_template.fields.is_empty());
+
+        let identity_template = CommonTemplates::identity();
+        assert_eq!(identity_template.name, "identity");
+        assert!(!identity_template.fields.is_empty());
+
+        let password_template = CommonTemplates::password();
+        assert_eq!(password_template.name, "password");
+        assert!(!password_template.fields.is_empty());
+
+        let document_template = CommonTemplates::document();
+        assert_eq!(document_template.name, "document");
+        assert!(!document_template.fields.is_empty());
+
+        let ssh_key_template = CommonTemplates::ssh_key();
+        assert_eq!(ssh_key_template.name, "ssh_key");
+        assert!(!ssh_key_template.fields.is_empty());
+
+        let bank_account_template = CommonTemplates::bank_account();
+        assert_eq!(bank_account_template.name, "bank_account");
+        assert!(!bank_account_template.fields.is_empty());
+
+        let api_credentials_template = CommonTemplates::api_credentials();
+        assert_eq!(api_credentials_template.name, "api_credentials");
+        assert!(!api_credentials_template.fields.is_empty());
+
+        let crypto_wallet_template = CommonTemplates::crypto_wallet();
+        assert_eq!(crypto_wallet_template.name, "crypto_wallet");
+        assert!(!crypto_wallet_template.fields.is_empty());
+
+        let database_template = CommonTemplates::database();
+        assert_eq!(database_template.name, "database");
+        assert!(!database_template.fields.is_empty());
+
+        let software_license_template = CommonTemplates::software_license();
+        assert_eq!(software_license_template.name, "software_license");
+        assert!(!software_license_template.fields.is_empty());
+    }
+
+    #[test]
+    fn test_all_specification_credential_types_implemented() {
+        // According to specification section 3.3, these are all the required credential types
+        let all_templates = vec![
+            ("Login", CommonTemplates::login()),
+            ("Secure Note", CommonTemplates::secure_note()),
+            ("Credit Card", CommonTemplates::credit_card()),
+            ("Identity", CommonTemplates::identity()),
+            ("Password", CommonTemplates::password()),
+            ("Document", CommonTemplates::document()),
+            ("SSH Key", CommonTemplates::ssh_key()),
+            ("Bank Account", CommonTemplates::bank_account()),
+            ("API Credentials", CommonTemplates::api_credentials()),
+            ("Crypto Wallet", CommonTemplates::crypto_wallet()),
+            ("Database", CommonTemplates::database()),
+            ("Software License", CommonTemplates::software_license()),
+        ];
+
+        // Verify we have all 12 credential types from the specification
+        assert_eq!(
+            all_templates.len(),
+            12,
+            "Missing credential types from specification"
+        );
+
+        // Verify each template is properly configured
+        for (description, template) in all_templates {
+            assert!(
+                !template.name.is_empty(),
+                "{} template missing name",
+                description
+            );
+            assert!(
+                !template.description.is_empty(),
+                "{} template missing description",
+                description
+            );
+            assert!(
+                !template.fields.is_empty(),
+                "{} template has no fields",
+                description
+            );
+            assert!(
+                !template.default_tags.is_empty(),
+                "{} template has no default tags",
+                description
+            );
+
+            // Verify each field has required properties
+            for field in &template.fields {
+                assert!(
+                    !field.name.is_empty(),
+                    "{} template has field with empty name",
+                    description
+                );
+                assert!(
+                    !field.label.is_empty(),
+                    "{} template has field with empty label",
+                    description
+                );
+            }
+        }
     }
 
     #[test]

@@ -110,6 +110,15 @@ impl EditCredentialView {
             CommonTemplates::login(),
             CommonTemplates::credit_card(),
             CommonTemplates::secure_note(),
+            CommonTemplates::identity(),
+            CommonTemplates::password(),
+            CommonTemplates::document(),
+            CommonTemplates::ssh_key(),
+            CommonTemplates::bank_account(),
+            CommonTemplates::api_credentials(),
+            CommonTemplates::crypto_wallet(),
+            CommonTemplates::database(),
+            CommonTemplates::software_license(),
         ]
     }
 
@@ -551,6 +560,15 @@ impl EditCredentialView {
             "login" => Some(ziplock_shared::models::CommonTemplates::login()),
             "credit_card" => Some(ziplock_shared::models::CommonTemplates::credit_card()),
             "secure_note" => Some(ziplock_shared::models::CommonTemplates::secure_note()),
+            "identity" => Some(ziplock_shared::models::CommonTemplates::identity()),
+            "password" => Some(ziplock_shared::models::CommonTemplates::password()),
+            "document" => Some(ziplock_shared::models::CommonTemplates::document()),
+            "ssh_key" => Some(ziplock_shared::models::CommonTemplates::ssh_key()),
+            "bank_account" => Some(ziplock_shared::models::CommonTemplates::bank_account()),
+            "api_credentials" => Some(ziplock_shared::models::CommonTemplates::api_credentials()),
+            "crypto_wallet" => Some(ziplock_shared::models::CommonTemplates::crypto_wallet()),
+            "database" => Some(ziplock_shared::models::CommonTemplates::database()),
+            "software_license" => Some(ziplock_shared::models::CommonTemplates::software_license()),
             _ => None,
         };
 

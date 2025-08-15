@@ -7,7 +7,8 @@
 //! - Integration with backend credential creation API
 
 use iced::{
-    widget::{button, column, container, text, Space},
+    alignment,
+    widget::{button, column, container, row, scrollable, svg, text, Space},
     Alignment, Command, Element, Length,
 };
 use std::collections::HashMap;
@@ -144,6 +145,15 @@ impl AddCredentialView {
             CommonTemplates::login(),
             CommonTemplates::credit_card(),
             CommonTemplates::secure_note(),
+            CommonTemplates::identity(),
+            CommonTemplates::password(),
+            CommonTemplates::document(),
+            CommonTemplates::ssh_key(),
+            CommonTemplates::bank_account(),
+            CommonTemplates::api_credentials(),
+            CommonTemplates::crypto_wallet(),
+            CommonTemplates::database(),
+            CommonTemplates::software_license(),
         ]
     }
 
@@ -324,45 +334,109 @@ impl AddCredentialView {
 
     /// Render the type selection state
     fn view_type_selection(&self) -> Element<'_, AddCredentialMessage> {
-        let mut type_buttons = vec![];
+        // Create a responsive grid layout for credential type buttons
+        let mut grid_rows = vec![];
+        let templates_per_row = 4; // Increased to 4 for better use of space
 
-        for template in &self.available_types {
-            let button_element =
-                button(text(&StringUtils::to_display_name(&template.name)).size(16))
-                    .on_press(AddCredentialMessage::TypeSelected(template.name.clone()))
-                    .style(button_styles::primary())
-                    .width(Length::Fill)
-                    .padding(utils::button_padding());
+        // Process templates in chunks of 4
+        for chunk in self.available_types.chunks(templates_per_row) {
+            let mut row_buttons = vec![];
 
-            type_buttons.push(button_element.into());
-            type_buttons.push(Space::with_height(Length::Fixed(10.0)).into());
+            for template in chunk {
+                // Get icon SVG for credential type
+                let icon_svg = match template.name.as_str() {
+                    "login" => crate::ui::theme::lock_icon(),
+                    "credit_card" => crate::ui::theme::credit_card_icon(),
+                    "secure_note" => crate::ui::theme::note_icon(),
+                    "identity" => crate::ui::theme::user_icon(),
+                    "password" => crate::ui::theme::lock_icon(),
+                    "document" => crate::ui::theme::document_icon(),
+                    "ssh_key" => crate::ui::theme::settings_icon(),
+                    "bank_account" => crate::ui::theme::bank_icon(),
+                    "api_credentials" => crate::ui::theme::settings_icon(),
+                    "crypto_wallet" => crate::ui::theme::wallet_icon(),
+                    "database" => crate::ui::theme::database_icon(),
+                    "software_license" => crate::ui::theme::license_icon(),
+                    _ => crate::ui::theme::alert_icon(),
+                };
+
+                let button_element = button(
+                    column![
+                        container(
+                            svg(icon_svg)
+                                .width(Length::Fixed(24.0))
+                                .height(Length::Fixed(24.0))
+                        )
+                        .width(Length::Fill)
+                        .center_x(),
+                        Space::with_height(Length::Fixed(12.0)),
+                        container(
+                            text(&StringUtils::to_display_name(&template.name))
+                                .size(16)
+                                .horizontal_alignment(alignment::Horizontal::Center)
+                        )
+                        .width(Length::Fill)
+                        .center_x()
+                    ]
+                    .align_items(Alignment::Center)
+                    .spacing(0)
+                    .width(Length::Fill),
+                )
+                .on_press(AddCredentialMessage::TypeSelected(template.name.clone()))
+                .style(button_styles::primary())
+                .width(Length::Fill)
+                .height(Length::Fixed(90.0))
+                .padding([15, 10]);
+
+                row_buttons.push(button_element.into());
+            }
+
+            // Fill remaining space in incomplete rows
+            while row_buttons.len() < templates_per_row {
+                row_buttons.push(Space::with_width(Length::Fill).into());
+            }
+
+            grid_rows.push(row(row_buttons).spacing(18).into());
         }
 
-        // Add cancel button
-        type_buttons.push(Space::with_height(Length::Fixed(20.0)).into());
-        type_buttons.push(
+        // Create the grid container with scrollable support
+        let grid_container = container(
+            scrollable(column(grid_rows).spacing(18))
+                .width(Length::Fill)
+                .height(Length::Fill),
+        )
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .padding([0, 30]); // More horizontal padding for better spacing
+
+        // Cancel button at the bottom
+        let cancel_button = container(
             button("Cancel")
                 .on_press(AddCredentialMessage::Cancel)
                 .style(button_styles::secondary())
-                .padding(utils::button_padding())
-                .into(),
-        );
+                .padding(utils::button_padding()),
+        )
+        .width(Length::Fill)
+        .center_x();
 
         container(
             column![
                 self.view_header(),
-                Space::with_height(Length::Fixed(30.0)),
-                text("Select the type of credential to create:").size(16),
                 Space::with_height(Length::Fixed(20.0)),
-                column(type_buttons).spacing(5).width(Length::Fixed(300.0)),
+                text("What type of information are we storing?")
+                    .size(18)
+                    .horizontal_alignment(alignment::Horizontal::Center),
+                Space::with_height(Length::Fixed(25.0)),
+                grid_container,
+                Space::with_height(Length::Fixed(20.0)),
+                cancel_button,
             ]
-            .spacing(10)
+            .spacing(0)
             .align_items(Alignment::Center),
         )
-        .padding(40)
+        .padding([30, 20]) // Reduced vertical padding, maintained horizontal
+        .width(Length::Fill)
         .height(Length::Fill)
-        .center_x()
-        .center_y()
         .style(container_styles::sidebar())
         .into()
     }
@@ -467,6 +541,15 @@ impl AddCredentialView {
             CommonTemplates::login(),
             CommonTemplates::credit_card(),
             CommonTemplates::secure_note(),
+            CommonTemplates::identity(),
+            CommonTemplates::password(),
+            CommonTemplates::document(),
+            CommonTemplates::ssh_key(),
+            CommonTemplates::bank_account(),
+            CommonTemplates::api_credentials(),
+            CommonTemplates::crypto_wallet(),
+            CommonTemplates::database(),
+            CommonTemplates::software_license(),
         ])
     }
 
@@ -485,6 +568,15 @@ impl AddCredentialView {
             "login" => Some(ziplock_shared::models::CommonTemplates::login()),
             "credit_card" => Some(ziplock_shared::models::CommonTemplates::credit_card()),
             "secure_note" => Some(ziplock_shared::models::CommonTemplates::secure_note()),
+            "identity" => Some(ziplock_shared::models::CommonTemplates::identity()),
+            "password" => Some(ziplock_shared::models::CommonTemplates::password()),
+            "document" => Some(ziplock_shared::models::CommonTemplates::document()),
+            "ssh_key" => Some(ziplock_shared::models::CommonTemplates::ssh_key()),
+            "bank_account" => Some(ziplock_shared::models::CommonTemplates::bank_account()),
+            "api_credentials" => Some(ziplock_shared::models::CommonTemplates::api_credentials()),
+            "crypto_wallet" => Some(ziplock_shared::models::CommonTemplates::crypto_wallet()),
+            "database" => Some(ziplock_shared::models::CommonTemplates::database()),
+            "software_license" => Some(ziplock_shared::models::CommonTemplates::software_license()),
             _ => None,
         };
 

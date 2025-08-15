@@ -505,6 +505,24 @@ impl std::fmt::Display for FieldType {
 }
 
 /// Common credential templates
+///
+/// This struct provides all the built-in credential types required by the ZipLock specification (section 3.3).
+/// All 12 credential types from the specification have been implemented:
+///
+/// 1. **Login** - Website or application login (Username, Password, URL, 2FA Secret)
+/// 2. **Secure Note** - Secure note or document (Content)
+/// 3. **Credit Card** - Credit card information (Cardholder Name, Card Number, Expiry Date, CVV)
+/// 4. **Identity** - Personal identity information (Name, Birthday, SSN/ID)
+/// 5. **Password** - Password only (Password)
+/// 6. **Document** - Document with file attachment (Title, File Path)
+/// 7. **SSH Key** - SSH key and passphrase (Key, Passphrase)
+/// 8. **Bank Account** - Bank account information (Account Number, Routing Number, PIN)
+/// 9. **API Credentials** - API key and secret (Key, Secret, URL)
+/// 10. **Crypto Wallet** - Cryptocurrency wallet keys (Public Key, Private Key/Seed Phrase)
+/// 11. **Database** - Database connection credentials (Hostname, Port, Username, Password)
+/// 12. **Software License** - Software license information (License Key, Product Name, Purchase Date)
+///
+/// Each template includes appropriate field types, sensitivity settings, validation rules, and default tags.
 pub struct CommonTemplates;
 
 impl CommonTemplates {
@@ -622,6 +640,315 @@ impl CommonTemplates {
                 validation: None,
             }],
             default_tags: vec!["note".to_string()],
+        }
+    }
+
+    /// Identity template
+    pub fn identity() -> CredentialTemplate {
+        CredentialTemplate {
+            name: "identity".to_string(),
+            description: "Personal identity information".to_string(),
+            fields: vec![
+                FieldTemplate {
+                    name: "name".to_string(),
+                    field_type: FieldType::Text,
+                    label: "Full Name".to_string(),
+                    required: false,
+                    sensitive: false,
+                    default_value: None,
+                    validation: None,
+                },
+                FieldTemplate {
+                    name: "birthday".to_string(),
+                    field_type: FieldType::Date,
+                    label: "Date of Birth".to_string(),
+                    required: false,
+                    sensitive: false,
+                    default_value: None,
+                    validation: None,
+                },
+                FieldTemplate {
+                    name: "ssn".to_string(),
+                    field_type: FieldType::Text,
+                    label: "SSN/ID Number".to_string(),
+                    required: false,
+                    sensitive: true,
+                    default_value: None,
+                    validation: None,
+                },
+            ],
+            default_tags: vec!["identity".to_string()],
+        }
+    }
+
+    /// Password template
+    pub fn password() -> CredentialTemplate {
+        CredentialTemplate {
+            name: "password".to_string(),
+            description: "Password only".to_string(),
+            fields: vec![FieldTemplate {
+                name: "password".to_string(),
+                field_type: FieldType::Password,
+                label: "Password".to_string(),
+                required: false,
+                sensitive: true,
+                default_value: None,
+                validation: Some(FieldValidation {
+                    min_length: Some(8),
+                    max_length: None,
+                    pattern: None,
+                    message: Some("Password must be at least 8 characters".to_string()),
+                }),
+            }],
+            default_tags: vec!["password".to_string()],
+        }
+    }
+
+    /// Document template
+    pub fn document() -> CredentialTemplate {
+        CredentialTemplate {
+            name: "document".to_string(),
+            description: "Document with file attachment".to_string(),
+            fields: vec![
+                FieldTemplate {
+                    name: "title".to_string(),
+                    field_type: FieldType::Text,
+                    label: "Document Title".to_string(),
+                    required: false,
+                    sensitive: false,
+                    default_value: None,
+                    validation: None,
+                },
+                FieldTemplate {
+                    name: "file".to_string(),
+                    field_type: FieldType::Text,
+                    label: "File Path".to_string(),
+                    required: false,
+                    sensitive: false,
+                    default_value: None,
+                    validation: None,
+                },
+            ],
+            default_tags: vec!["document".to_string()],
+        }
+    }
+
+    /// SSH Key template
+    pub fn ssh_key() -> CredentialTemplate {
+        CredentialTemplate {
+            name: "ssh_key".to_string(),
+            description: "SSH key and passphrase".to_string(),
+            fields: vec![
+                FieldTemplate {
+                    name: "key".to_string(),
+                    field_type: FieldType::TextArea,
+                    label: "SSH Key".to_string(),
+                    required: false,
+                    sensitive: true,
+                    default_value: None,
+                    validation: None,
+                },
+                FieldTemplate {
+                    name: "passphrase".to_string(),
+                    field_type: FieldType::Password,
+                    label: "Passphrase".to_string(),
+                    required: false,
+                    sensitive: true,
+                    default_value: None,
+                    validation: None,
+                },
+            ],
+            default_tags: vec!["ssh".to_string()],
+        }
+    }
+
+    /// Bank account template
+    pub fn bank_account() -> CredentialTemplate {
+        CredentialTemplate {
+            name: "bank_account".to_string(),
+            description: "Bank account information".to_string(),
+            fields: vec![
+                FieldTemplate {
+                    name: "account_number".to_string(),
+                    field_type: FieldType::Text,
+                    label: "Account Number".to_string(),
+                    required: false,
+                    sensitive: true,
+                    default_value: None,
+                    validation: None,
+                },
+                FieldTemplate {
+                    name: "routing_number".to_string(),
+                    field_type: FieldType::Text,
+                    label: "Routing Number".to_string(),
+                    required: false,
+                    sensitive: false,
+                    default_value: None,
+                    validation: None,
+                },
+                FieldTemplate {
+                    name: "pin".to_string(),
+                    field_type: FieldType::Password,
+                    label: "PIN".to_string(),
+                    required: false,
+                    sensitive: true,
+                    default_value: None,
+                    validation: None,
+                },
+            ],
+            default_tags: vec!["bank".to_string()],
+        }
+    }
+
+    /// API credentials template
+    pub fn api_credentials() -> CredentialTemplate {
+        CredentialTemplate {
+            name: "api_credentials".to_string(),
+            description: "API key and secret".to_string(),
+            fields: vec![
+                FieldTemplate {
+                    name: "key".to_string(),
+                    field_type: FieldType::Text,
+                    label: "API Key".to_string(),
+                    required: false,
+                    sensitive: true,
+                    default_value: None,
+                    validation: None,
+                },
+                FieldTemplate {
+                    name: "secret".to_string(),
+                    field_type: FieldType::Password,
+                    label: "API Secret".to_string(),
+                    required: false,
+                    sensitive: true,
+                    default_value: None,
+                    validation: None,
+                },
+                FieldTemplate {
+                    name: "url".to_string(),
+                    field_type: FieldType::Url,
+                    label: "API URL".to_string(),
+                    required: false,
+                    sensitive: false,
+                    default_value: None,
+                    validation: None,
+                },
+            ],
+            default_tags: vec!["api".to_string()],
+        }
+    }
+
+    /// Crypto wallet template
+    pub fn crypto_wallet() -> CredentialTemplate {
+        CredentialTemplate {
+            name: "crypto_wallet".to_string(),
+            description: "Cryptocurrency wallet keys".to_string(),
+            fields: vec![
+                FieldTemplate {
+                    name: "public_key".to_string(),
+                    field_type: FieldType::TextArea,
+                    label: "Public Key".to_string(),
+                    required: false,
+                    sensitive: false,
+                    default_value: None,
+                    validation: None,
+                },
+                FieldTemplate {
+                    name: "private_key".to_string(),
+                    field_type: FieldType::TextArea,
+                    label: "Private Key/Seed Phrase".to_string(),
+                    required: false,
+                    sensitive: true,
+                    default_value: None,
+                    validation: None,
+                },
+            ],
+            default_tags: vec!["crypto".to_string()],
+        }
+    }
+
+    /// Database template
+    pub fn database() -> CredentialTemplate {
+        CredentialTemplate {
+            name: "database".to_string(),
+            description: "Database connection credentials".to_string(),
+            fields: vec![
+                FieldTemplate {
+                    name: "hostname".to_string(),
+                    field_type: FieldType::Text,
+                    label: "Hostname".to_string(),
+                    required: false,
+                    sensitive: false,
+                    default_value: None,
+                    validation: None,
+                },
+                FieldTemplate {
+                    name: "port".to_string(),
+                    field_type: FieldType::Number,
+                    label: "Port".to_string(),
+                    required: false,
+                    sensitive: false,
+                    default_value: None,
+                    validation: None,
+                },
+                FieldTemplate {
+                    name: "username".to_string(),
+                    field_type: FieldType::Username,
+                    label: "Username".to_string(),
+                    required: false,
+                    sensitive: false,
+                    default_value: None,
+                    validation: None,
+                },
+                FieldTemplate {
+                    name: "password".to_string(),
+                    field_type: FieldType::Password,
+                    label: "Password".to_string(),
+                    required: false,
+                    sensitive: true,
+                    default_value: None,
+                    validation: None,
+                },
+            ],
+            default_tags: vec!["database".to_string()],
+        }
+    }
+
+    /// Software license template
+    pub fn software_license() -> CredentialTemplate {
+        CredentialTemplate {
+            name: "software_license".to_string(),
+            description: "Software license information".to_string(),
+            fields: vec![
+                FieldTemplate {
+                    name: "license_key".to_string(),
+                    field_type: FieldType::TextArea,
+                    label: "License Key".to_string(),
+                    required: false,
+                    sensitive: true,
+                    default_value: None,
+                    validation: None,
+                },
+                FieldTemplate {
+                    name: "product_name".to_string(),
+                    field_type: FieldType::Text,
+                    label: "Product Name".to_string(),
+                    required: false,
+                    sensitive: false,
+                    default_value: None,
+                    validation: None,
+                },
+                FieldTemplate {
+                    name: "purchase_date".to_string(),
+                    field_type: FieldType::Date,
+                    label: "Purchase Date".to_string(),
+                    required: false,
+                    sensitive: false,
+                    default_value: None,
+                    validation: None,
+                },
+            ],
+            default_tags: vec!["license".to_string()],
         }
     }
 }

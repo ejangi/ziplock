@@ -48,6 +48,30 @@ pub const LOCK_ICON_SVG: &[u8] = include_bytes!("../../resources/icons/lock.svg"
 /// Embedded xmark icon SVG for close/dismiss buttons (from Iconoir style)
 pub const XMARK_ICON_SVG: &[u8] = include_bytes!("../../resources/icons/xmark.svg");
 
+/// Embedded credit card icon SVG for credit card credentials
+pub const CREDIT_CARD_ICON_SVG: &[u8] = include_bytes!("../../resources/icons/credit-card.svg");
+
+/// Embedded note icon SVG for secure notes
+pub const NOTE_ICON_SVG: &[u8] = include_bytes!("../../resources/icons/note.svg");
+
+/// Embedded user icon SVG for identity credentials
+pub const USER_ICON_SVG: &[u8] = include_bytes!("../../resources/icons/user.svg");
+
+/// Embedded document icon SVG for document credentials
+pub const DOCUMENT_ICON_SVG: &[u8] = include_bytes!("../../resources/icons/document.svg");
+
+/// Embedded bank icon SVG for bank account credentials
+pub const BANK_ICON_SVG: &[u8] = include_bytes!("../../resources/icons/bank.svg");
+
+/// Embedded wallet icon SVG for crypto wallet credentials
+pub const WALLET_ICON_SVG: &[u8] = include_bytes!("../../resources/icons/wallet.svg");
+
+/// Embedded database icon SVG for database credentials
+pub const DATABASE_ICON_SVG: &[u8] = include_bytes!("../../resources/icons/database.svg");
+
+/// Embedded license icon SVG for software license credentials
+pub const LICENSE_ICON_SVG: &[u8] = include_bytes!("../../resources/icons/license.svg");
+
 /// Helper function to create an SVG handle from the embedded ZipLock logo
 pub fn ziplock_logo() -> svg::Handle {
     svg::Handle::from_memory(ZIPLOCK_LOGO_SVG)
@@ -106,6 +130,46 @@ pub fn lock_icon() -> svg::Handle {
 /// Helper function to create an SVG handle from the embedded xmark icon
 pub fn xmark_icon() -> svg::Handle {
     svg::Handle::from_memory(XMARK_ICON_SVG)
+}
+
+/// Helper function to create an SVG handle from the embedded credit card icon
+pub fn credit_card_icon() -> svg::Handle {
+    svg::Handle::from_memory(CREDIT_CARD_ICON_SVG)
+}
+
+/// Helper function to create an SVG handle from the embedded note icon
+pub fn note_icon() -> svg::Handle {
+    svg::Handle::from_memory(NOTE_ICON_SVG)
+}
+
+/// Helper function to create an SVG handle from the embedded user icon
+pub fn user_icon() -> svg::Handle {
+    svg::Handle::from_memory(USER_ICON_SVG)
+}
+
+/// Helper function to create an SVG handle from the embedded document icon
+pub fn document_icon() -> svg::Handle {
+    svg::Handle::from_memory(DOCUMENT_ICON_SVG)
+}
+
+/// Helper function to create an SVG handle from the embedded bank icon
+pub fn bank_icon() -> svg::Handle {
+    svg::Handle::from_memory(BANK_ICON_SVG)
+}
+
+/// Helper function to create an SVG handle from the embedded wallet icon
+pub fn wallet_icon() -> svg::Handle {
+    svg::Handle::from_memory(WALLET_ICON_SVG)
+}
+
+/// Helper function to create an SVG handle from the embedded database icon
+pub fn database_icon() -> svg::Handle {
+    svg::Handle::from_memory(DATABASE_ICON_SVG)
+}
+
+/// Helper function to create an SVG handle from the embedded license icon
+pub fn license_icon() -> svg::Handle {
+    svg::Handle::from_memory(LICENSE_ICON_SVG)
 }
 
 /// Logo purple color from design.md (#8338ec)

@@ -224,6 +224,42 @@ impl CredentialUtils {
                 &CommonTemplates::secure_note(),
                 title,
             )),
+            "identity" | "personal" => Some(CredentialRecord::from_template(
+                &CommonTemplates::identity(),
+                title,
+            )),
+            "password" => Some(CredentialRecord::from_template(
+                &CommonTemplates::password(),
+                title,
+            )),
+            "document" | "file" => Some(CredentialRecord::from_template(
+                &CommonTemplates::document(),
+                title,
+            )),
+            "ssh_key" | "ssh" => Some(CredentialRecord::from_template(
+                &CommonTemplates::ssh_key(),
+                title,
+            )),
+            "bank_account" | "bank" => Some(CredentialRecord::from_template(
+                &CommonTemplates::bank_account(),
+                title,
+            )),
+            "api_credentials" | "api" => Some(CredentialRecord::from_template(
+                &CommonTemplates::api_credentials(),
+                title,
+            )),
+            "crypto_wallet" | "wallet" | "crypto" => Some(CredentialRecord::from_template(
+                &CommonTemplates::crypto_wallet(),
+                title,
+            )),
+            "database" | "db" => Some(CredentialRecord::from_template(
+                &CommonTemplates::database(),
+                title,
+            )),
+            "software_license" | "license" => Some(CredentialRecord::from_template(
+                &CommonTemplates::software_license(),
+                title,
+            )),
             _ => None,
         }
     }
@@ -439,6 +475,59 @@ impl CredentialExport {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_credential_utils_create_from_pattern_all_types() {
+        // Test all credential types from specification
+        let test_cases = vec![
+            ("login", "My Login", "login"),
+            ("website", "My Website", "login"),
+            ("credit_card", "My Card", "credit_card"),
+            ("card", "My Credit Card", "credit_card"),
+            ("secure_note", "My Note", "secure_note"),
+            ("note", "My Secure Note", "secure_note"),
+            ("identity", "My Identity", "identity"),
+            ("personal", "My Personal Info", "identity"),
+            ("password", "My Password", "password"),
+            ("document", "My Document", "document"),
+            ("file", "My File", "document"),
+            ("ssh_key", "My SSH Key", "ssh_key"),
+            ("ssh", "My SSH", "ssh_key"),
+            ("bank_account", "My Bank Account", "bank_account"),
+            ("bank", "My Bank", "bank_account"),
+            ("api_credentials", "My API", "api_credentials"),
+            ("api", "My API Creds", "api_credentials"),
+            ("crypto_wallet", "My Wallet", "crypto_wallet"),
+            ("wallet", "My Crypto Wallet", "crypto_wallet"),
+            ("crypto", "My Crypto", "crypto_wallet"),
+            ("database", "My Database", "database"),
+            ("db", "My DB", "database"),
+            ("software_license", "My License", "software_license"),
+            ("license", "My Software License", "software_license"),
+        ];
+
+        for (pattern, title, expected_type) in test_cases {
+            let result = CredentialUtils::create_from_pattern(pattern, title.to_string());
+            assert!(
+                result.is_some(),
+                "Failed to create credential for pattern: {}",
+                pattern
+            );
+
+            let cred = result.unwrap();
+            assert_eq!(cred.title, title);
+            assert_eq!(cred.credential_type, expected_type);
+            assert!(
+                !cred.fields.is_empty(),
+                "No fields for pattern: {}",
+                pattern
+            );
+        }
+
+        // Test unknown pattern returns None
+        let unknown = CredentialUtils::create_from_pattern("unknown_pattern", "Test".to_string());
+        assert!(unknown.is_none());
+    }
 
     #[test]
     fn test_password_generation() {
