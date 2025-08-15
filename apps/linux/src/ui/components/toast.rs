@@ -22,7 +22,6 @@ pub const DEFAULT_TOAST_DURATION: Duration = Duration::from_secs(5);
 pub const MAX_VISIBLE_TOASTS: usize = 3;
 
 /// Toast positioning constants (kept for future use)
-
 /// Position where toasts should appear
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub enum ToastPosition {

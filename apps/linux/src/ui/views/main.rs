@@ -46,7 +46,7 @@ pub enum MainViewMessage {
 }
 
 /// Main application view state
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct MainView {
     search_query: String,
     credentials: Vec<CredentialItem>,
@@ -64,19 +64,6 @@ pub struct CredentialItem {
     pub username: String,
     pub url: Option<String>,
     pub last_modified: String,
-}
-
-impl Default for MainView {
-    fn default() -> Self {
-        Self {
-            search_query: String::new(),
-            credentials: vec![],
-            session_id: None,
-            is_authenticated: false,
-            selected_credential: None,
-            is_loading: false,
-        }
-    }
 }
 
 impl MainView {

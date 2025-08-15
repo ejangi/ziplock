@@ -371,7 +371,7 @@ impl AddCredentialView {
                         .center_x(),
                         Space::with_height(Length::Fixed(12.0)),
                         container(
-                            text(&StringUtils::to_display_name(&template.name))
+                            text(StringUtils::to_display_name(&template.name))
                                 .size(16)
                                 .horizontal_alignment(alignment::Horizontal::Center)
                         )

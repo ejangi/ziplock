@@ -392,7 +392,7 @@ impl ArchiveManager {
                     || cred
                         .notes
                         .as_ref()
-                        .map_or(false, |notes| notes.to_lowercase().contains(&query_lower))
+                        .is_some_and(|notes| notes.to_lowercase().contains(&query_lower))
                     || cred
                         .tags
                         .iter()
@@ -451,8 +451,7 @@ impl ArchiveManager {
         let backup_dir = self
             .config
             .backup_dir
-            .as_ref()
-            .map(|p| p.as_path())
+            .as_deref()
             .unwrap_or_else(|| archive_path.parent().unwrap_or_else(|| Path::new(".")));
 
         fs::create_dir_all(backup_dir).map_err(|e| ArchiveError::BackupFailed {
@@ -486,8 +485,7 @@ impl ArchiveManager {
         let backup_dir = self
             .config
             .backup_dir
-            .as_ref()
-            .map(|p| p.as_path())
+            .as_deref()
             .unwrap_or_else(|| archive_path.parent().unwrap_or_else(|| Path::new(".")));
 
         if !backup_dir.exists() {
@@ -979,10 +977,12 @@ mod tests {
         let archive_path = temp_dir.path().join("test.7z");
         let backup_dir = temp_dir.path().join("backups");
 
-        let mut config = ArchiveConfig::default();
-        config.backup_count = 2; // Test with only 2 backups
-        config.auto_backup = true;
-        config.backup_dir = Some(backup_dir.clone());
+        let config = ArchiveConfig {
+            backup_count: 2, // Test with only 2 backups
+            auto_backup: true,
+            backup_dir: Some(backup_dir.clone()),
+            ..Default::default()
+        };
 
         let manager = ArchiveManager::new(config).unwrap();
 
@@ -1036,7 +1036,7 @@ mod tests {
 
                 // Year should be reasonable (20XX)
                 let year: u32 = timestamp_part[0..4].parse().unwrap();
-                assert!(year >= 2024 && year <= 2030);
+                assert!((2024..=2030).contains(&year));
             }
         }
 
