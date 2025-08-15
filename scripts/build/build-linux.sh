@@ -276,7 +276,7 @@ create_install_structure() {
     cat > "$install_dir/etc/ziplock/config.yml" << EOF
 # ZipLock Configuration (Unified FFI Architecture)
 storage:
-  backup_count: 5
+  backup_count: 3
   auto_backup: true
   compression:
     level: 6

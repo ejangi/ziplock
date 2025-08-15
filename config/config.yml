@@ -17,7 +17,7 @@ storage:
   # Default directory for storing archives
   default_archive_dir: "~/Documents/ZipLock"
   # Number of backup copies to maintain
-  backup_count: 5
+  backup_count: 3
   # Enable automatic backup creation
   auto_backup: true
   # Custom backup directory (optional)

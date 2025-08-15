@@ -12,6 +12,7 @@ use iced::{
 };
 use std::collections::HashMap;
 use ziplock_shared::models::{CommonTemplates, CredentialField, CredentialTemplate, FieldType};
+use ziplock_shared::utils::StringUtils;
 
 use crate::ui::components::{CredentialForm, CredentialFormConfig, CredentialFormMessage};
 use crate::ui::theme::{button_styles, container_styles, utils};
@@ -326,11 +327,12 @@ impl AddCredentialView {
         let mut type_buttons = vec![];
 
         for template in &self.available_types {
-            let button_element = button(text(&template.name).size(16))
-                .on_press(AddCredentialMessage::TypeSelected(template.name.clone()))
-                .style(button_styles::primary())
-                .width(Length::Fill)
-                .padding(utils::button_padding());
+            let button_element =
+                button(text(&StringUtils::to_display_name(&template.name)).size(16))
+                    .on_press(AddCredentialMessage::TypeSelected(template.name.clone()))
+                    .style(button_styles::primary())
+                    .width(Length::Fill)
+                    .padding(utils::button_padding());
 
             type_buttons.push(button_element.into());
             type_buttons.push(Space::with_height(Length::Fixed(10.0)).into());

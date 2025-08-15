@@ -381,6 +381,7 @@ impl RepositoryWizard {
                     .width(Length::Fill)
                     .id(text_input::Id::new("directory_path"))
                     .on_submit(WizardMessage::NextStep)
+                    .padding(theme::utils::text_input_padding())
                     .style(theme::text_input_styles::standard()),
                 button("Browse...")
                     .on_press(WizardMessage::SelectDirectory)
@@ -428,6 +429,7 @@ impl RepositoryWizard {
                     .width(Length::Fill)
                     .id(text_input::Id::new("repository_name"))
                     .on_submit(WizardMessage::NextStep)
+                    .padding(theme::utils::text_input_padding())
                     .style(theme::text_input_styles::standard()),
             ]
             .spacing(5),
@@ -468,6 +470,7 @@ impl RepositoryWizard {
                     .on_input(WizardMessage::PassphraseChanged)
                     .secure(!self.show_passphrase)
                     .width(Length::Fill)
+                    .padding(theme::utils::text_input_padding())
                     .style(self.get_passphrase_style())
                     .id(text_input::Id::new("master_passphrase"))
                     .on_submit(WizardMessage::FocusNextField),
@@ -497,6 +500,7 @@ impl RepositoryWizard {
                     .on_input(WizardMessage::ConfirmPassphraseChanged)
                     .secure(!self.show_passphrase)
                     .width(Length::Fill)
+                    .padding(theme::utils::text_input_padding())
                     .style(self.get_confirm_passphrase_style())
                     .id(text_input::Id::new("confirm_passphrase"))
                     .on_submit(WizardMessage::CreateRepository),
@@ -874,7 +878,7 @@ impl RepositoryWizard {
     /// Get the style for the passphrase field
     fn get_passphrase_style(&self) -> iced::theme::TextInput {
         if self.passphrase.is_empty() {
-            iced::theme::TextInput::Default
+            theme::text_input_styles::standard()
         } else {
             let strength = self.passphrase_validator.validate(&self.passphrase);
             if strength.meets_requirements && strength.level.is_acceptable() {
@@ -890,7 +894,7 @@ impl RepositoryWizard {
     /// Get the style for the confirm passphrase field
     fn get_confirm_passphrase_style(&self) -> iced::theme::TextInput {
         if self.confirm_passphrase.is_empty() {
-            iced::theme::TextInput::Default
+            theme::text_input_styles::standard()
         } else if !self.confirm_passphrase.is_empty() && self.passphrase == self.confirm_passphrase
         {
             // Green border when passphrases match

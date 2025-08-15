@@ -10,6 +10,7 @@ use iced::{
     widget::{button, column, container, row, scrollable, svg, text, text_input, Space},
     Alignment, Command, Element, Length,
 };
+use ziplock_shared::utils::StringUtils;
 
 /// Messages for the main application view
 #[derive(Debug, Clone)]
@@ -612,7 +613,10 @@ impl MainView {
                     .map(|record| CredentialItem {
                         id: record.id,
                         title: record.title,
-                        username: format!("Type: {}", record.credential_type),
+                        username: format!(
+                            "Type: {}",
+                            StringUtils::to_display_name(&record.credential_type)
+                        ),
                         url: None,
                         last_modified: record
                             .updated_at

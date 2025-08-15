@@ -288,7 +288,7 @@ impl OpenRepositoryView {
             .on_submit(OpenRepositoryMessage::OpenRepository)
             .secure(!self.show_passphrase)
             .style(self.get_passphrase_style())
-            .padding(utils::button_padding())
+            .padding(utils::text_input_padding())
             .width(Length::Fill);
 
         let toggle_button = utils::password_visibility_toggle(
@@ -434,7 +434,7 @@ impl OpenRepositoryView {
     /// Get the style for the passphrase input field
     fn get_passphrase_style(&self) -> iced::theme::TextInput {
         if self.passphrase.is_empty() {
-            iced::theme::TextInput::Default
+            theme::text_input_styles::standard()
         } else {
             // For opening, we don't validate strength, just that it's not empty
             // This giving visual feedback that something has been entered

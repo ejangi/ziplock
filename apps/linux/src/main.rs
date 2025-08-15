@@ -906,11 +906,13 @@ impl ZipLockApp {
                 Space::with_height(Length::Fixed(40.0)),
                 button("Setup Repository")
                     .on_press(Message::ShowWizard)
-                    .padding(theme::utils::setup_button_padding()),
+                    .padding(theme::utils::setup_button_padding())
+                    .style(theme::button_styles::primary()),
                 Space::with_height(Length::Fixed(20.0)),
                 button("Open Existing Repository")
                     .on_press(Message::ShowOpenRepository)
-                    .padding(theme::utils::standard_button_padding()),
+                    .padding(theme::utils::standard_button_padding())
+                    .style(theme::button_styles::secondary()),
                 Space::with_height(Length::Fill),
             ]
             .align_items(Alignment::Center)

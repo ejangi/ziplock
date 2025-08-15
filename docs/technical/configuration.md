@@ -31,7 +31,7 @@ storage:
   # Default directory for storing archives
   default_archive_dir: "~/Documents/ZipLock"
   # Number of backup copies to maintain
-  backup_count: 5
+  backup_count: 3
   # Enable automatic backup creation
   auto_backup: true
   # Custom backup directory (optional)
@@ -167,7 +167,7 @@ logging:
 
 ```yaml
 storage:
-  backup_count: 5
+  backup_count: 3
   validation:
     enable_comprehensive_validation: false
     deep_validation: false
@@ -195,7 +195,7 @@ logging:
 Controls how archives are stored and managed:
 
 - `default_archive_dir`: Where new archives are created by default
-- `backup_count`: Number of automatic backups to maintain
+- `backup_count`: Number of automatic backups to maintain (default: 3)
 - `auto_backup`: Whether to create backups automatically
 - `backup_dir`: Custom backup directory (optional, defaults to subdirectory of archive dir)
 - `file_lock_timeout`: Prevents concurrent access issues

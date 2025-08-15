@@ -45,6 +45,9 @@ pub const SETTINGS_ICON_SVG: &[u8] = include_bytes!("../../resources/icons/setti
 /// Embedded lock icon SVG for lock button (from Iconoir style)
 pub const LOCK_ICON_SVG: &[u8] = include_bytes!("../../resources/icons/lock.svg");
 
+/// Embedded xmark icon SVG for close/dismiss buttons (from Iconoir style)
+pub const XMARK_ICON_SVG: &[u8] = include_bytes!("../../resources/icons/xmark.svg");
+
 /// Helper function to create an SVG handle from the embedded ZipLock logo
 pub fn ziplock_logo() -> svg::Handle {
     svg::Handle::from_memory(ZIPLOCK_LOGO_SVG)
@@ -98,6 +101,11 @@ pub fn settings_icon() -> svg::Handle {
 /// Helper function to create an SVG handle from the embedded lock icon
 pub fn lock_icon() -> svg::Handle {
     svg::Handle::from_memory(LOCK_ICON_SVG)
+}
+
+/// Helper function to create an SVG handle from the embedded xmark icon
+pub fn xmark_icon() -> svg::Handle {
+    svg::Handle::from_memory(XMARK_ICON_SVG)
 }
 
 /// Logo purple color from design.md (#8338ec)
@@ -225,6 +233,11 @@ pub mod button_styles {
         iced::theme::Button::Custom(Box::new(TextFieldLikeButtonStyle))
     }
 
+    /// Toast close button style with white background and bold border
+    pub fn toast_close_button() -> iced::theme::Button {
+        iced::theme::Button::Custom(Box::new(ToastCloseButtonStyle))
+    }
+
     // Style implementations
     struct PrimaryButtonStyle;
     struct SecondaryButtonStyle;
@@ -233,6 +246,7 @@ pub mod button_styles {
     struct PasswordToggleInactiveStyle;
     struct PasswordToggleActiveStyle;
     struct TextFieldLikeButtonStyle;
+    struct ToastCloseButtonStyle;
 
     impl button::StyleSheet for PrimaryButtonStyle {
         type Style = Theme;
@@ -458,7 +472,7 @@ pub mod button_styles {
         fn hovered(&self, style: &Self::Style) -> button::Appearance {
             let active = self.active(style);
             button::Appearance {
-                background: Some(Color::from_rgb(0.45, 0.18, 0.82).into()), // Slightly darker purple
+                background: Some(LOGO_PURPLE_HOVER.into()),
                 ..active
             }
         }
@@ -466,7 +480,7 @@ pub mod button_styles {
         fn pressed(&self, style: &Self::Style) -> button::Appearance {
             let active = self.active(style);
             button::Appearance {
-                background: Some(Color::from_rgb(0.40, 0.15, 0.75).into()), // Even darker purple
+                background: Some(LOGO_PURPLE_PRESSED.into()),
                 ..active
             }
         }
@@ -565,6 +579,66 @@ pub mod button_styles {
                 text_color: DISABLED_TEXT,
                 border: iced::Border {
                     color: EXTRA_LIGHT_GRAY,
+                    width: 1.0,
+                    radius: utils::border_radius().into(),
+                },
+                shadow: iced::Shadow::default(),
+                shadow_offset: iced::Vector::new(0.0, 0.0),
+            }
+        }
+    }
+
+    impl button::StyleSheet for ToastCloseButtonStyle {
+        type Style = iced::Theme;
+
+        fn active(&self, _style: &Self::Style) -> button::Appearance {
+            button::Appearance {
+                background: Some(WHITE.into()),
+                text_color: DARK_TEXT,
+                border: iced::Border {
+                    color: WHITE,
+                    width: 2.0,
+                    radius: utils::border_radius().into(),
+                },
+                shadow: iced::Shadow::default(),
+                shadow_offset: iced::Vector::new(0.0, 0.0),
+            }
+        }
+
+        fn hovered(&self, _style: &Self::Style) -> button::Appearance {
+            button::Appearance {
+                background: Some(iced::Color::from_rgba(1.0, 1.0, 1.0, 0.9).into()),
+                text_color: DARK_TEXT,
+                border: iced::Border {
+                    color: WHITE,
+                    width: 2.0,
+                    radius: utils::border_radius().into(),
+                },
+                shadow: iced::Shadow::default(),
+                shadow_offset: iced::Vector::new(0.0, 0.0),
+            }
+        }
+
+        fn pressed(&self, _style: &Self::Style) -> button::Appearance {
+            button::Appearance {
+                background: Some(iced::Color::from_rgba(1.0, 1.0, 1.0, 0.8).into()),
+                text_color: DARK_TEXT,
+                border: iced::Border {
+                    color: WHITE,
+                    width: 2.0,
+                    radius: utils::border_radius().into(),
+                },
+                shadow: iced::Shadow::default(),
+                shadow_offset: iced::Vector::new(0.0, 0.0),
+            }
+        }
+
+        fn disabled(&self, _style: &Self::Style) -> button::Appearance {
+            button::Appearance {
+                background: Some(iced::Color::from_rgba(1.0, 1.0, 1.0, 0.5).into()),
+                text_color: DISABLED_TEXT,
+                border: iced::Border {
+                    color: DISABLED_BORDER,
                     width: 1.0,
                     radius: utils::border_radius().into(),
                 },
@@ -879,6 +953,26 @@ pub mod container_styles {
         iced::theme::Container::Custom(Box::new(InfoAlertStyle))
     }
 
+    /// Error toast container style with red border and light red background (no border radius)
+    pub fn error_toast() -> iced::theme::Container {
+        iced::theme::Container::Custom(Box::new(ErrorToastStyle))
+    }
+
+    /// Warning toast container style with yellow border and light yellow background (no border radius)
+    pub fn warning_toast() -> iced::theme::Container {
+        iced::theme::Container::Custom(Box::new(WarningToastStyle))
+    }
+
+    /// Success toast container style with green border and light green background (no border radius)
+    pub fn success_toast() -> iced::theme::Container {
+        iced::theme::Container::Custom(Box::new(SuccessToastStyle))
+    }
+
+    /// Info toast container style with purple border and light purple background (no border radius)
+    pub fn info_toast() -> iced::theme::Container {
+        iced::theme::Container::Custom(Box::new(InfoToastStyle))
+    }
+
     /// Sidebar container style with light gray background
     pub fn sidebar() -> iced::theme::Container {
         iced::theme::Container::Custom(Box::new(SidebarStyle))
@@ -890,6 +984,12 @@ pub mod container_styles {
     struct SuccessAlertStyle;
     struct InfoAlertStyle;
     struct SidebarStyle;
+
+    // Toast style implementations (no border radius)
+    struct ErrorToastStyle;
+    struct WarningToastStyle;
+    struct SuccessToastStyle;
+    struct InfoToastStyle;
 
     impl container::StyleSheet for ErrorAlertStyle {
         type Style = iced::Theme;
@@ -973,6 +1073,74 @@ pub mod container_styles {
                 },
                 shadow: Shadow::default(),
                 text_color: None,
+            }
+        }
+    }
+
+    impl container::StyleSheet for ErrorToastStyle {
+        type Style = iced::Theme;
+
+        fn appearance(&self, _style: &Self::Style) -> container::Appearance {
+            container::Appearance {
+                background: Some(ERROR_RED.into()),
+                border: iced::Border {
+                    color: ERROR_RED,
+                    width: 0.0,
+                    radius: 0.0.into(),
+                },
+                text_color: Some(WHITE),
+                shadow: iced::Shadow::default(),
+            }
+        }
+    }
+
+    impl container::StyleSheet for WarningToastStyle {
+        type Style = iced::Theme;
+
+        fn appearance(&self, _style: &Self::Style) -> container::Appearance {
+            container::Appearance {
+                background: Some(WARNING_YELLOW.into()),
+                border: iced::Border {
+                    color: WARNING_YELLOW,
+                    width: 0.0,
+                    radius: 0.0.into(),
+                },
+                text_color: Some(WHITE),
+                shadow: iced::Shadow::default(),
+            }
+        }
+    }
+
+    impl container::StyleSheet for SuccessToastStyle {
+        type Style = iced::Theme;
+
+        fn appearance(&self, _style: &Self::Style) -> container::Appearance {
+            container::Appearance {
+                background: Some(SUCCESS_GREEN.into()),
+                border: iced::Border {
+                    color: SUCCESS_GREEN,
+                    width: 0.0,
+                    radius: 0.0.into(),
+                },
+                text_color: Some(WHITE),
+                shadow: iced::Shadow::default(),
+            }
+        }
+    }
+
+    impl container::StyleSheet for InfoToastStyle {
+        type Style = iced::Theme;
+
+        fn appearance(&self, _style: &Self::Style) -> container::Appearance {
+            container::Appearance {
+                background: Some(LOGO_PURPLE.into()),
+                border: iced::Border {
+                    color: LOGO_PURPLE,
+                    width: 0.0,
+                    radius: 0.0.into(),
+                },
+                text_color: Some(WHITE),
+                shadow: iced::Shadow::default(),
             }
         }
     }
@@ -1245,7 +1413,7 @@ pub mod alerts {
         if alert.dismissible {
             if let Some(dismiss_msg) = on_dismiss {
                 content = content.push(Space::with_width(Length::Fixed(10.0))).push(
-                    button("✕")
+                    button(svg(xmark_icon()).width(12).height(12))
                         .on_press(dismiss_msg)
                         .padding(utils::toast_dismiss_padding())
                         .style(button_styles::secondary()),

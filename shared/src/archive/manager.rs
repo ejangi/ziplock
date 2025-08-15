@@ -10,13 +10,14 @@ use crate::archive::{ArchiveConfig, ArchiveError, ArchiveResult};
 use crate::models::CredentialRecord;
 use crate::validation::validate_credential;
 
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sevenz_rust2::{encoder_options, ArchiveWriter};
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::SystemTime;
 use tempfile::TempDir;
 use tokio::sync::RwLock;
 use tracing::{debug, error, info, warn};
@@ -245,10 +246,17 @@ impl ArchiveManager {
                 // Note: In a full implementation, we'd save here
             }
 
+            // Clean up old backups before closing
+            if self.config.auto_backup {
+                if let Err(e) = self.cleanup_old_backups(&archive.path).await {
+                    warn!("Failed to cleanup old backups: {}", e);
+                }
+            }
+
             // File lock is automatically released when dropped
             info!("Archive closed successfully");
         } else {
-            debug!("No archive currently open");
+            info!("No archive was open");
         }
 
         Ok(())
@@ -451,10 +459,8 @@ impl ArchiveManager {
             reason: format!("Failed to create backup directory: {}", e),
         })?;
 
-        let timestamp = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs();
+        let now: DateTime<Utc> = SystemTime::now().into();
+        let timestamp = now.format("%Y%m%d%H%M%S").to_string();
 
         let backup_name = format!(
             "{}_{}.7z",
@@ -472,6 +478,68 @@ impl ArchiveManager {
         })?;
 
         info!("Created backup: {:?}", backup_path);
+        Ok(())
+    }
+
+    /// Clean up old backup files, keeping only the most recent ones based on backup_count
+    async fn cleanup_old_backups(&self, archive_path: &Path) -> ArchiveResult<()> {
+        let backup_dir = self
+            .config
+            .backup_dir
+            .as_ref()
+            .map(|p| p.as_path())
+            .unwrap_or_else(|| archive_path.parent().unwrap_or_else(|| Path::new(".")));
+
+        if !backup_dir.exists() {
+            return Ok(());
+        }
+
+        let archive_stem = archive_path
+            .file_stem()
+            .unwrap_or_default()
+            .to_string_lossy();
+
+        // Find all backup files for this archive
+        let entries = fs::read_dir(backup_dir).map_err(|e| ArchiveError::BackupFailed {
+            reason: format!("Failed to read backup directory: {}", e),
+        })?;
+
+        let mut backup_files = Vec::new();
+
+        for entry in entries {
+            let entry = entry.map_err(|e| ArchiveError::BackupFailed {
+                reason: format!("Failed to read directory entry: {}", e),
+            })?;
+
+            let path = entry.path();
+            if let Some(filename) = path.file_name().and_then(|n| n.to_str()) {
+                // Check if this is a backup file for our archive
+                if filename.starts_with(&format!("{}_", archive_stem)) && filename.ends_with(".7z")
+                {
+                    if let Ok(metadata) = entry.metadata() {
+                        if let Ok(modified) = metadata.modified() {
+                            backup_files.push((path, modified));
+                        }
+                    }
+                }
+            }
+        }
+
+        // Sort by modification time (newest first)
+        backup_files.sort_by(|a, b| b.1.cmp(&a.1));
+
+        // Remove old backups beyond the configured count
+        if backup_files.len() > self.config.backup_count as usize {
+            let files_to_remove = &backup_files[self.config.backup_count as usize..];
+
+            for (path, _) in files_to_remove {
+                match fs::remove_file(path) {
+                    Ok(_) => info!("Removed old backup: {:?}", path),
+                    Err(e) => warn!("Failed to remove old backup {:?}: {}", path, e),
+                }
+            }
+        }
+
         Ok(())
     }
 
@@ -903,5 +971,81 @@ mod tests {
         manager.delete_credential(id).await.unwrap();
         let credentials = manager.list_credentials().await.unwrap();
         assert_eq!(credentials.len(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_backup_functionality() {
+        let temp_dir = TempDir::new().unwrap();
+        let archive_path = temp_dir.path().join("test.7z");
+        let backup_dir = temp_dir.path().join("backups");
+
+        let mut config = ArchiveConfig::default();
+        config.backup_count = 2; // Test with only 2 backups
+        config.auto_backup = true;
+        config.backup_dir = Some(backup_dir.clone());
+
+        let manager = ArchiveManager::new(config).unwrap();
+
+        // Create and open archive
+        manager
+            .create_archive(archive_path.clone(), "strong_password_123".to_string())
+            .await
+            .unwrap();
+        manager
+            .open_archive(archive_path.clone(), "strong_password_123".to_string())
+            .await
+            .unwrap();
+
+        // Create several backups by saving multiple times
+        for i in 0..4 {
+            let credential =
+                CredentialRecord::new(format!("Test Login {}", i), "login".to_string());
+            manager.add_credential(credential).await.unwrap();
+            manager.save_archive().await.unwrap();
+
+            // Small delay to ensure different timestamps
+            tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+        }
+
+        // Close archive to trigger cleanup
+        manager.close_archive().await.unwrap();
+
+        // Check that backup files exist with human-readable timestamps
+        let backup_files = std::fs::read_dir(&backup_dir).unwrap();
+        let mut backup_count = 0;
+
+        for entry in backup_files {
+            let entry = entry.unwrap();
+            let filename = entry.file_name().into_string().unwrap();
+
+            if filename.starts_with("test_") && filename.ends_with(".7z") {
+                backup_count += 1;
+
+                // Extract timestamp part and verify it's in YYYYMMDDHHMMSS format
+                let timestamp_part = filename
+                    .strip_prefix("test_")
+                    .unwrap()
+                    .strip_suffix(".7z")
+                    .unwrap();
+
+                // Should be 14 characters (YYYYMMDDHHMMSS)
+                assert_eq!(timestamp_part.len(), 14);
+
+                // Should be all digits
+                assert!(timestamp_part.chars().all(|c| c.is_ascii_digit()));
+
+                // Year should be reasonable (20XX)
+                let year: u32 = timestamp_part[0..4].parse().unwrap();
+                assert!(year >= 2024 && year <= 2030);
+            }
+        }
+
+        // Should have at most backup_count files due to cleanup
+        assert!(
+            backup_count <= 2,
+            "Expected at most 2 backup files, found {}",
+            backup_count
+        );
+        assert!(backup_count > 0, "Expected at least 1 backup file");
     }
 }

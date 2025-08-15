@@ -12,8 +12,7 @@ use std::time::{Duration, Instant};
 use crate::ui::theme::{
     alert_icon,
     alerts::{AlertLevel, AlertMessage},
-    button_styles, check_icon, container_styles, error_icon, utils, warning_icon, DARK_TEXT,
-    ERROR_RED, LOGO_PURPLE, SUCCESS_GREEN, WARNING_YELLOW,
+    button_styles, check_icon, container_styles, error_icon, warning_icon, xmark_icon, WHITE,
 };
 
 /// Duration for toast auto-dismiss (in seconds)
@@ -22,11 +21,7 @@ pub const DEFAULT_TOAST_DURATION: Duration = Duration::from_secs(5);
 /// Maximum number of toasts to display simultaneously
 pub const MAX_VISIBLE_TOASTS: usize = 3;
 
-/// Toast positioning and spacing constants
-pub const TOAST_MARGIN: f32 = 20.0;
-pub const TOAST_SPACING: f32 = 10.0;
-pub const TOAST_MIN_WIDTH: f32 = 300.0;
-pub const TOAST_MAX_WIDTH: f32 = 500.0;
+/// Toast positioning constants (kept for future use)
 
 /// Position where toasts should appear
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
@@ -286,10 +281,10 @@ pub fn render_toast<Message: Clone + 'static>(
     on_dismiss: Option<Message>,
 ) -> Element<'_, Message> {
     let container_style = match toast.message.level {
-        AlertLevel::Error => container_styles::error_alert(),
-        AlertLevel::Warning => container_styles::warning_alert(),
-        AlertLevel::Success => container_styles::success_alert(),
-        AlertLevel::Info => container_styles::info_alert(),
+        AlertLevel::Error => container_styles::error_toast(),
+        AlertLevel::Warning => container_styles::warning_toast(),
+        AlertLevel::Success => container_styles::success_toast(),
+        AlertLevel::Info => container_styles::info_toast(),
     };
 
     let icon_svg = match toast.message.level {
@@ -304,23 +299,13 @@ pub fn render_toast<Message: Clone + 'static>(
     let mut text_column = column![];
 
     if let Some(title) = &toast.message.title {
-        let title_color = match toast.message.level {
-            AlertLevel::Error => ERROR_RED,
-            AlertLevel::Warning => WARNING_YELLOW,
-            AlertLevel::Success => SUCCESS_GREEN,
-            AlertLevel::Info => LOGO_PURPLE,
-        };
-        text_column = text_column.push(
-            text(title)
-                .size(14)
-                .style(iced::theme::Text::Color(title_color)),
-        );
+        text_column = text_column.push(text(title).size(16).style(iced::theme::Text::Color(WHITE)));
     }
 
     text_column = text_column.push(
         text(&toast.message.message)
-            .size(12)
-            .style(iced::theme::Text::Color(DARK_TEXT)),
+            .size(14)
+            .style(iced::theme::Text::Color(WHITE)),
     );
 
     content = content
@@ -331,19 +316,17 @@ pub fn render_toast<Message: Clone + 'static>(
     if toast.message.dismissible || on_dismiss.is_some() {
         if let Some(dismiss_msg) = on_dismiss {
             content = content.push(Space::with_width(Length::Fixed(10.0))).push(
-                button("✕")
+                button(svg(xmark_icon()).width(12).height(12))
                     .on_press(dismiss_msg)
-                    .padding(crate::ui::theme::utils::toast_dismiss_padding())
-                    .style(button_styles::secondary()),
+                    .padding([8, 12])
+                    .style(button_styles::toast_close_button()),
             );
         }
     }
 
     let toast_container = container(content.align_items(Alignment::Center))
-        .padding(utils::alert_padding())
-        .width(Length::Fixed(
-            TOAST_MIN_WIDTH.max(TOAST_MAX_WIDTH.min(400.0)),
-        ))
+        .padding([16, 20])
+        .width(Length::Fill)
         .style(container_style);
 
     // Apply opacity for fade effect
@@ -373,7 +356,7 @@ pub fn render_toasts<Message: Clone + 'static>(
         let dismiss_message = on_dismiss(toast.id);
         let toast_element = render_toast(toast, Some(dismiss_message));
         toast_column = toast_column.push(toast_element);
-        toast_column = toast_column.push(Space::with_height(Length::Fixed(TOAST_SPACING)));
+        // Remove spacing between toasts for flat design
     }
 
     // Remove the last spacing
@@ -397,7 +380,6 @@ pub fn render_toasts<Message: Clone + 'static>(
     positioned_toasts
         .width(Length::Fill)
         .height(Length::Shrink)
-        .padding(TOAST_MARGIN)
         .into()
 }
 
@@ -417,15 +399,11 @@ pub fn render_toast_overlay<'a, Message: Clone + 'static>(
         let toasts = render_toasts(toast_manager, on_dismiss);
 
         // Create a toast container positioned at bottom-right
-        let toast_container = container(
-            container(toasts)
-                .width(Length::Shrink)
-                .height(Length::Shrink),
-        )
-        .width(Length::Fill)
-        .height(Length::Shrink)
-        .align_x(iced::alignment::Horizontal::Right)
-        .padding([0.0, TOAST_MARGIN, TOAST_MARGIN, 0.0]);
+        let toast_container =
+            container(container(toasts).width(Length::Fill).height(Length::Shrink))
+                .width(Length::Fill)
+                .height(Length::Shrink)
+                .align_x(iced::alignment::Horizontal::Right);
 
         // Return main content with toasts floating at bottom
         column![main_content, toast_container].into()
@@ -434,51 +412,36 @@ pub fn render_toast_overlay<'a, Message: Clone + 'static>(
         let toasts = render_toasts(toast_manager, on_dismiss);
 
         let positioned_toasts = match toast_manager.position() {
-            ToastPosition::TopRight => container(
-                container(toasts)
-                    .width(Length::Shrink)
+            ToastPosition::TopRight => {
+                container(container(toasts).width(Length::Fill).height(Length::Shrink))
+                    .width(Length::Fill)
                     .height(Length::Shrink)
-                    .padding([TOAST_MARGIN, TOAST_MARGIN, 0.0, 0.0]),
-            )
-            .width(Length::Fill)
-            .height(Length::Shrink)
-            .align_x(iced::alignment::Horizontal::Right),
-            ToastPosition::TopLeft => container(
-                container(toasts)
-                    .width(Length::Shrink)
+                    .align_x(iced::alignment::Horizontal::Right)
+            }
+            ToastPosition::TopLeft => {
+                container(container(toasts).width(Length::Fill).height(Length::Shrink))
+                    .width(Length::Fill)
                     .height(Length::Shrink)
-                    .padding([TOAST_MARGIN, 0.0, 0.0, TOAST_MARGIN]),
-            )
-            .width(Length::Fill)
-            .height(Length::Shrink)
-            .align_x(iced::alignment::Horizontal::Left),
-            ToastPosition::BottomLeft => container(
-                container(toasts)
-                    .width(Length::Shrink)
+                    .align_x(iced::alignment::Horizontal::Left)
+            }
+            ToastPosition::BottomLeft => {
+                container(container(toasts).width(Length::Fill).height(Length::Shrink))
+                    .width(Length::Fill)
                     .height(Length::Shrink)
-                    .padding([0.0, 0.0, TOAST_MARGIN, TOAST_MARGIN]),
-            )
-            .width(Length::Fill)
-            .height(Length::Shrink)
-            .align_x(iced::alignment::Horizontal::Left),
-            ToastPosition::TopCenter => container(
-                container(toasts)
-                    .width(Length::Shrink)
+                    .align_x(iced::alignment::Horizontal::Left)
+            }
+            ToastPosition::TopCenter => {
+                container(container(toasts).width(Length::Fill).height(Length::Shrink))
+                    .width(Length::Fill)
                     .height(Length::Shrink)
-                    .padding([TOAST_MARGIN, 0.0, 0.0, 0.0]),
-            )
-            .width(Length::Fill)
-            .height(Length::Shrink)
-            .center_x(),
-            ToastPosition::BottomCenter => container(
-                container(toasts)
-                    .width(Length::Shrink)
+                    .center_x()
+            }
+            ToastPosition::BottomCenter => {
+                container(container(toasts).width(Length::Fill).height(Length::Shrink))
+                    .width(Length::Fill)
                     .height(Length::Shrink)
-                    .padding([0.0, 0.0, TOAST_MARGIN, 0.0]),
-            )
-            .width(Length::Fill)
-            .height(Length::Shrink)
-            .center_x(),
+                    .center_x()
+            }
             ToastPosition::BottomRight => unreachable!(), // Handled above
         };
 

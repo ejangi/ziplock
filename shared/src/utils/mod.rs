@@ -76,6 +76,23 @@ impl StringUtils {
             && !input.ends_with('@')
             && input.matches('@').count() == 1
     }
+
+    /// Convert machine-friendly names (like "credit_card") to human-readable display names (like "Credit Card")
+    pub fn to_display_name(input: &str) -> String {
+        input
+            .split('_')
+            .map(|word| {
+                let mut chars = word.chars();
+                match chars.next() {
+                    None => String::new(),
+                    Some(first) => {
+                        first.to_uppercase().collect::<String>() + &chars.as_str().to_lowercase()
+                    }
+                }
+            })
+            .collect::<Vec<String>>()
+            .join(" ")
+    }
 }
 
 /// Time utilities
@@ -347,6 +364,35 @@ mod tests {
 
         assert!(StringUtils::looks_like_email("test@example.com"));
         assert!(!StringUtils::looks_like_email("not an email"));
+
+        // Test display name conversion for current credential types
+        assert_eq!(StringUtils::to_display_name("credit_card"), "Credit Card");
+        assert_eq!(StringUtils::to_display_name("secure_note"), "Secure Note");
+        assert_eq!(StringUtils::to_display_name("login"), "Login");
+
+        // Test display name conversion for future credential types from specification
+        assert_eq!(
+            StringUtils::to_display_name("api_credentials"),
+            "Api Credentials"
+        );
+        assert_eq!(StringUtils::to_display_name("ssh_key"), "Ssh Key");
+        assert_eq!(StringUtils::to_display_name("bank_account"), "Bank Account");
+        assert_eq!(
+            StringUtils::to_display_name("crypto_wallet"),
+            "Crypto Wallet"
+        );
+        assert_eq!(
+            StringUtils::to_display_name("software_license"),
+            "Software License"
+        );
+
+        // Test edge cases
+        assert_eq!(StringUtils::to_display_name("single"), "Single");
+        assert_eq!(StringUtils::to_display_name(""), "");
+        assert_eq!(
+            StringUtils::to_display_name("word_with_many_underscores"),
+            "Word With Many Underscores"
+        );
     }
 
     #[test]

@@ -25,7 +25,7 @@ storage:
   default_archive_dir: "~/.local/share/ziplock"
 
   # Number of backup copies to maintain
-  backup_count: 5
+  backup_count: 3
 
   # Enable automatic backup creation
   auto_backup: true
