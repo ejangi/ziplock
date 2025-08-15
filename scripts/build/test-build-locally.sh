@@ -341,7 +341,7 @@ analyze_build_results() {
     if [ -f "target/x86_64-unknown-linux-gnu/release/ziplock" ]; then
         echo "Application binary size: $(du -h target/x86_64-unknown-linux-gnu/release/ziplock | cut -f1)"
         echo "Application glibc requirements:"
-        app_glibc=$(objdump -T target/x86_64-unknown-linux-gnu/release/ziplock 2>/dev/null | grep GLIBC | sort -V | sed -n '$-2,$p') || app_glibc="No GLIBC symbols found"
+        app_glibc=$(objdump -T target/x86_64-unknown-linux-gnu/release/ziplock 2>/dev/null | grep GLIBC | sort -V | tail -3) || app_glibc="No GLIBC symbols found"
         echo "$app_glibc"
         echo ""
     fi
@@ -349,7 +349,7 @@ analyze_build_results() {
     if [ -f "target/x86_64-unknown-linux-gnu/release/libziplock_shared.so" ]; then
         echo "Shared library size: $(du -h target/x86_64-unknown-linux-gnu/release/libziplock_shared.so | cut -f1)"
         echo "Shared library glibc requirements:"
-        lib_glibc=$(objdump -T target/x86_64-unknown-linux-gnu/release/libziplock_shared.so 2>/dev/null | grep GLIBC | sort -V | sed -n '$-2,$p') || lib_glibc="No GLIBC symbols found"
+        lib_glibc=$(objdump -T target/x86_64-unknown-linux-gnu/release/libziplock_shared.so 2>/dev/null | grep GLIBC | sort -V | tail -3) || lib_glibc="No GLIBC symbols found"
         echo "$lib_glibc"
         echo ""
     fi
@@ -357,7 +357,7 @@ analyze_build_results() {
     if [ -f "target/x86_64-unknown-linux-gnu/release/ziplock" ]; then
         echo "Frontend binary size: $(du -h target/x86_64-unknown-linux-gnu/release/ziplock | cut -f1)"
         echo "Frontend glibc requirements:"
-        frontend_glibc=$(objdump -T target/x86_64-unknown-linux-gnu/release/ziplock 2>/dev/null | grep GLIBC | sort -V | sed -n '$-2,$p') || frontend_glibc="No GLIBC symbols found"
+        frontend_glibc=$(objdump -T target/x86_64-unknown-linux-gnu/release/ziplock 2>/dev/null | grep GLIBC | sort -V | tail -3) || frontend_glibc="No GLIBC symbols found"
         echo "$frontend_glibc"
     fi
 

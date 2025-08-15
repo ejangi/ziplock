@@ -110,7 +110,7 @@ Section: utils
 Priority: optional
 Architecture: $PACKAGE_ARCH
 Installed-Size: $installed_size
-Depends: libc6, libfontconfig1, libfreetype6, libx11-6, libxft2, liblzma5, systemd
+Depends: libc6, libfontconfig1, libfreetype6, libx11-6, libxft2, liblzma5
 Recommends: gnome-keyring | kde-wallet-kf5
 Suggests: firejail
 Maintainer: $MAINTAINER

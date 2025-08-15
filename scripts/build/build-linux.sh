@@ -109,15 +109,6 @@ setup_build_environment() {
 }
 
 build_shared_library() {
-    log_info "Building shared library..."
-
-    cd "$PROJECT_ROOT"
-    $CARGO_CMD build --profile "$PROFILE" --target "$TARGET_ARCH" -p ziplock-shared
-
-    log_success "Shared library built successfully"
-}
-
-build_shared_library_with_capi() {
     log_info "Building shared library with C API..."
 
     cd "$PROJECT_ROOT"
@@ -440,7 +431,6 @@ main() {
     check_dependencies
     setup_build_environment
     build_shared_library
-    build_shared_library_with_capi
     build_unified_application
 
     if [ "$skip_tests" = false ]; then
