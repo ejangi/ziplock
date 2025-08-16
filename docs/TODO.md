@@ -8,4 +8,4 @@ Run one of the following prompts in Zed's agent panel and when you're ready to b
 
 
 ## Android
-- Can you review `docs/technical.md` and `docs/technical/*.md` and have a think about whether we need to make any changes to file locking. Does that still work on Android? I'm conscious that sometimes the user will want to open files from Google Drive or Dropbox, etc and I'm not sure how Android handles files from cloud services and whether we still get a local storage location to manage lock files.
+- Can you review `docs/technical.md`, `docs/design.md` and `docs/technical/android.md` and can we start by producing a logo spash page for the android app? It should be a simple white background with the logo (`assets/icons/ziplogo-logo.svg`)? I thought this might be a good first step towards building out the android app.

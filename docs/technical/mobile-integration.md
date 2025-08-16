@@ -1809,6 +1809,74 @@ private fun createSampleCredential() {
 }
 ```
 
+## Cloud Storage Integration
+
+### Android Cloud Storage Challenges
+
+When users open ZipLock archives from cloud storage services (Google Drive, Dropbox, OneDrive, etc.) on Android, several challenges arise that the ZipLock system addresses automatically:
+
+#### Storage Access Framework (SAF) Issues
+
+Android's Storage Access Framework provides `content://` URIs that don't map to real filesystem paths where traditional file locking can operate. ZipLock handles this by:
+
+- **Automatic Detection**: The system detects cloud storage patterns in file paths
+- **Copy-to-Local Strategy**: Cloud files are automatically copied to app-private storage for safe operations
+- **Sync-Back Mechanism**: Changes are synced back to the original cloud location when saving
+
+#### Common Cloud Storage Patterns Detected
+
+```rust
+// Android cloud storage cache patterns
+/Android/data/com.google.android.apps.docs/       // Google Drive
+/Android/data/com.dropbox.android/                // Dropbox  
+/Android/data/com.microsoft.skydrive/             // OneDrive
+/Android/data/com.box.android/                    // Box
+/Android/data/com.nextcloud.client/               // Nextcloud
+
+// Storage Access Framework URIs
+content://com.android.providers.media.documents/
+
+// Generic cloud storage indicators
+/cloud/, /sync/, /googledrive/, /dropbox/
+```
+
+#### Enhanced File Locking for Cloud Storage
+
+The `CloudFileHandle` provides cloud-aware file operations:
+
+```kotlin
+// When opening a cloud file, ZipLock automatically:
+// 1. Detects it's from cloud storage
+// 2. Copies to local working directory  
+// 3. Creates file locks on local copy
+// 4. Monitors for external changes
+// 5. Syncs back on save/close
+
+// Example warning log:
+// "Cloud storage file detected: /Android/data/com.google.android.apps.docs/files/passwords.7z. 
+//  Working with local copy: /data/data/com.ziplock/cache/session_123456/passwords.7z"
+```
+
+#### Conflict Detection and Prevention
+
+ZipLock implements content-based conflict detection for cloud files:
+
+- **Hash-Based Monitoring**: Tracks file content changes using size + modification time + content sampling
+- **External Change Detection**: Warns if the original cloud file was modified by sync services
+- **Safe Sync-Back**: Only syncs changes back if no external modifications detected
+
+### Best Practices for Cloud Storage
+
+#### For Users
+- **Single Device Editing**: Avoid editing the same archive on multiple devices simultaneously
+- **Sync Completion**: Ensure cloud sync is complete before opening archives
+- **Local Backup**: Keep local backups of important archives
+
+#### For Developers
+- **Always Use CloudFileHandle**: Replace direct file operations with cloud-aware handles
+- **Monitor Cloud Patterns**: Watch logs for cloud storage detection warnings
+- **Test Cloud Scenarios**: Include cloud storage simulation in integration tests
+
 ## Security Considerations
 
 ### Memory Management
@@ -1897,7 +1965,26 @@ ZipLockNative.ziplock_debug_logging(1)
 - Use batch operations when possible
 - Consider background threading for long-running operations
 
+### Cloud Storage Security
+
+#### Temporary File Handling
+- Cloud files are copied to app-private storage during operations
+- Working directories use unique session identifiers
+- Temporary files are securely cleaned up on operation completion
+- No sensitive data remains in system temporary directories
+
+#### Sync Conflict Prevention
+- Content hashing prevents data corruption from sync conflicts
+- File locks prevent concurrent local access during cloud operations
+- User warnings alert to potential cloud storage risks
+
 ## Future Enhancements
+
+### Enhanced Cloud Storage Support
+- **Real-time Sync Monitoring**: Detect cloud service background sync activity
+- **Conflict Resolution UI**: User interface for handling sync conflicts
+- **Multi-Provider Optimization**: Provider-specific optimizations for different cloud services
+- **Offline Mode**: Better handling of offline cloud file access
 
 The C API provides a foundation for:
 - Repository management (opening/saving encrypted archives)

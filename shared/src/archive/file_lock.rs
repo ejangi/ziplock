@@ -21,6 +21,9 @@ pub enum FileLockError {
     #[error("File not found: {path}")]
     FileNotFound { path: String },
 
+    #[error("Cloud storage file detected: {path}. File locking may not prevent sync conflicts.")]
+    CloudStorageWarning { path: String },
+
     #[error("I/O error: {0}")]
     Io(#[from] std::io::Error),
 }
@@ -40,6 +43,11 @@ impl FileLock {
     pub fn new<P: AsRef<Path>>(path: P, timeout_seconds: u64) -> Result<Self, FileLockError> {
         let path = path.as_ref();
         debug!("Acquiring file lock: {:?}", path);
+
+        // Check for cloud storage patterns and warn
+        if is_cloud_storage_path(path) {
+            warn!("Cloud storage file detected: {:?}. File locking may not prevent sync conflicts from cloud services.", path);
+        }
 
         if !path.exists() {
             return Err(FileLockError::FileNotFound {
@@ -190,6 +198,7 @@ impl Drop for FileLock {
 }
 
 /// Create a temporary lock file for coordination
+#[derive(Debug)]
 pub struct LockFile {
     lock_path: std::path::PathBuf,
     _file_lock: FileLock,
@@ -202,6 +211,12 @@ impl LockFile {
         timeout_seconds: u64,
     ) -> Result<Self, FileLockError> {
         let base_path = base_path.as_ref();
+
+        // Check for cloud storage patterns and warn
+        if is_cloud_storage_path(base_path) {
+            warn!("Cloud storage file detected: {:?}. Lock file may not prevent sync conflicts from cloud services.", base_path);
+        }
+
         let lock_path = base_path.with_extension(format!(
             "{}.lock",
             base_path.extension().and_then(|s| s.to_str()).unwrap_or("")
@@ -237,6 +252,36 @@ impl Drop for LockFile {
             debug!("Removed lock file: {:?}", self.lock_path);
         }
     }
+}
+
+/// Detect if a file path appears to be from cloud storage
+/// This checks for common cloud storage cache patterns on Android and other platforms
+fn is_cloud_storage_path(path: &Path) -> bool {
+    let path_str = path.to_string_lossy().to_lowercase();
+
+    // Android cloud storage patterns
+    path_str.contains("/android/data/com.google.android.apps.docs") ||  // Google Drive
+    path_str.contains("/android/data/com.dropbox.android") ||           // Dropbox
+    path_str.contains("/android/data/com.microsoft.skydrive") ||        // OneDrive
+    path_str.contains("/android/data/com.box.android") ||               // Box
+    path_str.contains("/android/data/com.amazon.clouddrive") ||         // Amazon Drive
+
+    // Storage Access Framework patterns
+    path_str.starts_with("content://") ||
+
+    // Generic cloud storage indicators
+    path_str.contains("/cloud/") ||
+    path_str.contains("/sync/") ||
+    path_str.contains("/drive/") ||
+    path_str.contains("/dropbox/") ||
+
+    // Temporary cache directories that might be cloud-synced
+    (path_str.contains("/cache/") && (
+        path_str.contains("drive") ||
+        path_str.contains("dropbox") ||
+        path_str.contains("onedrive") ||
+        path_str.contains("cloud")
+    ))
 }
 
 #[cfg(test)]
@@ -366,5 +411,38 @@ mod tests {
         // Should be able to acquire the lock again immediately
         let lock2 = FileLock::new(&path, 1);
         assert!(lock2.is_ok());
+    }
+
+    #[test]
+    fn test_cloud_storage_detection() {
+        // Test Android Google Drive pattern
+        assert!(is_cloud_storage_path(Path::new(
+            "/Android/data/com.google.android.apps.docs/files/test.7z"
+        )));
+
+        // Test Android Dropbox pattern
+        assert!(is_cloud_storage_path(Path::new(
+            "/Android/data/com.dropbox.android/cache/test.7z"
+        )));
+
+        // Test Storage Access Framework URI
+        assert!(is_cloud_storage_path(Path::new(
+            "content://com.android.providers.media.documents/document/test"
+        )));
+
+        // Test generic cloud patterns
+        assert!(is_cloud_storage_path(Path::new("/home/user/drive/test.7z")));
+        assert!(is_cloud_storage_path(Path::new(
+            "/tmp/cache/drive_temp/test.7z"
+        )));
+
+        // Test normal local paths (should not be detected as cloud)
+        assert!(!is_cloud_storage_path(Path::new(
+            "/home/user/documents/test.7z"
+        )));
+        assert!(!is_cloud_storage_path(Path::new("/tmp/test.7z")));
+        assert!(!is_cloud_storage_path(Path::new(
+            "C:\\Users\\test\\Documents\\test.7z"
+        )));
     }
 }

@@ -4,11 +4,13 @@
 //! previously in the backend. It handles creating, opening, reading, and
 //! writing to encrypted 7z archives containing credential data.
 
+pub mod cloud_storage;
 pub mod file_lock;
 pub mod manager;
 pub mod validation;
 
 // Re-export commonly used types
+pub use cloud_storage::{is_cloud_storage_path, CloudFileHandle, CloudStorageError};
 pub use file_lock::{FileLock, FileLockError};
 pub use manager::ArchiveManager;
 pub use validation::{RepositoryValidator, ValidationIssue, ValidationReport};

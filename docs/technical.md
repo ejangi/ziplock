@@ -16,6 +16,7 @@ Do not place technical documentation in the root `docs/` directory or other loca
 - [Design Guidelines](design.md) - UI/UX design principles and visual standards
 - [Repository Detection Implementation](technical/repository-detection-implementation.md) - Technical implementation details for repository detection
 - [Configuration Guide](technical/configuration.md) - Complete configuration reference with examples and profiles
+- [Cloud Storage Implementation](technical/cloud-storage-implementation.md) - Cloud storage file handling and conflict prevention for Android
 
 - [Mobile Integration Guide](technical/mobile-integration.md) - Complete mobile platform integration documentation with examples
 - [Mobile Shared Implementation](technical/mobile-shared-implementation.md) - Shared library integration for mobile platforms

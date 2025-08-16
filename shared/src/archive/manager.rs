@@ -4,7 +4,8 @@
 //! credential records. It provides a safe abstraction over the sevenz-rust2
 //! crate with proper file locking, backup management, and error handling.
 
-use super::file_lock::FileLock;
+use super::cloud_storage::{CloudFileHandle, CloudStorageError};
+
 use crate::archive::validation::{RepositoryStats, ValidationIssue};
 use crate::archive::{ArchiveConfig, ArchiveError, ArchiveResult};
 use crate::models::CredentialRecord;
@@ -36,18 +37,27 @@ struct OpenArchive {
     path: PathBuf,
     master_password: String,
     temp_dir: TempDir,
-    #[allow(dead_code)] // Future use for file locking
-    file_lock: FileLock,
+    cloud_file_handle: CloudFileHandle,
     credentials: HashMap<String, CredentialRecord>,
     modified: bool,
     last_access: SystemTime,
 }
 
 impl OpenArchive {
-    /// Validate file lock is still valid
+    /// Validate file lock is still valid and check for conflicts
     fn validate_file_lock(&self) -> ArchiveResult<()> {
-        // Note: FileLock doesn't expose is_locked() method in current implementation
-        // Lock validity is ensured by the lock object lifetime
+        // Check for cloud storage conflicts
+        self.cloud_file_handle
+            .verify_no_conflicts()
+            .map_err(|e| match e {
+                CloudStorageError::ContentModified => ArchiveError::Internal {
+                    message: "Archive was modified by external sync service. Please reload."
+                        .to_string(),
+                },
+                _ => ArchiveError::Internal {
+                    message: format!("Cloud file validation failed: {}", e),
+                },
+            })?;
         Ok(())
     }
 
@@ -184,27 +194,35 @@ impl ArchiveManager {
             }
         }
 
-        // Acquire file lock
-        let lock_path = path.with_extension("lock");
-        // Create lock file if it doesn't exist
-        if !lock_path.exists() {
-            fs::write(&lock_path, b"ziplock").map_err(|_e| ArchiveError::LockFailed {
-                path: path.to_string_lossy().to_string(),
+        // Create cloud-aware file handle
+        let cloud_file_handle = CloudFileHandle::new(&path, Some(self.config.file_lock_timeout))
+            .map_err(|e| match e {
+                CloudStorageError::LockError(_) => ArchiveError::LockFailed {
+                    path: path.to_string_lossy().to_string(),
+                },
+                _ => ArchiveError::Internal {
+                    message: format!("Failed to create cloud file handle: {}", e),
+                },
             })?;
+
+        // Get the local working path (may be different from original for cloud files)
+        let working_path = cloud_file_handle.local_path();
+
+        // Warn if this is a cloud storage file
+        if cloud_file_handle.is_cloud_file() {
+            warn!(
+                "Opening archive from cloud storage: {:?}. Working with local copy: {:?}",
+                path, working_path
+            );
         }
-        let file_lock = FileLock::new(&lock_path, self.config.file_lock_timeout).map_err(|_e| {
-            ArchiveError::LockFailed {
-                path: path.to_string_lossy().to_string(),
-            }
-        })?;
 
         // Create temporary directory
         let temp_dir = TempDir::new().map_err(|e| ArchiveError::OpenFailed {
             reason: format!("Failed to create temporary directory: {}", e),
         })?;
 
-        // Extract archive to temp directory
-        self.extract_archive(&path, temp_dir.path(), &master_password)
+        // Extract archive to temp directory (use working path for cloud files)
+        self.extract_archive(working_path, temp_dir.path(), &master_password)
             .await?;
 
         // Load credentials from extracted directory
@@ -217,7 +235,7 @@ impl ArchiveManager {
             path: path.clone(),
             master_password,
             temp_dir,
-            file_lock,
+            cloud_file_handle,
             credentials,
             modified: false,
             last_access: SystemTime::now(),
@@ -237,23 +255,54 @@ impl ArchiveManager {
     pub async fn close_archive(&self) -> ArchiveResult<()> {
         let mut archive_guard = self.current_archive.write().await;
 
-        if let Some(archive) = archive_guard.take() {
+        if let Some(mut archive) = archive_guard.take() {
             info!("Closing archive: {:?}", archive.path);
 
             // Save if modified
             if archive.modified {
                 warn!("Archive has unsaved changes, saving before closing");
-                // Note: In a full implementation, we'd save here
+
+                // Write credentials to temp directory
+                self.write_credentials_to_directory(archive.temp_dir.path(), &archive.credentials)
+                    .await?;
+
+                // Create new encrypted archive
+                self.create_encrypted_archive(
+                    archive.temp_dir.path(),
+                    archive.cloud_file_handle.local_path(),
+                    &archive.master_password,
+                )
+                .await?;
+
+                // Mark for sync back and sync to cloud storage if needed
+                archive.cloud_file_handle.mark_modified();
+                if archive.cloud_file_handle.is_cloud_file() {
+                    info!(
+                        "Syncing final changes back to cloud storage: {:?}",
+                        archive.path
+                    );
+                    archive.cloud_file_handle.sync_back().map_err(|e| {
+                        warn!("Failed to sync final changes to cloud storage: {}", e);
+                        ArchiveError::Internal {
+                            message: format!("Failed to sync to cloud storage on close: {}", e),
+                        }
+                    })?;
+                }
             }
 
-            // Clean up old backups before closing
+            // Clean up old backups before closing (use local path for cloud files)
             if self.config.auto_backup {
-                if let Err(e) = self.cleanup_old_backups(&archive.path).await {
+                let backup_path = if archive.cloud_file_handle.is_cloud_file() {
+                    archive.cloud_file_handle.local_path()
+                } else {
+                    &archive.path
+                };
+                if let Err(e) = self.cleanup_old_backups(backup_path).await {
                     warn!("Failed to cleanup old backups: {}", e);
                 }
             }
 
-            // File lock is automatically released when dropped
+            // CloudFileHandle is automatically cleaned up when dropped
             info!("Archive closed successfully");
         } else {
             info!("No archive was open");
@@ -406,29 +455,48 @@ impl ArchiveManager {
 
     /// Save the current archive
     pub async fn save_archive(&self) -> ArchiveResult<()> {
-        let archive_guard = self.current_archive.write().await;
+        let mut archive_guard = self.current_archive.write().await;
 
-        if let Some(archive) = archive_guard.as_ref() {
+        if let Some(archive) = archive_guard.as_mut() {
             if archive.modified {
                 info!("Saving archive: {:?}", archive.path);
+
+                // Check for cloud storage conflicts before saving
+                archive.validate_file_lock()?;
 
                 // Write credentials to temp directory
                 self.write_credentials_to_directory(archive.temp_dir.path(), &archive.credentials)
                     .await?;
 
-                // Create backup if enabled
+                // Create backup if enabled (use local working path for cloud files)
                 if self.config.auto_backup {
-                    self.create_backup(&archive.path).await?;
+                    self.create_backup(archive.cloud_file_handle.local_path())
+                        .await?;
                 }
 
-                // Create new encrypted archive
+                // Create new encrypted archive (save to local working path)
                 self.create_encrypted_archive(
                     archive.temp_dir.path(),
-                    &archive.path,
+                    archive.cloud_file_handle.local_path(),
                     &archive.master_password,
                 )
                 .await?;
 
+                // Mark that the file was modified for cloud storage sync back
+                archive.cloud_file_handle.mark_modified();
+
+                // For cloud files, sync back to original location
+                if archive.cloud_file_handle.is_cloud_file() {
+                    info!("Syncing changes back to cloud storage: {:?}", archive.path);
+                    archive
+                        .cloud_file_handle
+                        .sync_back()
+                        .map_err(|e| ArchiveError::Internal {
+                            message: format!("Failed to sync to cloud storage: {}", e),
+                        })?;
+                }
+
+                archive.modified = false;
                 info!("Archive saved successfully");
             } else {
                 debug!("Archive has no changes to save");
