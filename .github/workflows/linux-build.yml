@@ -409,6 +409,18 @@ jobs:
       - name: Create Arch package structure
         run: |
           echo "Creating Arch source package from installation structure..."
+          echo "DEBUG: Current workflow file timestamp:"
+          stat .github/workflows/linux-build.yml
+          echo "DEBUG: Git commit hash:"
+          git rev-parse HEAD
+          echo "DEBUG: Checking for updated printf approach in workflow..."
+          if grep -q "printf.*sha256sums" .github/workflows/linux-build.yml; then
+            echo "DEBUG: ✅ Found printf approach in workflow file"
+          else
+            echo "DEBUG: ❌ Printf approach NOT found - still using old sed command"
+            echo "DEBUG: Current sha256sums update method:"
+            grep -A 5 -B 5 "sha256sums" .github/workflows/linux-build.yml || echo "No sha256sums found"
+          fi
 
           # Validate prerequisites
           if [ ! -f "target/install/usr/bin/ziplock" ]; then
@@ -454,9 +466,13 @@ jobs:
                 set -euo pipefail
                 cd /tmp/build
 
+                echo \"DEBUG: About to execute sha256sums update commands...\"
+                echo \"DEBUG: Method being used for sha256sums update:\"
+                echo \"  - Using printf approach (new method)\"
+
                 # Get version from Cargo.toml
-                VERSION=$(grep "^version" Cargo.toml | head -1 | sed "s/.*= \"\\(.*\\)\"/\\1/")
-                echo "Creating Arch package for version: $VERSION"
+                VERSION=\$(grep \"^version\" Cargo.toml | head -1 | sed \"s/.*= \\\"\\(.*\\)\\\"/\\1/\")
+                echo \"Creating Arch package for version: \$VERSION\"
 
                 # Create source archive manually (same as script but with control)
                 mkdir -p target/src
@@ -483,14 +499,18 @@ jobs:
 
                 # Update PKGBUILD with current version and SHA256
                 cd packaging/arch
-                sed -i "s/^pkgver=.*/pkgver=$VERSION/" PKGBUILD
+                sed -i \"s/^pkgver=.*/pkgver=\$VERSION/\" PKGBUILD
 
-                # Update sha256sums using printf to avoid escaping issues
-                cp PKGBUILD PKGBUILD.backup
-                grep -v "^sha256sums=" PKGBUILD.backup > PKGBUILD.tmp
-                printf "sha256sums=('%s')\n" "$SHA256" >> PKGBUILD.tmp
-                mv PKGBUILD.tmp PKGBUILD
-                rm PKGBUILD.backup
+                echo \"DEBUG: Updating sha256sums using simple substitution...\"
+                echo \"DEBUG: SHA256 value: \$SHA256\"
+                echo \"DEBUG: Original PKGBUILD sha256sums line:\"
+                grep \"^sha256sums=\" PKGBUILD || echo \"No sha256sums line found\"
+
+                # Update sha256sums using simple substitution to avoid escaping issues
+                sed -i \"s/^sha256sums=.*/sha256sums=('\$SHA256')/\" PKGBUILD
+
+                echo \"DEBUG: Updated PKGBUILD sha256sums line:\"
+                grep \"^sha256sums=\" PKGBUILD || echo \"No sha256sums line found after update\"
 
                 # Generate .SRCINFO from updated PKGBUILD
                 echo "Generating .SRCINFO..."
