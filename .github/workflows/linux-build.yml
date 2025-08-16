@@ -484,7 +484,10 @@ jobs:
                 # Update PKGBUILD with current version and SHA256
                 cd packaging/arch
                 sed -i "s/^pkgver=.*/pkgver=$VERSION/" PKGBUILD
-                sed -i "s/^sha256sums=.*/sha256sums=(\"$SHA256\")/" PKGBUILD
+
+                # Update sha256sums using a temp file to avoid escaping issues
+                sed "s/^sha256sums=.*/sha256sums=('"'"'$SHA256'"'"')/" PKGBUILD > PKGBUILD.tmp
+                mv PKGBUILD.tmp PKGBUILD
 
                 # Generate .SRCINFO from updated PKGBUILD
                 echo "Generating .SRCINFO..."
