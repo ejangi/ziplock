@@ -36,6 +36,12 @@ pub enum AddCredentialMessage {
     CreateCredential,
     CredentialCreated(Result<String, String>),
 
+    // Clipboard operations
+    CopyToClipboard {
+        content: String,
+        content_type: crate::services::ClipboardContentType,
+    },
+
     // Error and success handling (for toast notifications)
     ShowError(String),
     ShowSuccess(String),
@@ -228,11 +234,49 @@ impl AddCredentialView {
                         tracing::debug!("Cancel button clicked in add credential view");
                         return Command::perform(async {}, |_| AddCredentialMessage::Cancel);
                     }
+                    CredentialFormMessage::CopyToClipboard {
+                        content,
+                        content_type,
+                    } => {
+                        tracing::debug!(
+                            "AddCredential view forwarding clipboard message: content_type={:?}, content_length={}",
+                            content_type,
+                            content.len()
+                        );
+                        // Forward clipboard operations to main app
+                        return Command::perform(
+                            async move { (content, content_type) },
+                            |(content, content_type)| AddCredentialMessage::CopyToClipboard {
+                                content,
+                                content_type,
+                            },
+                        );
+                    }
+                    CredentialFormMessage::CopyFieldToClipboard {
+                        field_name: _,
+                        content,
+                        content_type,
+                    } => {
+                        tracing::debug!(
+                            "AddCredential view forwarding field clipboard message: content_type={:?}, content_length={}",
+                            content_type,
+                            content.len()
+                        );
+                        // Forward clipboard operations to main app
+                        return Command::perform(
+                            async move { (content, content_type) },
+                            |(content, content_type)| AddCredentialMessage::CopyToClipboard {
+                                content,
+                                content_type,
+                            },
+                        );
+                    }
                     _ => {
-                        self.form.update(form_msg);
+                        let form_command = self.form.update(form_msg);
+                        // Map form commands to add credential commands
+                        return form_command.map(AddCredentialMessage::FormMessage);
                     }
                 }
-                Command::none()
             }
 
             AddCredentialMessage::CreateCredential => {
@@ -316,6 +360,10 @@ impl AddCredentialView {
 
             AddCredentialMessage::ShowValidationError(_) => {
                 // Validation error handling is now done at the application level via toast system
+                Command::none()
+            }
+            AddCredentialMessage::CopyToClipboard { .. } => {
+                // This should be handled by the parent component (main app)
                 Command::none()
             }
         }

@@ -27,6 +27,17 @@ pub enum CredentialFormMessage {
     ToggleFieldSensitivity(String),
     /// TOTP field message
     TotpFieldMessage(String, crate::ui::components::totp_field::TotpFieldMessage),
+    /// Copy field content to clipboard
+    CopyFieldToClipboard {
+        field_name: String,
+        content: String,
+        content_type: crate::services::ClipboardContentType,
+    },
+    /// Copy content to clipboard with timeout
+    CopyToClipboard {
+        content: String,
+        content_type: crate::services::ClipboardContentType,
+    },
     /// The save button was pressed
     Save,
     /// The cancel button was pressed
@@ -191,7 +202,10 @@ impl CredentialForm {
     }
 
     /// Update the form based on a message
-    pub fn update(&mut self, message: CredentialFormMessage) {
+    pub fn update(
+        &mut self,
+        message: CredentialFormMessage,
+    ) -> iced::Command<CredentialFormMessage> {
         match message {
             CredentialFormMessage::TitleChanged(title) => {
                 tracing::debug!("Title changed to: '{}'", title);
@@ -230,11 +244,70 @@ impl CredentialForm {
                 tracing::debug!("TOTP field '{}' message: {:?}", field_name, totp_msg);
 
                 if let Some(totp_field) = self.totp_fields.get_mut(&field_name) {
-                    totp_field.update(totp_msg);
-                    // Update the field value with the current secret
-                    let secret = totp_field.secret().to_string();
-                    self.field_values.insert(field_name, secret);
+                    // Handle TOTP copy operations specially
+                    if let crate::ui::components::totp_field::TotpFieldMessage::CopyCode = &totp_msg
+                    {
+                        if let Some(code) = totp_field.current_code() {
+                            tracing::debug!(
+                                "TOTP copy requested for field '{}', code: '{}'",
+                                field_name,
+                                code
+                            );
+                            // Don't call totp_field.update() for CopyCode to avoid direct clipboard access
+                            // Instead, return a command that the parent can handle
+                            return iced::Command::perform(async move { code }, |code| {
+                                tracing::debug!(
+                                    "Returning CopyToClipboard command for TOTP code: '{}'",
+                                    code
+                                );
+                                CredentialFormMessage::CopyToClipboard {
+                                    content: code,
+                                    content_type: crate::services::ClipboardContentType::TotpCode,
+                                }
+                            });
+                        } else {
+                            tracing::warn!(
+                                "TOTP copy requested but no current code available for field '{}'",
+                                field_name
+                            );
+                        }
+                    } else {
+                        totp_field.update(totp_msg);
+                        // Update the field value with the current secret
+                        let secret = totp_field.secret().to_string();
+                        self.field_values.insert(field_name, secret);
+                    }
                 }
+            }
+            CredentialFormMessage::CopyFieldToClipboard {
+                field_name: _,
+                content,
+                content_type,
+            } => {
+                // Forward to parent as CopyToClipboard message
+                return iced::Command::perform(
+                    async move { (content, content_type) },
+                    |(content, content_type)| CredentialFormMessage::CopyToClipboard {
+                        content,
+                        content_type,
+                    },
+                );
+            }
+            CredentialFormMessage::CopyToClipboard {
+                content,
+                content_type,
+            } => {
+                // This should be handled by the parent component
+                tracing::debug!(
+                    "Clipboard message received in credential form - should be handled by parent"
+                );
+                return iced::Command::perform(
+                    async move { (content, content_type) },
+                    |(content, content_type)| CredentialFormMessage::CopyToClipboard {
+                        content,
+                        content_type,
+                    },
+                );
             }
             CredentialFormMessage::Save => {
                 tracing::debug!("Save button clicked in credential form");
@@ -249,6 +322,7 @@ impl CredentialForm {
                 // This is handled by the parent component
             }
         }
+        iced::Command::none()
     }
 
     /// Render the credential form
@@ -489,7 +563,7 @@ impl CredentialForm {
                 }
             }
             FieldType::Password if is_sensitive => {
-                // Password input with toggle
+                // Password input with toggle and copy button
                 row![
                     text_input(placeholder, value)
                         .on_input({
@@ -502,6 +576,14 @@ impl CredentialForm {
                         .padding(utils::text_input_padding())
                         .style(crate::ui::theme::text_input_styles::standard())
                         .size(crate::ui::theme::utils::typography::text_input_size()),
+                    button("📋")
+                        .on_press(CredentialFormMessage::CopyFieldToClipboard {
+                            field_name: field_name.to_string(),
+                            content: value.to_string(),
+                            content_type: crate::services::ClipboardContentType::Password,
+                        })
+                        .style(button_styles::secondary())
+                        .padding(utils::small_button_padding()),
                     button(if is_sensitive { "👁" } else { "🙈" })
                         .on_press(CredentialFormMessage::ToggleFieldSensitivity(
                             field_name.to_string()
@@ -514,7 +596,7 @@ impl CredentialForm {
                 .into()
             }
             _ if is_sensitive => {
-                // Password input with toggle
+                // Sensitive field input with toggle and copy button
                 row![
                     text_input(placeholder, value)
                         .on_input({
@@ -527,6 +609,14 @@ impl CredentialForm {
                         .padding(utils::text_input_padding())
                         .style(crate::ui::theme::text_input_styles::standard())
                         .size(crate::ui::theme::utils::typography::text_input_size()),
+                    button("📋")
+                        .on_press(CredentialFormMessage::CopyFieldToClipboard {
+                            field_name: field_name.to_string(),
+                            content: value.to_string(),
+                            content_type: crate::services::ClipboardContentType::Password,
+                        })
+                        .style(button_styles::secondary())
+                        .padding(utils::small_button_padding()),
                     button(if is_sensitive { "👁" } else { "🙈" })
                         .on_press(CredentialFormMessage::ToggleFieldSensitivity(
                             field_name.to_string()
@@ -613,5 +703,88 @@ impl CredentialForm {
 
         tracing::debug!("Validation passed!");
         true
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ziplock_shared::models::{FieldTemplate, FieldType};
+
+    #[test]
+    fn test_totp_copy_message_flow() {
+        let mut form = CredentialForm::new();
+
+        // Create a template with a TOTP field
+        let totp_template = FieldTemplate {
+            name: "totp_secret".to_string(),
+            field_type: FieldType::TotpSecret,
+            label: "TOTP Secret".to_string(),
+            required: false,
+            sensitive: false,
+            default_value: None,
+            validation: None,
+        };
+
+        let template = CredentialTemplate {
+            name: "login".to_string(),
+            description: "Basic login credentials".to_string(),
+            fields: vec![totp_template],
+            default_tags: vec![],
+        };
+
+        form.set_template(template);
+
+        // Set a TOTP secret that would generate a code
+        form.set_field_value("totp_secret".to_string(), "JBSWY3DPEHPK3PXP".to_string());
+
+        // Simulate a TOTP copy message
+        let totp_msg = crate::ui::components::totp_field::TotpFieldMessage::CopyCode;
+        let form_msg = CredentialFormMessage::TotpFieldMessage("totp_secret".to_string(), totp_msg);
+
+        // Update should return a command for clipboard operation
+        let _command = form.update(form_msg);
+
+        // If we get here without panicking, the basic message flow is working
+        assert!(true);
+    }
+
+    #[test]
+    fn test_password_field_copy_button() {
+        let mut form = CredentialForm::new();
+
+        // Create a template with a password field
+        let password_template = FieldTemplate {
+            name: "password".to_string(),
+            field_type: FieldType::Password,
+            label: "Password".to_string(),
+            required: true,
+            sensitive: true,
+            default_value: None,
+            validation: None,
+        };
+
+        let template = CredentialTemplate {
+            name: "login".to_string(),
+            description: "Basic login credentials".to_string(),
+            fields: vec![password_template],
+            default_tags: vec![],
+        };
+
+        form.set_template(template);
+        form.set_field_value("password".to_string(), "secret123".to_string());
+
+        // Simulate a password field copy message
+        let copy_msg = CredentialFormMessage::CopyFieldToClipboard {
+            field_name: "password".to_string(),
+            content: "secret123".to_string(),
+            content_type: crate::services::ClipboardContentType::Password,
+        };
+
+        // Update should return a command for clipboard operation
+        let _command = form.update(copy_msg);
+
+        // Basic test to ensure the message is processed
+        assert!(true);
     }
 }

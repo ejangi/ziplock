@@ -37,6 +37,12 @@ pub enum EditCredentialMessage {
     /// Credential was deleted
     CredentialDeleted(Result<(), String>),
 
+    // Clipboard operations
+    CopyToClipboard {
+        content: String,
+        content_type: crate::services::ClipboardContentType,
+    },
+
     // Error and success handling (for toast notifications)
     ShowError(String),
     ShowSuccess(String),
@@ -237,11 +243,49 @@ impl EditCredentialView {
                             EditCredentialMessage::DeleteCredential
                         });
                     }
+                    CredentialFormMessage::CopyFieldToClipboard {
+                        field_name: _,
+                        content,
+                        content_type,
+                    } => {
+                        tracing::debug!(
+                            "EditCredential view forwarding field clipboard message: content_type={:?}, content_length={}",
+                            content_type,
+                            content.len()
+                        );
+                        // Forward clipboard operations to main app
+                        return Command::perform(
+                            async move { (content, content_type) },
+                            |(content, content_type)| EditCredentialMessage::CopyToClipboard {
+                                content,
+                                content_type,
+                            },
+                        );
+                    }
+                    CredentialFormMessage::CopyToClipboard {
+                        content,
+                        content_type,
+                    } => {
+                        tracing::debug!(
+                            "EditCredential view forwarding clipboard message: content_type={:?}, content_length={}",
+                            content_type,
+                            content.len()
+                        );
+                        // Forward clipboard operations to main app
+                        return Command::perform(
+                            async move { (content, content_type) },
+                            |(content, content_type)| EditCredentialMessage::CopyToClipboard {
+                                content,
+                                content_type,
+                            },
+                        );
+                    }
                     _ => {
-                        self.form.update(form_msg);
+                        let form_command = self.form.update(form_msg);
+                        // Map form commands to edit credential commands
+                        return form_command.map(EditCredentialMessage::FormMessage);
                     }
                 }
-                Command::none()
             }
 
             EditCredentialMessage::UpdateCredential => {
@@ -359,6 +403,10 @@ impl EditCredentialView {
 
             EditCredentialMessage::ShowValidationError(_) => {
                 // Validation error handling is now done at the application level via toast system
+                Command::none()
+            }
+            EditCredentialMessage::CopyToClipboard { .. } => {
+                // This should be handled by the parent component (main app)
                 Command::none()
             }
         }

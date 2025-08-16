@@ -9,8 +9,10 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 // Import removed - these types are used in the actual code through other paths
 
 mod config;
-
+mod services;
 mod ui;
+
+use services::ClipboardManager;
 
 use ui::components::toast::{ToastManager, ToastPosition};
 use ui::components::{UpdateDialog, UpdateDialogMessage};
@@ -97,6 +99,12 @@ pub enum Message {
     HideUpdateDialog,
     AutoUpdateCheck,
 
+    // Clipboard management
+    CopyToClipboard {
+        content: String,
+        content_type: services::ClipboardContentType,
+    },
+
     // General
     Quit,
     QuittingWithLogout,
@@ -135,6 +143,8 @@ pub struct ZipLockApp {
     auto_lock_enabled: bool,
     // Update checking
     update_checker: ziplock_shared::UpdateChecker,
+    // Clipboard management
+    clipboard_manager: ClipboardManager,
 }
 
 impl Application for ZipLockApp {
@@ -157,6 +167,7 @@ impl Application for ZipLockApp {
             last_activity: std::time::Instant::now(),
             auto_lock_enabled: false,
             update_checker: ziplock_shared::UpdateChecker::new(),
+            clipboard_manager: ClipboardManager::new(),
         };
 
         let load_config_command =
@@ -558,16 +569,16 @@ impl Application for ZipLockApp {
 
             Message::AddCredential(add_msg) => {
                 if let AppState::AddCredentialActive(add_view) = &mut self.state {
-                    match &add_msg {
+                    match add_msg {
                         AddCredentialMessage::Cancel => {
                             return Command::perform(async {}, |_| Message::HideAddCredential);
                         }
-                        AddCredentialMessage::ShowError(error) => {
+                        AddCredentialMessage::ShowError(ref error) => {
                             self.toast_manager.error(error.clone());
                             let command = add_view.update(add_msg).map(Message::AddCredential);
                             return command;
                         }
-                        AddCredentialMessage::ShowSuccess(success) => {
+                        AddCredentialMessage::ShowSuccess(ref success) => {
                             self.toast_manager.success(success.clone());
                             let command = add_view.update(add_msg).map(Message::AddCredential);
                             return Command::batch([
@@ -575,10 +586,23 @@ impl Application for ZipLockApp {
                                 Command::perform(async {}, |_| Message::HideAddCredential),
                             ]);
                         }
-                        AddCredentialMessage::ShowValidationError(error) => {
+                        AddCredentialMessage::ShowValidationError(ref error) => {
                             self.toast_manager.warning(error.clone());
                             let command = add_view.update(add_msg).map(Message::AddCredential);
                             return command;
+                        }
+                        AddCredentialMessage::CopyToClipboard {
+                            content,
+                            content_type,
+                        } => {
+                            // Forward clipboard operations to main app
+                            return Command::perform(
+                                async move { (content, content_type) },
+                                |(content, content_type)| Message::CopyToClipboard {
+                                    content,
+                                    content_type,
+                                },
+                            );
                         }
                         _ => {
                             let command = add_view.update(add_msg).map(Message::AddCredential);
@@ -627,16 +651,16 @@ impl Application for ZipLockApp {
 
             Message::EditCredential(edit_msg) => {
                 if let AppState::EditCredentialActive(edit_view) = &mut self.state {
-                    match &edit_msg {
+                    match edit_msg {
                         EditCredentialMessage::Cancel => {
                             return Command::perform(async {}, |_| Message::HideEditCredential);
                         }
-                        EditCredentialMessage::ShowError(error) => {
+                        EditCredentialMessage::ShowError(ref error) => {
                             self.toast_manager.error(error.clone());
                             let command = edit_view.update(edit_msg).map(Message::EditCredential);
                             return command;
                         }
-                        EditCredentialMessage::ShowSuccess(success) => {
+                        EditCredentialMessage::ShowSuccess(ref success) => {
                             self.toast_manager.success(success.clone());
                             let command = edit_view.update(edit_msg).map(Message::EditCredential);
                             return Command::batch([
@@ -644,10 +668,23 @@ impl Application for ZipLockApp {
                                 Command::perform(async {}, |_| Message::HideEditCredential),
                             ]);
                         }
-                        EditCredentialMessage::ShowValidationError(error) => {
+                        EditCredentialMessage::ShowValidationError(ref error) => {
                             self.toast_manager.warning(error.clone());
                             let command = edit_view.update(edit_msg).map(Message::EditCredential);
                             return command;
+                        }
+                        EditCredentialMessage::CopyToClipboard {
+                            content,
+                            content_type,
+                        } => {
+                            // Forward clipboard operations to main app
+                            return Command::perform(
+                                async move { (content, content_type) },
+                                |(content, content_type)| Message::CopyToClipboard {
+                                    content,
+                                    content_type,
+                                },
+                            );
                         }
                         _ => {
                             let command = edit_view.update(edit_msg).map(Message::EditCredential);
@@ -877,8 +914,57 @@ impl Application for ZipLockApp {
                 Command::none()
             }
 
+            Message::CopyToClipboard {
+                content,
+                content_type,
+            } => {
+                tracing::debug!(
+                    "CopyToClipboard message received: content_type={:?}, content_length={}",
+                    content_type,
+                    content.len()
+                );
+
+                // Get clipboard timeout from config
+                let timeout_seconds = if let Some(config_manager) = &self.config_manager {
+                    config_manager.config().app.clipboard_timeout
+                } else {
+                    30 // Default timeout
+                };
+
+                tracing::debug!("Using clipboard timeout: {}s (0=disabled)", timeout_seconds);
+
+                let clipboard_manager = self.clipboard_manager.clone();
+                Command::perform(
+                    async move {
+                        clipboard_manager
+                            .copy_with_timeout(content, content_type, timeout_seconds)
+                            .await
+                    },
+                    |result| match result {
+                        Ok(_) => {
+                            tracing::debug!("Clipboard copy successful");
+                            Message::UserActivity // Update activity on successful copy
+                        }
+                        Err(e) => {
+                            tracing::warn!("Failed to copy to clipboard: {}", e);
+                            Message::ShowToast(AlertMessage::error(format!(
+                                "Failed to copy to clipboard: {}",
+                                e
+                            )))
+                        }
+                    },
+                )
+            }
+
             Message::Quit => {
                 info!("Application quit requested");
+
+                // Clear clipboard content before quitting
+                let clipboard_manager = self.clipboard_manager.clone();
+                let _ = tokio::spawn(async move {
+                    clipboard_manager.clear_tracked_content().await;
+                });
+
                 // If we have an active session, try to logout first
                 if self.session_id.is_some() {
                     info!("Active session detected, logging out before quit");

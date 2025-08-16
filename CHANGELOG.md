@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.7] - 2025-08-16
+
+### Added
+- Clipboard is cleared after the amount of time we set in the settings
+
 ## [0.2.6] - 2025-08-16
 
 ### Fixed

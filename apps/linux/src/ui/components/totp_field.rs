@@ -69,10 +69,10 @@ pub struct TotpField {
     last_refresh: Option<Instant>,
     /// Whether the field is in edit mode
     is_editing: bool,
-    /// Field name for form submission
-    #[allow(dead_code)] // Future TOTP field functionality
+
+    /// Field name for identification
     field_name: String,
-    /// Time step for TOTP generation (usually 30 seconds)
+    /// Time step for TOTP generation (typically 30 seconds)
     time_step: u64,
 }
 
@@ -91,7 +91,7 @@ impl TotpField {
             last_refresh: None,
             is_editing: false,
             field_name,
-            time_step: 30,
+            time_step: 30u64,
         };
 
         // Generate initial code if secret is valid
@@ -113,6 +113,11 @@ impl TotpField {
     /// Get the current secret value
     pub fn secret(&self) -> &str {
         &self.secret
+    }
+
+    /// Get the current TOTP code if available
+    pub fn current_code(&self) -> Option<String> {
+        self.current_code.clone()
     }
 
     /// Set the secret value
@@ -202,14 +207,14 @@ impl TotpField {
                 // More than a full time step has elapsed, definitely need refresh
                 return true;
             }
-            self.time_step - elapsed
+            (self.time_step - elapsed) as u32
         } else {
             return true;
         };
 
         // If the actual system time boundary remaining is greater than what we
         // calculated based on our last refresh, it means we've crossed a boundary
-        seconds_remaining > last_refresh_seconds_remaining
+        seconds_remaining > last_refresh_seconds_remaining as u64
     }
 
     /// Update the component
@@ -241,6 +246,7 @@ impl TotpField {
             TotpFieldMessage::CopyCode => {
                 if let Some(ref code) = self.current_code {
                     // Copy the unformatted code (without spaces) to clipboard
+                    // This will be enhanced to use the clipboard manager with timeout in the future
                     if let Err(e) = arboard::Clipboard::new()
                         .and_then(|mut clipboard| clipboard.set_text(code.clone()))
                     {
