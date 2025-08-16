@@ -20,7 +20,8 @@ use config::{ConfigManager, RepositoryInfo};
 use ui::views::main::{MainView, MainViewMessage};
 use ui::views::{
     AddCredentialMessage, AddCredentialView, EditCredentialMessage, EditCredentialView,
-    OpenRepositoryMessage, OpenRepositoryView, RepositoryWizard, WizardMessage,
+    OpenRepositoryMessage, OpenRepositoryView, RepositoryWizard, SettingsMessage, SettingsView,
+    WizardMessage,
 };
 use ziplock_shared::ZipLockClient;
 
@@ -63,6 +64,11 @@ pub enum Message {
     ShowEditCredential(String),
     HideEditCredential,
 
+    // Settings messages
+    Settings(SettingsMessage),
+    ShowSettings,
+    HideSettings,
+
     // Alert management
     ShowAlert(AlertMessage),
     DismissAlert,
@@ -77,6 +83,10 @@ pub enum Message {
 
     // Session management
     SessionTimeout,
+
+    // Auto-lock management
+    AutoLockTimerTick,
+    UserActivity,
 
     // General
     Quit,
@@ -95,6 +105,7 @@ pub enum AppState {
     OpenRepositoryActive(OpenRepositoryView),
     AddCredentialActive(AddCredentialView),
     EditCredentialActive(EditCredentialView),
+    SettingsActive(SettingsView),
     MainInterface(MainView),
     Error(String),
 }
@@ -109,6 +120,9 @@ pub struct ZipLockApp {
     current_alert: Option<AlertMessage>,
     session_id: Option<String>,
     toast_manager: ToastManager,
+    // Auto-lock timer fields
+    last_activity: std::time::Instant,
+    auto_lock_enabled: bool,
 }
 
 impl Application for ZipLockApp {
@@ -128,6 +142,8 @@ impl Application for ZipLockApp {
             current_alert: None,
             session_id: None,
             toast_manager: ToastManager::with_position(ToastPosition::BottomRight),
+            last_activity: std::time::Instant::now(),
+            auto_lock_enabled: false,
         };
 
         let load_config_command =
@@ -147,6 +163,7 @@ impl Application for ZipLockApp {
             AppState::OpenRepositoryActive(_) => "ZipLock - Open Repository".to_string(),
             AppState::AddCredentialActive(_) => "ZipLock - Add Credential".to_string(),
             AppState::EditCredentialActive(_) => "ZipLock - Edit Credential".to_string(),
+            AppState::SettingsActive(_) => "ZipLock - Settings".to_string(),
             AppState::MainInterface(_) => "ZipLock Password Manager".to_string(),
             AppState::Error(_) => "ZipLock - Error".to_string(),
         }
@@ -167,6 +184,11 @@ impl Application for ZipLockApp {
             Message::ConfigReady => {
                 if let Ok(config_manager) = ConfigManager::new() {
                     info!("Configuration loaded successfully");
+
+                    // Initialize typography with font size from config
+                    ui::theme::utils::typography::init_font_size(
+                        config_manager.config().ui.font_size,
+                    );
 
                     // Check if we should show the wizard immediately
                     if config_manager.should_show_wizard() {
@@ -342,6 +364,9 @@ impl Application for ZipLockApp {
                             let mut main_view = MainView::new();
                             main_view.set_session_id(Some(session_id.clone()));
                             self.state = AppState::MainInterface(main_view);
+                            // Enable auto-lock timer when session is established
+                            self.auto_lock_enabled = true;
+                            self.last_activity = std::time::Instant::now();
                             // Trigger initial refresh to update authentication state
                             return Command::batch([
                                 command,
@@ -349,8 +374,6 @@ impl Application for ZipLockApp {
                                     Message::MainView(MainViewMessage::RefreshCredentials)
                                 }),
                             ]);
-                        } else {
-                            self.state = AppState::MainInterface(MainView::new());
                         }
                         return command;
                     }
@@ -362,8 +385,9 @@ impl Application for ZipLockApp {
                     }
 
                     return command;
+                } else {
+                    Command::none()
                 }
-                Command::none()
             }
 
             Message::CreateRepository => {
@@ -457,6 +481,10 @@ impl Application for ZipLockApp {
                                 async move { credential_id },
                                 Message::ShowEditCredential,
                             )
+                        }
+                        MainViewMessage::ShowSettings => {
+                            // Show settings view
+                            Command::perform(async {}, |_| Message::ShowSettings)
                         }
                         MainViewMessage::TriggerConnectionError => {
                             self.toast_manager.ipc_error(
@@ -621,6 +649,86 @@ impl Application for ZipLockApp {
                 Command::none()
             }
 
+            Message::ShowSettings => {
+                info!("Showing settings view");
+                if let Some(config_manager) = &self.config_manager {
+                    let settings_view = SettingsView::new(config_manager.config().clone());
+                    self.state = AppState::SettingsActive(settings_view);
+                } else {
+                    self.toast_manager
+                        .error("Configuration not available".to_string());
+                }
+                Command::none()
+            }
+
+            Message::HideSettings => {
+                debug!("Hiding settings view, returning to main interface");
+                if let Some(session_id) = &self.session_id {
+                    let mut main_view = MainView::new();
+                    main_view.set_session_id(Some(session_id.clone()));
+                    self.state = AppState::MainInterface(main_view);
+                    // Trigger refresh to reload credentials
+                    return Command::perform(async {}, |_| {
+                        Message::MainView(MainViewMessage::RefreshCredentials)
+                    });
+                } else {
+                    self.state = AppState::MainInterface(MainView::new());
+                }
+                Command::none()
+            }
+
+            Message::Settings(settings_msg) => {
+                if let AppState::SettingsActive(settings_view) = &mut self.state {
+                    match &settings_msg {
+                        SettingsMessage::Cancel => {
+                            return Command::perform(async {}, |_| Message::HideSettings);
+                        }
+                        SettingsMessage::Save => {
+                            // Handle settings save
+                            if !settings_view.has_validation_errors() {
+                                if let Some(config_manager) = &mut self.config_manager {
+                                    let updated_config = settings_view.get_updated_config();
+                                    // Update the config manager
+                                    *config_manager.config_mut() = updated_config;
+
+                                    // Reinitialize typography with new font size
+                                    ui::theme::utils::typography::init_font_size(
+                                        config_manager.config().ui.font_size,
+                                    );
+
+                                    // Save the configuration
+                                    match config_manager.save() {
+                                        Ok(_) => {
+                                            self.toast_manager
+                                                .success("Settings saved successfully".to_string());
+                                            return Command::perform(async {}, |_| {
+                                                Message::HideSettings
+                                            });
+                                        }
+                                        Err(e) => {
+                                            self.toast_manager
+                                                .error(format!("Failed to save settings: {}", e));
+                                        }
+                                    }
+                                } else {
+                                    self.toast_manager
+                                        .error("Configuration manager not available".to_string());
+                                }
+                            } else {
+                                self.toast_manager.warning(
+                                    "Please fix validation errors before saving".to_string(),
+                                );
+                            }
+                            return settings_view.update(settings_msg).map(Message::Settings);
+                        }
+                        _ => {
+                            return settings_view.update(settings_msg).map(Message::Settings);
+                        }
+                    }
+                }
+                Command::none()
+            }
+
             Message::SessionTimeout => {
                 info!("Session timeout detected, redirecting to login");
                 // Clear session state
@@ -647,6 +755,35 @@ impl Application for ZipLockApp {
                 // Show timeout notification
                 self.toast_manager
                     .warning("Your session has expired. Please unlock your repository again.");
+                // Reset auto-lock timer when session times out
+                self.last_activity = std::time::Instant::now();
+                self.auto_lock_enabled = false;
+                Command::none()
+            }
+
+            Message::AutoLockTimerTick => {
+                // Check if auto-lock is enabled and we have a session
+                if self.auto_lock_enabled && self.session_id.is_some() {
+                    if let Some(config_manager) = &self.config_manager {
+                        let timeout_minutes = config_manager.config().app.auto_lock_timeout;
+                        // Only check timeout if it's not disabled (0)
+                        if timeout_minutes > 0 {
+                            let timeout_duration =
+                                std::time::Duration::from_secs(timeout_minutes as u64 * 60);
+                            if self.last_activity.elapsed() >= timeout_duration {
+                                info!("Auto-lock timeout reached, locking application");
+                                // Trigger session timeout to lock the application
+                                return Command::perform(async {}, |_| Message::SessionTimeout);
+                            }
+                        }
+                    }
+                }
+                Command::none()
+            }
+
+            Message::UserActivity => {
+                // Reset the activity timer
+                self.last_activity = std::time::Instant::now();
                 Command::none()
             }
 
@@ -687,6 +824,7 @@ impl Application for ZipLockApp {
             AppState::EditCredentialActive(edit_view) => {
                 edit_view.view().map(Message::EditCredential)
             }
+            AppState::SettingsActive(settings_view) => settings_view.view().map(Message::Settings),
             AppState::MainInterface(main_view) => main_view.view().map(Message::MainView),
             AppState::Error(error) => self.view_error(error),
         };
@@ -706,8 +844,33 @@ impl Application for ZipLockApp {
             _ => None,
         });
 
+        // Track user activity for auto-lock
+        let activity_subscription = iced::event::listen_with(|event, _status| match event {
+            iced::Event::Mouse(_) | iced::Event::Keyboard(_) | iced::Event::Touch(_) => {
+                Some(Message::UserActivity)
+            }
+            _ => None,
+        });
+
         let toast_subscription = if self.toast_manager.has_toasts() {
             time::every(std::time::Duration::from_millis(100)).map(|_| Message::UpdateToasts)
+        } else {
+            iced::Subscription::none()
+        };
+
+        // Auto-lock timer subscription - check every 10 seconds
+        let auto_lock_subscription = if self.auto_lock_enabled && self.session_id.is_some() {
+            if let Some(config_manager) = &self.config_manager {
+                let timeout_minutes = config_manager.config().app.auto_lock_timeout;
+                if timeout_minutes > 0 {
+                    time::every(std::time::Duration::from_secs(10))
+                        .map(|_| Message::AutoLockTimerTick)
+                } else {
+                    iced::Subscription::none()
+                }
+            } else {
+                iced::Subscription::none()
+            }
         } else {
             iced::Subscription::none()
         };
@@ -720,7 +883,13 @@ impl Application for ZipLockApp {
             _ => iced::Subscription::none(),
         };
 
-        iced::Subscription::batch([close_subscription, toast_subscription, view_subscription])
+        iced::Subscription::batch([
+            close_subscription,
+            activity_subscription,
+            toast_subscription,
+            auto_lock_subscription,
+            view_subscription,
+        ])
     }
 }
 

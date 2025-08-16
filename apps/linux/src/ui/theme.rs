@@ -1337,6 +1337,58 @@ pub mod utils {
         .style(style)
         .padding(password_toggle_padding())
     }
+
+    /// Typography utilities for consistent font sizing
+    pub mod typography {
+        use std::sync::OnceLock;
+
+        static FONT_SIZE: OnceLock<f32> = OnceLock::new();
+
+        /// Initialize the global font size
+        pub fn init_font_size(size: f32) {
+            let _ = FONT_SIZE.set(size);
+        }
+
+        /// Get the base font size, defaulting to 14.0 if not set
+        fn base_font_size() -> f32 {
+            *FONT_SIZE.get().unwrap_or(&14.0)
+        }
+
+        /// Get normal text size
+        pub fn normal_text_size() -> f32 {
+            base_font_size()
+        }
+
+        /// Get text input size
+        pub fn text_input_size() -> f32 {
+            base_font_size()
+        }
+
+        /// Get medium text size (slightly larger than normal)
+        pub fn medium_text_size() -> f32 {
+            base_font_size() + 2.0
+        }
+
+        /// Get small text size (smaller than normal)
+        pub fn small_text_size() -> f32 {
+            base_font_size() - 2.0
+        }
+
+        /// Get header text size (larger than medium)
+        pub fn header_text_size() -> f32 {
+            base_font_size() + 4.0
+        }
+
+        /// Get large text size (larger than header)
+        pub fn large_text_size() -> f32 {
+            base_font_size() + 6.0
+        }
+
+        /// Get extra large text size (largest size)
+        pub fn extra_large_text_size() -> f32 {
+            base_font_size() + 10.0
+        }
+    }
 }
 
 /// Alert component utilities and types

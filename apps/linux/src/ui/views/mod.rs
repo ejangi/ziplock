@@ -15,10 +15,12 @@ pub mod add_credential;
 pub mod edit_credential;
 pub mod main;
 pub mod open_repository;
+pub mod settings;
 pub mod wizard;
 
 // Re-export views that are actually used by main.rs
 pub use add_credential::{AddCredentialMessage, AddCredentialView};
 pub use edit_credential::{EditCredentialMessage, EditCredentialView};
 pub use open_repository::{OpenRepositoryMessage, OpenRepositoryView};
+pub use settings::{SettingsMessage, SettingsView};
 pub use wizard::{RepositoryWizard, WizardMessage};

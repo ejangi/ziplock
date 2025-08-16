@@ -237,11 +237,11 @@ impl OpenRepositoryView {
                 .height(Length::Fixed(64.0)),
             Space::with_height(Length::Fixed(20.0)),
             text("Open Repository")
-                .size(28)
+                .size(crate::ui::theme::utils::typography::extra_large_text_size())
                 .horizontal_alignment(iced::alignment::Horizontal::Center),
             Space::with_height(Length::Fixed(10.0)),
             text("Select your repository file and enter your passphrase to unlock it.")
-                .size(14)
+                .size(crate::ui::theme::utils::typography::normal_text_size())
                 .horizontal_alignment(iced::alignment::Horizontal::Center),
         ]
         .align_items(Alignment::Center)
@@ -257,17 +257,17 @@ impl OpenRepositoryView {
                     .unwrap_or_else(|| std::ffi::OsStr::new("Unknown"))
                     .to_string_lossy()
             ))
-            .size(14)
+            .size(crate::ui::theme::utils::typography::normal_text_size())
             .style(iced::theme::Text::Color(theme::SUCCESS_GREEN))
         } else {
             text("No file selected")
-                .size(14)
+                .size(crate::ui::theme::utils::typography::normal_text_size())
                 .style(iced::theme::Text::Color(MEDIUM_GRAY))
         };
 
         column![
             text("Repository File")
-                .size(16)
+                .size(crate::ui::theme::utils::typography::medium_text_size())
                 .horizontal_alignment(iced::alignment::Horizontal::Left),
             Space::with_height(Length::Fixed(8.0)),
             button("Browse...")
@@ -289,6 +289,7 @@ impl OpenRepositoryView {
             .secure(!self.show_passphrase)
             .style(self.get_passphrase_style())
             .padding(utils::text_input_padding())
+            .size(crate::ui::theme::utils::typography::text_input_size())
             .width(Length::Fill);
 
         let toggle_button = utils::password_visibility_toggle(
@@ -298,7 +299,7 @@ impl OpenRepositoryView {
 
         column![
             text("Master Passphrase")
-                .size(16)
+                .size(crate::ui::theme::utils::typography::medium_text_size())
                 .horizontal_alignment(iced::alignment::Horizontal::Left),
             Space::with_height(Length::Fixed(8.0)),
             row![
@@ -348,11 +349,11 @@ impl OpenRepositoryView {
                     .height(Length::Fixed(64.0)),
                 Space::with_height(Length::Fixed(20.0)),
                 text("Opening Repository...")
-                    .size(24)
+                    .size(crate::ui::theme::utils::typography::header_text_size())
                     .horizontal_alignment(iced::alignment::Horizontal::Center),
                 Space::with_height(Length::Fixed(10.0)),
                 text("Please wait while we unlock your repository.")
-                    .size(14)
+                    .size(crate::ui::theme::utils::typography::normal_text_size())
                     .horizontal_alignment(iced::alignment::Horizontal::Center),
             ]
             .align_items(Alignment::Center)
@@ -370,15 +371,15 @@ impl OpenRepositoryView {
         container(
             column![
                 text("✅")
-                    .size(48)
+                    .size(48.0)
                     .horizontal_alignment(iced::alignment::Horizontal::Center),
                 Space::with_height(Length::Fixed(20.0)),
                 text("Repository Opened")
-                    .size(24)
+                    .size(crate::ui::theme::utils::typography::header_text_size())
                     .horizontal_alignment(iced::alignment::Horizontal::Center),
                 Space::with_height(Length::Fixed(10.0)),
                 text("Your repository has been successfully opened and unlocked.")
-                    .size(14)
+                    .size(crate::ui::theme::utils::typography::normal_text_size())
                     .horizontal_alignment(iced::alignment::Horizontal::Center),
             ]
             .align_items(Alignment::Center)
@@ -396,16 +397,16 @@ impl OpenRepositoryView {
         container(
             column![
                 text("❌")
-                    .size(48)
+                    .size(48.0)
                     .horizontal_alignment(iced::alignment::Horizontal::Center),
                 Space::with_height(Length::Fixed(20.0)),
                 text("Failed to Open Repository")
-                    .size(24)
+                    .size(crate::ui::theme::utils::typography::header_text_size())
                     .horizontal_alignment(iced::alignment::Horizontal::Center),
                 Space::with_height(Length::Fixed(20.0)),
                 container(
                     text(error)
-                        .size(14)
+                        .size(crate::ui::theme::utils::typography::normal_text_size())
                         .horizontal_alignment(iced::alignment::Horizontal::Center)
                 )
                 .style(container_styles::error_alert())

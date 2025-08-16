@@ -256,7 +256,6 @@ ui:
   window_width: 1000
   window_height: 700
   theme: "system"
-  remember_window_state: true
   show_wizard_on_startup: true
   font_size: 14.0
   language: "en"

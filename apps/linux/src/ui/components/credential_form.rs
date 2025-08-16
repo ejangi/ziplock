@@ -254,11 +254,14 @@ impl CredentialForm {
 
         let mut form_fields = vec![
             // Title field (always first and required)
-            text("Title *").size(14).into(),
+            text("Title *")
+                .size(crate::ui::theme::utils::typography::normal_text_size())
+                .into(),
             text_input("Enter credential title...", &self.title)
                 .on_input(CredentialFormMessage::TitleChanged)
                 .padding(utils::text_input_padding())
                 .style(crate::ui::theme::text_input_styles::standard())
+                .size(crate::ui::theme::utils::typography::text_input_size())
                 .into(),
             Space::with_height(Length::Fixed(15.0)).into(),
         ];
@@ -284,7 +287,11 @@ impl CredentialForm {
                 field_template.label.clone()
             };
 
-            form_fields.push(text(label).size(14).into());
+            form_fields.push(
+                text(label)
+                    .size(crate::ui::theme::utils::typography::normal_text_size())
+                    .into(),
+            );
 
             // Create appropriate input based on field type
             let input_element = self.create_field_input(
@@ -304,7 +311,7 @@ impl CredentialForm {
             form_fields.push(
                 text(error)
                     .style(iced::theme::Text::Color(ERROR_RED))
-                    .size(14)
+                    .size(crate::ui::theme::utils::typography::normal_text_size())
                     .into(),
             );
         }
@@ -404,6 +411,7 @@ impl CredentialForm {
                         })
                         .padding(utils::text_input_padding())
                         .style(crate::ui::theme::text_input_styles::standard())
+                        .size(crate::ui::theme::utils::typography::text_input_size())
                         .into()
                 }
             }
@@ -430,6 +438,7 @@ impl CredentialForm {
                         })
                         .padding(utils::text_input_padding())
                         .style(crate::ui::theme::text_input_styles::standard())
+                        .size(crate::ui::theme::utils::typography::text_input_size())
                         .into()
                 }
             }
@@ -445,7 +454,8 @@ impl CredentialForm {
                         })
                         .secure(is_sensitive)
                         .padding(utils::text_input_padding())
-                        .style(crate::ui::theme::text_input_styles::standard()),
+                        .style(crate::ui::theme::text_input_styles::standard())
+                        .size(crate::ui::theme::utils::typography::text_input_size()),
                     button(if is_sensitive { "👁" } else { "🙈" })
                         .on_press(CredentialFormMessage::ToggleFieldSensitivity(
                             field_name.to_string()
@@ -469,7 +479,8 @@ impl CredentialForm {
                         })
                         .secure(is_sensitive)
                         .padding(utils::text_input_padding())
-                        .style(crate::ui::theme::text_input_styles::standard()),
+                        .style(crate::ui::theme::text_input_styles::standard())
+                        .size(crate::ui::theme::utils::typography::text_input_size()),
                     button(if is_sensitive { "👁" } else { "🙈" })
                         .on_press(CredentialFormMessage::ToggleFieldSensitivity(
                             field_name.to_string()
@@ -492,6 +503,7 @@ impl CredentialForm {
                     .padding(utils::text_input_padding())
                     .width(Length::Fill)
                     .style(crate::ui::theme::text_input_styles::standard())
+                    .size(crate::ui::theme::utils::typography::text_input_size())
                     .into()
             }
         }

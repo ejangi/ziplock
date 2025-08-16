@@ -334,7 +334,8 @@ impl RepositoryWizard {
                     .width(Length::Fixed(32.0))
                     .height(Length::Fixed(32.0)),
                 Space::with_width(Length::Fixed(10.0)),
-                text("ZipLock Repository Setup").size(28),
+                text("ZipLock Repository Setup")
+                    .size(crate::ui::theme::utils::typography::extra_large_text_size()),
             ]
             .align_items(Alignment::Center),
             Space::with_height(Length::Fixed(10.0)),
@@ -352,16 +353,16 @@ impl RepositoryWizard {
                 .width(Length::Fixed(80.0))
                 .height(Length::Fixed(80.0)),
             Space::with_height(Length::Fixed(20.0)),
-            text("Welcome to ZipLock!").size(24),
+            text("Welcome to ZipLock!").size(crate::ui::theme::utils::typography::header_text_size()),
             Space::with_height(Length::Fixed(20.0)),
             text("This wizard will help you create your first password repository.")
-                .size(16),
+                .size(crate::ui::theme::utils::typography::medium_text_size()),
             Space::with_height(Length::Fixed(10.0)),
             text("Your repository is a secure, encrypted file that stores all your passwords and sensitive information.")
-                .size(14),
+                .size(crate::ui::theme::utils::typography::normal_text_size()),
             Space::with_height(Length::Fixed(10.0)),
             text("You can store this file anywhere - on your computer, in cloud storage, or on a USB drive.")
-                .size(14),
+                .size(crate::ui::theme::utils::typography::normal_text_size()),
         ]
         .align_items(Alignment::Center)
         .into()
@@ -370,9 +371,9 @@ impl RepositoryWizard {
     /// View directory selection step
     fn view_directory_selection(&self) -> Element<'_, WizardMessage> {
         column![
-            text("Choose Repository Location").size(20),
+            text("Choose Repository Location").size(crate::ui::theme::utils::typography::large_text_size()),
             Space::with_height(Length::Fixed(15.0)),
-            text("Where would you like to store your password repository?").size(14),
+            text("Where would you like to store your password repository?").size(crate::ui::theme::utils::typography::normal_text_size()),
             Space::with_height(Length::Fixed(20.0)),
 
             row![
@@ -382,7 +383,8 @@ impl RepositoryWizard {
                     .id(text_input::Id::new("directory_path"))
                     .on_submit(WizardMessage::NextStep)
                     .padding(theme::utils::text_input_padding())
-                    .style(theme::text_input_styles::standard()),
+                    .style(theme::text_input_styles::standard())
+                    .size(crate::ui::theme::utils::typography::text_input_size()),
                 button("Browse...")
                     .on_press(WizardMessage::SelectDirectory)
                     .padding(utils::button_padding())
@@ -395,21 +397,21 @@ impl RepositoryWizard {
 
             if let Some(dir) = &self.selected_directory {
                 text(format!("Selected: {}", dir.display()))
-                    .size(12)
+                    .size(crate::ui::theme::utils::typography::small_text_size())
 
             } else if !self.directory_path_input.is_empty() {
                 text("Directory does not exist or is not accessible")
-                    .size(12)
+                    .size(crate::ui::theme::utils::typography::small_text_size())
 
             } else {
                 text("No directory selected")
-                    .size(12)
+                    .size(crate::ui::theme::utils::typography::small_text_size())
 
             },
 
             Space::with_height(Length::Fixed(15.0)),
             text("💡 Tip: You can store your repository in cloud storage (Dropbox, Google Drive, etc.) to access it from multiple devices.")
-                .size(12)
+                .size(crate::ui::theme::utils::typography::small_text_size())
                 ,
         ]
         .align_items(Alignment::Start)
@@ -419,10 +421,11 @@ impl RepositoryWizard {
     /// View repository details step
     fn view_repository_details(&self) -> Element<'_, WizardMessage> {
         column![
-            text("Repository Details").size(20),
+            text("Repository Details").size(crate::ui::theme::utils::typography::large_text_size()),
             Space::with_height(Length::Fixed(15.0)),
             column![
-                text("Repository Name").size(14),
+                text("Repository Name")
+                    .size(crate::ui::theme::utils::typography::normal_text_size()),
                 Space::with_height(Length::Fixed(5.0)),
                 text_input("Enter a name for your repository", &self.repository_name)
                     .on_input(WizardMessage::RepositoryNameChanged)
@@ -430,15 +433,18 @@ impl RepositoryWizard {
                     .id(text_input::Id::new("repository_name"))
                     .on_submit(WizardMessage::NextStep)
                     .padding(theme::utils::text_input_padding())
-                    .style(theme::text_input_styles::standard()),
+                    .style(theme::text_input_styles::standard())
+                    .size(crate::ui::theme::utils::typography::text_input_size()),
             ]
             .spacing(5),
             Space::with_height(Length::Fixed(20.0)),
             if let Some(dir) = &self.selected_directory {
                 let file_path = dir.join(format!("{}.7z", self.repository_name));
                 column![
-                    text("Repository will be created as:").size(12),
-                    text(file_path.display().to_string()).size(11),
+                    text("Repository will be created as:")
+                        .size(crate::ui::theme::utils::typography::small_text_size()),
+                    text(file_path.display().to_string())
+                        .size(crate::ui::theme::utils::typography::small_text_size()),
                 ]
             } else {
                 column![]
@@ -455,16 +461,16 @@ impl RepositoryWizard {
             !self.confirm_passphrase.is_empty() && self.passphrase == self.confirm_passphrase;
 
         column![
-            text("Set Master Passphrase").size(20),
+            text("Set Master Passphrase").size(crate::ui::theme::utils::typography::large_text_size()),
             Space::with_height(Length::Fixed(15.0)),
 
             text("Your master passphrase protects your entire repository. Choose a strong, memorable passphrase.")
-                .size(14),
+                .size(crate::ui::theme::utils::typography::normal_text_size()),
 
             Space::with_height(Length::Fixed(20.0)),
 
             column![
-                text("Master Passphrase").size(14),
+                text("Master Passphrase").size(crate::ui::theme::utils::typography::normal_text_size()),
                 Space::with_height(Length::Fixed(5.0)),
                 text_input("Enter your master passphrase", &self.passphrase)
                     .on_input(WizardMessage::PassphraseChanged)
@@ -472,6 +478,7 @@ impl RepositoryWizard {
                     .width(Length::Fill)
                     .padding(theme::utils::text_input_padding())
                     .style(self.get_passphrase_style())
+                    .size(crate::ui::theme::utils::typography::text_input_size())
                     .id(text_input::Id::new("master_passphrase"))
                     .on_submit(WizardMessage::FocusNextField),
 
@@ -479,7 +486,7 @@ impl RepositoryWizard {
 
                 row![
                     text(format!("Strength: {}", passphrase_strength.level.as_str()))
-                        .size(12)
+                        .size(crate::ui::theme::utils::typography::small_text_size())
                         .style(iced::theme::Text::Color(get_strength_color(&passphrase_strength.level))),
                     Space::with_width(Length::Fill),
                     utils::password_visibility_toggle(
@@ -494,7 +501,7 @@ impl RepositoryWizard {
             Space::with_height(Length::Fixed(15.0)),
 
             column![
-                text("Confirm Passphrase").size(14),
+                text("Confirm Passphrase").size(crate::ui::theme::utils::typography::normal_text_size()),
                 Space::with_height(Length::Fixed(5.0)),
                 text_input("Confirm your master passphrase", &self.confirm_passphrase)
                     .on_input(WizardMessage::ConfirmPassphraseChanged)
@@ -502,6 +509,7 @@ impl RepositoryWizard {
                     .width(Length::Fill)
                     .padding(theme::utils::text_input_padding())
                     .style(self.get_confirm_passphrase_style())
+                    .size(crate::ui::theme::utils::typography::text_input_size())
                     .id(text_input::Id::new("confirm_passphrase"))
                     .on_submit(WizardMessage::CreateRepository),
 
@@ -510,10 +518,10 @@ impl RepositoryWizard {
                 if !self.confirm_passphrase.is_empty() {
                     if passphrases_match {
                         text("✓ Passphrases match")
-                            .size(12)
+                            .size(crate::ui::theme::utils::typography::small_text_size())
                     } else {
                         text("✗ Passphrases do not match")
-                            .size(12)
+                            .size(crate::ui::theme::utils::typography::small_text_size())
                     }
                 } else {
                     text("")
@@ -526,7 +534,7 @@ impl RepositoryWizard {
             // Passphrase requirements and validation feedback
             if !self.passphrase.is_empty() {
                 column![
-                    text("Passphrase Requirements:").size(12).style(iced::theme::Text::Color(MEDIUM_GRAY)),
+                    text("Passphrase Requirements:").size(crate::ui::theme::utils::typography::small_text_size()).style(iced::theme::Text::Color(MEDIUM_GRAY)),
                     Space::with_height(Length::Fixed(5.0)),
 
                     // Show violations if any
@@ -538,7 +546,7 @@ impl RepositoryWizard {
                                     row![
                                         text("✗").style(iced::theme::Text::Color(theme::ERROR_RED)),
                                         Space::with_width(Length::Fixed(5.0)),
-                                        text(violation).size(11).style(iced::theme::Text::Color(theme::ERROR_RED))
+                                        text(violation).size(crate::ui::theme::utils::typography::small_text_size()).style(iced::theme::Text::Color(theme::ERROR_RED))
                                     ].into()
                                 })
                                 .collect::<Vec<Element<WizardMessage>>>()
@@ -556,7 +564,7 @@ impl RepositoryWizard {
                                     row![
                                         text("✓").style(iced::theme::Text::Color(theme::SUCCESS_GREEN)),
                                         Space::with_width(Length::Fixed(5.0)),
-                                        text(satisfied).size(11).style(iced::theme::Text::Color(theme::SUCCESS_GREEN))
+                                        text(satisfied).size(crate::ui::theme::utils::typography::small_text_size()).style(iced::theme::Text::Color(theme::SUCCESS_GREEN))
                                     ].into()
                                 })
                                 .collect::<Vec<Element<WizardMessage>>>()
@@ -568,13 +576,13 @@ impl RepositoryWizard {
                 .spacing(8)
             } else {
                 column![
-                    text("Passphrase Requirements:").size(12).style(iced::theme::Text::Color(MEDIUM_GRAY)),
+                    text("Passphrase Requirements:").size(crate::ui::theme::utils::typography::small_text_size()).style(iced::theme::Text::Color(MEDIUM_GRAY)),
                     Space::with_height(Length::Fixed(5.0)),
-                    text("• At least 12 characters long").size(11).style(iced::theme::Text::Color(LIGHT_GRAY_TEXT)),
-                    text("• Contains uppercase letters").size(11).style(iced::theme::Text::Color(LIGHT_GRAY_TEXT)),
-                    text("• Contains lowercase letters").size(11).style(iced::theme::Text::Color(LIGHT_GRAY_TEXT)),
-                    text("• Contains numbers").size(11).style(iced::theme::Text::Color(LIGHT_GRAY_TEXT)),
-                    text("• Contains special characters").size(11).style(iced::theme::Text::Color(LIGHT_GRAY_TEXT)),
+                    text("• At least 12 characters long").size(crate::ui::theme::utils::typography::small_text_size()).style(iced::theme::Text::Color(LIGHT_GRAY_TEXT)),
+                    text("• Contains uppercase letters").size(crate::ui::theme::utils::typography::small_text_size()).style(iced::theme::Text::Color(LIGHT_GRAY_TEXT)),
+                    text("• Contains lowercase letters").size(crate::ui::theme::utils::typography::small_text_size()).style(iced::theme::Text::Color(LIGHT_GRAY_TEXT)),
+                    text("• Contains numbers").size(crate::ui::theme::utils::typography::small_text_size()).style(iced::theme::Text::Color(LIGHT_GRAY_TEXT)),
+                    text("• Contains special characters").size(crate::ui::theme::utils::typography::small_text_size()).style(iced::theme::Text::Color(LIGHT_GRAY_TEXT)),
                 ]
                 .spacing(3)
             },
@@ -582,7 +590,7 @@ impl RepositoryWizard {
             Space::with_height(Length::Fixed(20.0)),
 
             text("⚠️ Important: There is no way to recover your repository if you forget your master passphrase. Write it down and keep it safe!")
-                .size(12),
+                .size(crate::ui::theme::utils::typography::small_text_size()),
         ]
         .align_items(Alignment::Start)
         .into()
@@ -592,16 +600,17 @@ impl RepositoryWizard {
     fn view_creating(&self) -> Element<'_, WizardMessage> {
         if let Some(error) = &self.creation_error {
             column![
-                text("Repository Creation Failed").size(20),
+                text("Repository Creation Failed")
+                    .size(crate::ui::theme::utils::typography::large_text_size()),
                 Space::with_height(Length::Fixed(20.0)),
                 container(
                     column![
                         text("❌ Creation Failed")
-                            .size(16)
+                            .size(crate::ui::theme::utils::typography::medium_text_size())
                             .style(iced::theme::Text::Color(theme::ERROR_RED)),
                         Space::with_height(Length::Fixed(8.0)),
                         text(error)
-                            .size(12)
+                            .size(crate::ui::theme::utils::typography::small_text_size())
                             .style(iced::theme::Text::Color(theme::DARK_TEXT)),
                     ]
                     .spacing(4)
@@ -619,15 +628,18 @@ impl RepositoryWizard {
             .into()
         } else {
             column![
-                text("Creating Repository...").size(20),
+                text("Creating Repository...")
+                    .size(crate::ui::theme::utils::typography::large_text_size()),
                 Space::with_height(Length::Fixed(30.0)),
                 progress_bar(0.0..=1.0, self.creation_progress)
                     .height(Length::Fixed(20.0))
                     .style(progress_bar_styles::primary()),
                 Space::with_height(Length::Fixed(10.0)),
-                text(format!("{}%", (self.creation_progress * 100.0) as u32)).size(14),
+                text(format!("{}%", (self.creation_progress * 100.0) as u32))
+                    .size(crate::ui::theme::utils::typography::normal_text_size()),
                 Space::with_height(Length::Fixed(20.0)),
-                text("Setting up encrypted archive structure...").size(12),
+                text("Setting up encrypted archive structure...")
+                    .size(crate::ui::theme::utils::typography::small_text_size()),
             ]
             .align_items(Alignment::Center)
             .into()
@@ -637,16 +649,16 @@ impl RepositoryWizard {
     /// View completion step
     fn view_complete(&self) -> Element<'_, WizardMessage> {
         column![
-            text("✓ Repository Created Successfully!").size(24),
+            text("✓ Repository Created Successfully!").size(crate::ui::theme::utils::typography::header_text_size()),
             Space::with_height(Length::Fixed(30.0)),
 
             if let Some(dir) = &self.selected_directory {
                 let repo_path = dir.join(format!("{}.7z", self.repository_name));
                 column![
-                    text("Your password repository has been created:").size(14),
+                    text("Your password repository has been created:").size(crate::ui::theme::utils::typography::normal_text_size()),
                     Space::with_height(Length::Fixed(10.0)),
                     text(repo_path.display().to_string())
-                        .size(12),
+                        .size(crate::ui::theme::utils::typography::small_text_size()),
                 ]
             } else {
                 column![]
@@ -655,7 +667,7 @@ impl RepositoryWizard {
             Space::with_height(Length::Fixed(30.0)),
 
             text("You can now start adding your passwords and sensitive information to your secure repository.")
-                .size(14),
+                .size(crate::ui::theme::utils::typography::normal_text_size()),
 
             Space::with_height(Length::Fixed(20.0)),
 

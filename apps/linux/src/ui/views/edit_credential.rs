@@ -379,7 +379,9 @@ impl EditCredentialView {
             "Edit Credential".to_string()
         };
 
-        text(title).size(24).into()
+        text(title)
+            .size(crate::ui::theme::utils::typography::header_text_size())
+            .into()
     }
 
     /// Render the loading state
@@ -388,7 +390,8 @@ impl EditCredentialView {
             column![
                 self.view_header(),
                 Space::with_height(Length::Fixed(40.0)),
-                text("Loading credential data...").size(16),
+                text("Loading credential data...")
+                    .size(crate::ui::theme::utils::typography::medium_text_size()),
             ]
             .spacing(20)
             .align_items(iced::Alignment::Center),
@@ -423,7 +426,8 @@ impl EditCredentialView {
             column![
                 self.view_header(),
                 Space::with_height(Length::Fixed(40.0)),
-                text("Saving changes...").size(16),
+                text("Saving changes...")
+                    .size(crate::ui::theme::utils::typography::medium_text_size()),
                 self.form.view().map(EditCredentialMessage::FormMessage),
             ]
             .spacing(20),
@@ -440,11 +444,14 @@ impl EditCredentialView {
             column![
                 self.view_header(),
                 Space::with_height(Length::Fixed(40.0)),
-                text("✅ Credential updated successfully!").size(18).style(
-                    iced::theme::Text::Color(iced::Color::from_rgb(0.02, 0.84, 0.63))
-                ), // Success green
+                text("✅ Credential updated successfully!")
+                    .size(crate::ui::theme::utils::typography::large_text_size())
+                    .style(iced::theme::Text::Color(iced::Color::from_rgb(
+                        0.02, 0.84, 0.63
+                    ))), // Success green
                 Space::with_height(Length::Fixed(20.0)),
-                text("You will be returned to the main view shortly.").size(14),
+                text("You will be returned to the main view shortly.")
+                    .size(crate::ui::theme::utils::typography::normal_text_size()),
             ]
             .spacing(10)
             .align_items(iced::Alignment::Center),
@@ -465,10 +472,13 @@ impl EditCredentialView {
             column![
                 self.view_header(),
                 Space::with_height(Length::Fixed(20.0)),
-                text("Error updating credential:").size(16),
-                text(error_message).size(14).style(iced::theme::Text::Color(
-                    iced::Color::from_rgb(0.94, 0.28, 0.44)
-                )), // Error red
+                text("Error updating credential:")
+                    .size(crate::ui::theme::utils::typography::medium_text_size()),
+                text(error_message)
+                    .size(crate::ui::theme::utils::typography::normal_text_size())
+                    .style(iced::theme::Text::Color(iced::Color::from_rgb(
+                        0.94, 0.28, 0.44
+                    ))), // Error red
                 Space::with_height(Length::Fixed(20.0)),
                 self.form.view().map(EditCredentialMessage::FormMessage),
             ]

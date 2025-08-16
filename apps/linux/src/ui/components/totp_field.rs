@@ -304,17 +304,21 @@ impl TotpField {
 
         let input: Element<'_, TotpFieldMessage> = if is_readonly {
             // Create a button that looks like a text input for copyable TOTP codes
-            button(text(&display_value).size(14))
-                .on_press(TotpFieldMessage::CopyCode)
-                .style(button_styles::text_field_like())
-                .padding(utils::text_input_padding())
-                .width(Length::Fill)
-                .into()
+            button(
+                text(&display_value).size(crate::ui::theme::utils::typography::normal_text_size()),
+            )
+            .on_press(TotpFieldMessage::CopyCode)
+            .style(button_styles::text_field_like())
+            .padding(utils::text_input_padding())
+            .width(Length::Fill)
+            .into()
         } else {
             text_input(placeholder, input_value)
                 .on_input(TotpFieldMessage::SecretChanged)
                 .padding(utils::text_input_padding())
                 .style(crate::ui::theme::text_input_styles::standard())
+                .size(crate::ui::theme::utils::typography::text_input_size())
+                .width(Length::Fill)
                 .into()
         };
 
@@ -361,7 +365,7 @@ impl TotpField {
 
             let refresh_indicator = container(
                 text(refresh_text)
-                    .size(12)
+                    .size(crate::ui::theme::utils::typography::small_text_size())
                     .style(iced::theme::Text::Color(color)),
             )
             .padding(utils::small_element_padding())
@@ -374,7 +378,7 @@ impl TotpField {
         if !self.is_valid_secret() && !self.secret.trim().is_empty() {
             let error_indicator = container(
                 text("❌")
-                    .size(12)
+                    .size(crate::ui::theme::utils::typography::small_text_size())
                     .style(iced::theme::Text::Color(theme::ERROR_RED)),
             )
             .padding(utils::small_element_padding())
@@ -405,7 +409,7 @@ impl TotpField {
                 main_row,
                 Space::with_height(Length::Fixed(5.0)),
                 text(help)
-                    .size(11)
+                    .size(crate::ui::theme::utils::typography::small_text_size())
                     .style(iced::theme::Text::Color(LIGHT_GRAY_TEXT))
             ]
             .into()
@@ -426,15 +430,18 @@ impl TotpField {
                 if let Some(ref code) = self.current_code {
                     let formatted_code = format!("{} {}", &code[..3], &code[3..]);
                     // Use a button that looks like a text input for copyable TOTP codes
-                    let code_button = button(text(&formatted_code).size(14))
-                        .on_press(TotpFieldMessage::CopyCode)
-                        .style(button_styles::text_field_like())
-                        .padding(10)
-                        .width(Length::Fill);
+                    let code_button = button(
+                        text(&formatted_code)
+                            .size(crate::ui::theme::utils::typography::normal_text_size()),
+                    )
+                    .on_press(TotpFieldMessage::CopyCode)
+                    .style(button_styles::text_field_like())
+                    .padding(10)
+                    .width(Length::Fill);
                     (code_button.into(), true)
                 } else {
                     let error_text = text("Invalid secret")
-                        .size(14)
+                        .size(crate::ui::theme::utils::typography::normal_text_size())
                         .style(iced::theme::Text::Color(theme::ERROR_RED));
                     (error_text.into(), false)
                 }
@@ -442,7 +449,7 @@ impl TotpField {
             TotpDisplayMode::Secret => {
                 let formatted_secret = totp::format_totp_secret(&self.secret);
                 let secret_text = text(&formatted_secret)
-                    .size(14)
+                    .size(crate::ui::theme::utils::typography::normal_text_size())
                     .style(iced::theme::Text::Color(theme::DARK_TEXT));
                 (secret_text.into(), false)
             }
@@ -480,7 +487,7 @@ impl TotpField {
 
             let refresh_indicator = container(
                 text(format!("{}s", remaining))
-                    .size(12)
+                    .size(crate::ui::theme::utils::typography::small_text_size())
                     .style(iced::theme::Text::Color(color)),
             )
             .padding(utils::small_element_padding())

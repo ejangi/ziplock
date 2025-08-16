@@ -298,12 +298,16 @@ pub fn render_toast<Message: Clone + 'static>(
     let mut text_column = column![];
 
     if let Some(title) = &toast.message.title {
-        text_column = text_column.push(text(title).size(16).style(iced::theme::Text::Color(WHITE)));
+        text_column = text_column.push(
+            text(title)
+                .size(crate::ui::theme::utils::typography::medium_text_size())
+                .style(iced::theme::Text::Color(WHITE)),
+        );
     }
 
     text_column = text_column.push(
         text(&toast.message.message)
-            .size(14)
+            .size(crate::ui::theme::utils::typography::normal_text_size())
             .style(iced::theme::Text::Color(WHITE)),
     );
 

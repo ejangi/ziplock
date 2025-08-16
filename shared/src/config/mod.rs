@@ -84,9 +84,6 @@ pub struct UiConfig {
     /// Theme selection ("light", "dark", "system")
     pub theme: String,
 
-    /// Remember window size and position
-    pub remember_window_state: bool,
-
     /// Show wizard on startup if no repository is configured
     pub show_wizard_on_startup: bool,
 
@@ -181,7 +178,7 @@ impl Default for UiConfig {
             window_width: 1000,
             window_height: 700,
             theme: "system".to_string(),
-            remember_window_state: true,
+
             show_wizard_on_startup: true,
             font_size: 14.0,
             language: "en".to_string(),
@@ -529,13 +526,9 @@ impl ConfigManager {
 
     /// Update UI settings
     pub fn set_window_size(&mut self, width: u32, height: u32) -> Result<()> {
-        if self.config.ui.remember_window_state {
-            self.config.ui.window_width = width;
-            self.config.ui.window_height = height;
-            self.save()
-        } else {
-            Ok(())
-        }
+        self.config.ui.window_width = width;
+        self.config.ui.window_height = height;
+        self.save()
     }
 
     /// Get config directory path

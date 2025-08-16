@@ -35,11 +35,17 @@ ui:
   window_width: 1000
   window_height: 700
 
-  # Remember window position and size between sessions
-  remember_window_state: true
+  # Theme selection ("light", "dark", "system")
+  theme: "system"
 
   # Show setup wizard on startup when no repositories are configured
   show_wizard_on_startup: true
+
+  # Font size for UI elements
+  font_size: 14.0
+
+  # UI language/locale
+  language: "en"
 
 # Application behavior settings
 app:
@@ -71,5 +77,4 @@ app:
 #   clipboard_timeout: 15
 #   enable_backup: true
 # ui:
-#   remember_window_state: false
 #   show_wizard_on_startup: false

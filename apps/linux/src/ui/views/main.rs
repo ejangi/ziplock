@@ -10,6 +10,7 @@ use iced::{
     widget::{button, column, container, row, scrollable, svg, text, text_input, Space},
     Alignment, Command, Element, Length,
 };
+use tracing::debug;
 use ziplock_shared::utils::StringUtils;
 
 /// Messages for the main application view
@@ -242,7 +243,7 @@ impl MainView {
             }
 
             MainViewMessage::ShowSettings => {
-                // TODO: Navigate to settings view
+                // This is handled at the application level in main.rs
                 Command::none()
             }
 
@@ -358,7 +359,8 @@ impl MainView {
                 .on_submit(MainViewMessage::SearchSubmitted)
                 .width(Length::FillPortion(3))
                 .padding(utils::search_bar_padding())
-                .style(theme::text_input_styles::standard()),
+                .style(theme::text_input_styles::standard())
+                .size(crate::ui::theme::utils::typography::text_input_size()),
             Space::with_width(Length::Fixed(10.0)),
             if !self.search_query.is_empty() {
                 button("Clear")
@@ -381,11 +383,11 @@ impl MainView {
             return column![
                 Space::with_height(Length::Fixed(50.0)),
                 text("Loading credentials...")
-                    .size(16)
+                    .size(crate::ui::theme::utils::typography::medium_text_size())
                     .style(iced::theme::Text::Color(theme::LOGO_PURPLE)),
                 Space::with_height(Length::Fixed(20.0)),
                 text("Please wait while we fetch your credentials from the backend...")
-                    .size(12)
+                    .size(crate::ui::theme::utils::typography::small_text_size())
                     .style(iced::theme::Text::Color(iced::Color::from_rgb(
                         0.7, 0.7, 0.7
                     ))),
@@ -418,15 +420,14 @@ impl MainView {
                     // No credentials and authenticated - show friendly empty state
                     container(
                         column![
-                            Space::with_height(Length::Fixed(80.0)),
                             text("No credentials yet!")
-                                .size(24)
+                                .size(crate::ui::theme::utils::typography::header_text_size())
                                 .style(iced::theme::Text::Color(iced::Color::from_rgb(
                                     0.4, 0.4, 0.4
                                 ))),
                             Space::with_height(Length::Fixed(10.0)),
                             text("Let's add your first credential to get started")
-                                .size(16)
+                                .size(crate::ui::theme::utils::typography::medium_text_size())
                                 .style(iced::theme::Text::Color(iced::Color::from_rgb(
                                     0.6, 0.6, 0.6
                                 ))),
@@ -437,7 +438,9 @@ impl MainView {
                                         .width(Length::Fixed(18.0))
                                         .height(Length::Fixed(18.0)),
                                     Space::with_width(Length::Fixed(8.0)),
-                                    text("Add Your First Credential").size(16)
+                                    text("Add Your First Credential").size(
+                                        crate::ui::theme::utils::typography::medium_text_size()
+                                    )
                                 ]
                                 .align_items(Alignment::Center)
                             )
@@ -446,7 +449,7 @@ impl MainView {
                             .style(button_styles::primary()),
                             Space::with_height(Length::Fixed(20.0)),
                             text("or click 'Refresh' to reload from backend")
-                                .size(12)
+                                .size(crate::ui::theme::utils::typography::small_text_size())
                                 .style(iced::theme::Text::Color(iced::Color::from_rgb(
                                     0.7, 0.7, 0.7
                                 ))),
@@ -461,16 +464,15 @@ impl MainView {
                 } else {
                     // Not authenticated - show locked state
                     column![
-                        Space::with_height(Length::Fixed(50.0)),
                         text("Database is locked")
-                            .size(16)
+                            .size(crate::ui::theme::utils::typography::medium_text_size())
                             .style(iced::theme::Text::Color(iced::Color::from_rgb(
                                 0.5, 0.5, 0.5
                             ))),
                         text("Please unlock it first to view credentials.")
-                            .size(14)
+                            .size(crate::ui::theme::utils::typography::normal_text_size())
                             .style(iced::theme::Text::Color(iced::Color::from_rgb(
-                                0.9, 0.6, 0.4
+                                0.7, 0.7, 0.7
                             ))),
                     ]
                     .align_items(Alignment::Center)
@@ -482,13 +484,15 @@ impl MainView {
                     column![
                         Space::with_height(Length::Fixed(50.0)),
                         text("No credentials found")
-                            .size(16)
+                            .size(crate::ui::theme::utils::typography::medium_text_size())
                             .style(iced::theme::Text::Color(iced::Color::from_rgb(
                                 0.5, 0.5, 0.5
                             ))),
-                        text("Try adjusting your search terms").size(14).style(
-                            iced::theme::Text::Color(iced::Color::from_rgb(0.7, 0.7, 0.7))
-                        ),
+                        text("Try adjusting your search terms")
+                            .size(crate::ui::theme::utils::typography::normal_text_size())
+                            .style(iced::theme::Text::Color(iced::Color::from_rgb(
+                                0.7, 0.7, 0.7
+                            ))),
                     ]
                     .align_items(Alignment::Center),
                 )
@@ -533,15 +537,15 @@ impl MainView {
         button(
             row![column![
                 text(&credential.title)
-                    .size(16)
+                    .size(crate::ui::theme::utils::typography::medium_text_size())
                     .style(iced::theme::Text::Color(theme::DARK_TEXT)),
                 text(&credential.username)
-                    .size(12)
-                    .style(iced::theme::Text::Color(LIGHT_GRAY_TEXT)),
+                    .size(crate::ui::theme::utils::typography::small_text_size())
+                    .style(iced::theme::Text::Color(theme::LIGHT_GRAY_TEXT)),
                 if let Some(url) = &credential.url {
                     text(url)
-                        .size(10)
-                        .style(iced::theme::Text::Color(theme::LOGO_PURPLE))
+                        .size(crate::ui::theme::utils::typography::small_text_size())
+                        .style(iced::theme::Text::Color(theme::LIGHT_GRAY_TEXT))
                 } else {
                     text("")
                 }

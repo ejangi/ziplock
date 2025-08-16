@@ -265,8 +265,7 @@ ui:
   # Window dimensions
   window_width: 1200
   window_height: 800
-  # Remember and restore window state
-  remember_window_state: true
+
   # Show setup wizard on startup if no repository is configured
   show_wizard_on_startup: true
 
