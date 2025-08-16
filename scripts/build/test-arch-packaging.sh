@@ -84,6 +84,7 @@ RUN pacman -Syu --noconfirm && \
       file \
       fakeroot \
       namcap \
+      rsync \
       && pacman -Scc --noconfirm
 
 # Create non-root user for makepkg
@@ -225,10 +226,113 @@ test_package_metadata() {
     local pkgbuild_version=$(grep '^pkgver=' "$PROJECT_ROOT/packaging/arch/PKGBUILD" | sed 's/pkgver=//')
 
     if [ "$cargo_version" != "$pkgbuild_version" ]; then
-        log_warning "Version mismatch: Cargo.toml ($cargo_version) vs PKGBUILD ($pkgbuild_version)"
-        log_info "This is expected if PKGBUILD hasn't been updated for the current version"
+        log_error "Version mismatch: Cargo.toml ($cargo_version) vs PKGBUILD ($pkgbuild_version)"
+        log_error "PKGBUILD pkgver must match the workspace version in Cargo.toml"
+        return 1
     else
-        log_success "Version consistency check passed"
+        log_success "Version consistency check passed: $cargo_version"
+    fi
+}
+
+test_pkgbuild_version_and_checksum() {
+    log_info "Testing PKGBUILD version and SHA256 checksum accuracy..."
+
+    # Get version from Cargo.toml
+    local cargo_version=$(grep '^version' "$PROJECT_ROOT/Cargo.toml" | sed -n '1s/.*"\(.*\)".*/\1/p')
+
+    # Check PKGBUILD version
+    local pkgbuild_version=$(grep '^pkgver=' "$PROJECT_ROOT/packaging/arch/PKGBUILD" | sed 's/pkgver=//')
+
+    # Check SHA256 in PKGBUILD
+    local pkgbuild_sha=$(grep '^sha256sums=' "$PROJECT_ROOT/packaging/arch/PKGBUILD" | sed "s/sha256sums=('\\(.*\\)')/\\1/")
+
+    log_info "Cargo.toml version: $cargo_version"
+    log_info "PKGBUILD version: $pkgbuild_version"
+    log_info "PKGBUILD SHA256: $pkgbuild_sha"
+
+    # Test 1: Version must match
+    if [ "$cargo_version" != "$pkgbuild_version" ]; then
+        log_error "PKGBUILD version ($pkgbuild_version) does not match Cargo.toml version ($cargo_version)"
+        return 1
+    fi
+
+    # Test 2: SHA256 must not be 'SKIP'
+    if [ "$pkgbuild_sha" = "SKIP" ]; then
+        log_error "PKGBUILD sha256sums is still set to 'SKIP' - must be a real checksum"
+        return 1
+    fi
+
+    # Test 3: SHA256 must be valid format (64 hex characters)
+    if ! echo "$pkgbuild_sha" | grep -qE '^[a-f0-9]{64}$'; then
+        log_error "PKGBUILD sha256sums is not a valid SHA256 hash: $pkgbuild_sha"
+        return 1
+    fi
+
+    # Test 4: If we have a source archive, verify the checksum matches
+    local archive_file="$BUILD_DIR/ziplock-${cargo_version}.tar.gz"
+    if [ -f "$archive_file" ]; then
+        local actual_sha=$(sha256sum "$archive_file" | cut -d' ' -f1)
+        log_info "Actual archive SHA256: $actual_sha"
+
+        if [ "$pkgbuild_sha" != "$actual_sha" ]; then
+            log_error "PKGBUILD SHA256 ($pkgbuild_sha) does not match actual archive SHA256 ($actual_sha)"
+            log_error "Run './scripts/build/package-arch.sh --source-only' to generate correct checksum"
+            return 1
+        fi
+
+        log_success "SHA256 checksum matches actual archive"
+    else
+        log_warning "Source archive not found at $archive_file - cannot verify checksum accuracy"
+        log_info "Consider running './scripts/build/package-arch.sh --source-only' first"
+    fi
+
+    log_success "PKGBUILD version and checksum validation passed"
+}
+
+test_pkgbuild_source_url() {
+    log_info "Testing PKGBUILD source URL consistency..."
+
+    local cargo_version=$(grep '^version' "$PROJECT_ROOT/Cargo.toml" | sed -n '1s/.*"\(.*\)".*/\1/p')
+
+    # Extract source URL from PKGBUILD
+    local source_line=$(grep '^source=' "$PROJECT_ROOT/packaging/arch/PKGBUILD")
+
+    # Check if source URL contains the correct version (either literal or variable)
+    if echo "$source_line" | grep -q "v$cargo_version.tar.gz" || echo "$source_line" | grep -q 'v$pkgver.tar.gz'; then
+        log_success "Source URL contains correct version reference"
+    else
+        log_error "Source URL does not contain correct version v$cargo_version or variable reference"
+        log_error "Current source line: $source_line"
+        return 1
+    fi
+
+    # Check URL format
+    if echo "$source_line" | grep -qE 'github\.com/[^/]+/ziplock/archive/v.*\.tar\.gz'; then
+        log_success "Source URL format is correct"
+    else
+        log_error "Source URL format appears incorrect"
+        log_error "Expected format: https://github.com/USER/ziplock/archive/vVERSION.tar.gz"
+        return 1
+    fi
+}
+
+run_standalone_validation() {
+    log_info "Running standalone PKGBUILD validation..."
+
+    # Check if the standalone validation script exists
+    local validation_script="$PROJECT_ROOT/scripts/build/test-pkgbuild-validation.sh"
+    if [ ! -f "$validation_script" ]; then
+        log_warning "Standalone validation script not found: $validation_script"
+        return 0
+    fi
+
+    # Run the standalone validation script
+    if "$validation_script"; then
+        log_success "Standalone PKGBUILD validation passed"
+    else
+        log_error "Standalone PKGBUILD validation failed"
+        log_info "Run '$validation_script' for detailed error information"
+        return 1
     fi
 }
 
@@ -325,6 +429,9 @@ print_test_summary() {
     echo "✓ Source archive creation"
     echo "✓ PKGBUILD validity"
     echo "✓ Package metadata consistency"
+    echo "✓ PKGBUILD version and checksum validation"
+    echo "✓ PKGBUILD source URL consistency"
+    echo "✓ Standalone PKGBUILD validation"
     echo "✓ Dependency availability"
     if [ "${FULL_BUILD_TEST:-false}" = "true" ]; then
         echo "✓ Full build test"
@@ -334,8 +441,15 @@ print_test_summary() {
     echo
     echo "Next Steps:"
     echo "==========="
-    echo "1. Update PKGBUILD version if needed:"
-    echo "   sed -i 's/^pkgver=.*/pkgver=$(grep '^version' Cargo.toml | sed -n '1s/.*\"\(.*\)\".*/\1/p')/' packaging/arch/PKGBUILD"
+    echo "1. If version/checksum validation failed, update PKGBUILD:"
+    echo "   ./scripts/build/package-arch.sh --source-only"
+    echo "   # This will generate the correct archive and SHA256"
+    echo "   # Then manually update packaging/arch/PKGBUILD with:"
+    echo "   # - pkgver=<current_version>"
+    echo "   # - sha256sums=('<generated_sha256>')"
+    echo
+    echo "   Or run the standalone validation for detailed guidance:"
+    echo "   ./scripts/build/test-pkgbuild-validation.sh --fix-suggestions"
     echo
     echo "2. Test on real Arch Linux system:"
     echo "   cd packaging/arch && makepkg -si"
@@ -391,6 +505,9 @@ main() {
     test_source_archive_creation
     test_pkgbuild_validity
     test_package_metadata
+    test_pkgbuild_version_and_checksum
+    test_pkgbuild_source_url
+    run_standalone_validation
     test_dependencies
     run_full_build_test
     print_test_summary

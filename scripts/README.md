@@ -14,6 +14,7 @@ Scripts for compiling, building, and packaging ZipLock for distribution.
 - **`test-build.sh`** - Tests build process in CI environment
 - **`test-build-locally.sh`** - Tests complete build process locally with Docker
 - **`test-arch-packaging.sh`** - Tests Arch Linux packaging in containerized environment
+- **`test-pkgbuild-validation.sh`** - Validates PKGBUILD version and checksum accuracy without Docker
 
 ### `dev/` - Development Scripts
 Scripts for development workflow, testing, and debugging.
@@ -57,6 +58,9 @@ Reserved for future deployment automation scripts.
 
 # Test Arch packaging
 ./scripts/build/test-arch-packaging.sh
+
+# Validate PKGBUILD quickly
+./scripts/build/test-pkgbuild-validation.sh
 ```
 
 ### Development
@@ -158,6 +162,31 @@ Tests Arch Linux packaging process in containerized environment.
 **Options:**
 - `--full-build`: Run complete makepkg build test (slow)
 - `--clean-images`: Remove Docker images after test
+
+### `build/test-pkgbuild-validation.sh`
+Validates PKGBUILD file for version and checksum accuracy without requiring Docker.
+
+**Usage:**
+```bash
+./scripts/build/test-pkgbuild-validation.sh [--fix-suggestions]
+```
+
+**Options:**
+- `--fix-suggestions`: Show fix suggestions even if tests pass
+
+**What it validates:**
+- PKGBUILD file existence and syntax
+- Required variables (pkgname, pkgver, pkgrel, pkgdesc)
+- Version consistency with Cargo.toml
+- SHA256 checksum format and validity (not 'SKIP')
+- Source URL format and version consistency
+- Install script existence
+
+**Features:**
+- Fast validation without Docker overhead
+- Detailed error messages with fix suggestions
+- Validates against actual source archive if available
+- Ensures PKGBUILD is ready for Arch Linux packaging
 
 ### `build/test-build-locally.sh`
 Comprehensive local build testing using Docker containers.
@@ -316,7 +345,10 @@ Quick pre-push validation that runs formatting and Clippy checks (skips tests fo
 # Test packaging
 ./scripts/build/test-arch-packaging.sh
 
-# Update PKGBUILD with correct checksum
+# Validate PKGBUILD before submission
+./scripts/build/test-pkgbuild-validation.sh
+
+# Update PKGBUILD with correct checksum if needed
 sha256sum target/ziplock-*.tar.gz
 # Edit packaging/arch/PKGBUILD and replace 'SKIP' with actual checksum
 
@@ -333,7 +365,10 @@ git push
 ### Testing Arch Packages
 
 ```bash
-# Quick validation
+# Quick PKGBUILD validation (no Docker required)
+./scripts/build/test-pkgbuild-validation.sh
+
+# Quick packaging validation with Docker
 ./scripts/build/test-arch-packaging.sh
 
 # Full build test (slow)

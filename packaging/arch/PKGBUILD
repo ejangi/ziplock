@@ -1,6 +1,6 @@
 # Maintainer: James Angus <james@ejangi.com>
 pkgname=ziplock
-pkgver=0.1.7
+pkgver=0.2.5
 pkgrel=1
 pkgdesc="A secure, portable password manager using encrypted 7z archives"
 arch=('x86_64')
@@ -16,7 +16,7 @@ conflicts=('ziplock-bin' 'ziplock-git')
 backup=('etc/ziplock/config.yml')
 install=ziplock.install
 source=("$pkgname-$pkgver.tar.gz::https://github.com/ejangi/ziplock/archive/v$pkgver.tar.gz")
-sha256sums=('SKIP')  # This should be updated for each release
+sha256sums=('d9bb7b5131ca089c04ae712df94fb2972995943b711e5a22c0e6124694950448')
 
 prepare() {
     cd "$pkgname-$pkgver"
