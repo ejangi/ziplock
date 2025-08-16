@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.6] - 2025-08-16
+
+### Fixed
+- The app can now check for updates and notify the user when a new version is available.
+
 ### Added
 - Build instructions for Arch/Manjaro to the release notes.
 - Fix an issue where the PKGBUILD file didn't have the correct version number and SHA checksums.
