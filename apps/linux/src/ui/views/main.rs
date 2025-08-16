@@ -33,6 +33,7 @@ pub enum MainViewMessage {
     // UI actions
     ShowSettings,
     ShowAbout,
+    CheckForUpdates,
 
     // Session management
     SessionTimeout,
@@ -250,6 +251,11 @@ impl MainView {
                 Command::none()
             }
 
+            MainViewMessage::CheckForUpdates => {
+                // This is handled by the parent application
+                Command::none()
+            }
+
             MainViewMessage::SessionTimeout => {
                 // This is handled by the helper method and parent application
                 // Just return none as the timeout has already been processed
@@ -294,6 +300,19 @@ impl MainView {
         .width(Length::Fill)
         .center_x();
 
+        let update_button = container(
+            button(
+                svg(theme::refresh_icon())
+                    .width(Length::Fixed(20.0))
+                    .height(Length::Fixed(20.0)),
+            )
+            .on_press(MainViewMessage::CheckForUpdates)
+            .padding(12)
+            .style(button_styles::secondary()),
+        )
+        .width(Length::Fill)
+        .center_x();
+
         let settings_button = container(
             button(
                 svg(theme::settings_icon())
@@ -312,6 +331,8 @@ impl MainView {
             Space::with_height(Length::Fixed(30.0)),
             add_button,
             Space::with_height(Length::Fill),
+            update_button,
+            Space::with_height(Length::Fixed(10.0)),
             settings_button,
         ]
         .spacing(0)

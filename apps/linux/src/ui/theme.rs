@@ -1104,12 +1104,24 @@ pub mod container_styles {
         iced::theme::Container::Custom(Box::new(SidebarStyle))
     }
 
+    /// Modal dialog container style with white background and shadow
+    pub fn modal() -> iced::theme::Container {
+        iced::theme::Container::Custom(Box::new(ModalStyle))
+    }
+
+    /// Card container style with light background and border
+    pub fn card() -> iced::theme::Container {
+        iced::theme::Container::Custom(Box::new(CardStyle))
+    }
+
     // Style implementations
     struct ErrorAlertStyle;
     struct WarningAlertStyle;
     struct SuccessAlertStyle;
     struct InfoAlertStyle;
     struct SidebarStyle;
+    struct ModalStyle;
+    struct CardStyle;
 
     // Toast style implementations (no border radius)
     struct ErrorToastStyle;
@@ -1266,6 +1278,44 @@ pub mod container_styles {
                     radius: 0.0.into(),
                 },
                 text_color: Some(WHITE),
+                shadow: iced::Shadow::default(),
+            }
+        }
+    }
+
+    impl container::StyleSheet for ModalStyle {
+        type Style = iced::Theme;
+
+        fn appearance(&self, _style: &Self::Style) -> container::Appearance {
+            container::Appearance {
+                background: Some(WHITE.into()),
+                border: iced::Border {
+                    color: iced::Color::from_rgb(0.9, 0.9, 0.9),
+                    width: 1.0,
+                    radius: utils::border_radius().into(),
+                },
+                text_color: Some(DARK_TEXT),
+                shadow: iced::Shadow {
+                    color: iced::Color::from_rgba(0.0, 0.0, 0.0, 0.1),
+                    offset: iced::Vector::new(0.0, 4.0),
+                    blur_radius: 8.0,
+                },
+            }
+        }
+    }
+
+    impl container::StyleSheet for CardStyle {
+        type Style = iced::Theme;
+
+        fn appearance(&self, _style: &Self::Style) -> container::Appearance {
+            container::Appearance {
+                background: Some(iced::Color::from_rgb(0.98, 0.98, 0.98).into()),
+                border: iced::Border {
+                    color: iced::Color::from_rgb(0.95, 0.95, 0.95),
+                    width: 1.0,
+                    radius: utils::border_radius().into(),
+                },
+                text_color: Some(DARK_TEXT),
                 shadow: iced::Shadow::default(),
             }
         }

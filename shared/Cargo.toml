@@ -45,6 +45,12 @@ regex = "1.10"
 base64 = "0.21"
 sha2 = "0.10"
 
+# HTTP client for update checking
+reqwest = { version = "0.11", features = [
+    "json",
+    "rustls-tls",
+], default-features = false }
+
 # Core backend functionality dependencies
 bytes = "1.5"
 tempfile = "3.8"

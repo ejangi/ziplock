@@ -6,6 +6,7 @@ pub mod button;
 pub mod credential_form;
 pub mod toast;
 pub mod totp_field;
+pub mod update_dialog;
 
 // Future UI components will be added here as needed:
 // - Password strength indicator
@@ -16,3 +17,4 @@ pub mod totp_field;
 
 // Re-export components that are actually used by other modules
 pub use credential_form::{CredentialForm, CredentialFormConfig, CredentialFormMessage};
+pub use update_dialog::{UpdateDialog, UpdateDialogMessage};

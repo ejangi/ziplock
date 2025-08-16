@@ -37,6 +37,7 @@ pub mod client;
 pub mod config;
 
 pub mod models;
+pub mod update_checker;
 pub mod utils;
 pub mod validation;
 pub mod yaml;
@@ -79,6 +80,11 @@ pub use api::{ApiError, ApiResult, ApiSession, ZipLockApi};
 
 // Re-export archive functionality
 pub use archive::{ArchiveConfig, ArchiveError, ArchiveManager, ArchiveResult};
+
+// Re-export update checker functionality
+pub use update_checker::{
+    InstallationMethod, ReleaseAsset, ReleaseInfo, UpdateCheckResult, UpdateChecker,
+};
 
 /// Current library version
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

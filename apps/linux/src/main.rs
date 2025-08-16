@@ -6,12 +6,14 @@
 use iced::{widget::svg, Application, Command, Element, Settings, Theme};
 use tracing::{debug, error, info, warn};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+// Import removed - these types are used in the actual code through other paths
 
 mod config;
 
 mod ui;
 
 use ui::components::toast::{ToastManager, ToastPosition};
+use ui::components::{UpdateDialog, UpdateDialogMessage};
 use ui::theme::alerts::AlertMessage;
 
 use ui::{create_ziplock_theme, theme};
@@ -88,6 +90,13 @@ pub enum Message {
     AutoLockTimerTick,
     UserActivity,
 
+    // Update checking
+    CheckForUpdates,
+    UpdateCheckResult(Result<ziplock_shared::UpdateCheckResult, String>),
+    ShowUpdateDialog(ziplock_shared::UpdateCheckResult),
+    HideUpdateDialog,
+    AutoUpdateCheck,
+
     // General
     Quit,
     QuittingWithLogout,
@@ -106,6 +115,7 @@ pub enum AppState {
     AddCredentialActive(AddCredentialView),
     EditCredentialActive(EditCredentialView),
     SettingsActive(SettingsView),
+    UpdateDialogActive(UpdateDialog),
     MainInterface(MainView),
     Error(String),
 }
@@ -123,6 +133,8 @@ pub struct ZipLockApp {
     // Auto-lock timer fields
     last_activity: std::time::Instant,
     auto_lock_enabled: bool,
+    // Update checking
+    update_checker: ziplock_shared::UpdateChecker,
 }
 
 impl Application for ZipLockApp {
@@ -144,6 +156,7 @@ impl Application for ZipLockApp {
             toast_manager: ToastManager::with_position(ToastPosition::BottomRight),
             last_activity: std::time::Instant::now(),
             auto_lock_enabled: false,
+            update_checker: ziplock_shared::UpdateChecker::new(),
         };
 
         let load_config_command =
@@ -164,6 +177,7 @@ impl Application for ZipLockApp {
             AppState::AddCredentialActive(_) => "ZipLock - Add Credential".to_string(),
             AppState::EditCredentialActive(_) => "ZipLock - Edit Credential".to_string(),
             AppState::SettingsActive(_) => "ZipLock - Settings".to_string(),
+            AppState::UpdateDialogActive(_) => "ZipLock - Update Available".to_string(),
             AppState::MainInterface(_) => "ZipLock Password Manager".to_string(),
             AppState::Error(_) => "ZipLock - Error".to_string(),
         }
@@ -486,6 +500,10 @@ impl Application for ZipLockApp {
                             // Show settings view
                             Command::perform(async {}, |_| Message::ShowSettings)
                         }
+                        MainViewMessage::CheckForUpdates => {
+                            // Trigger update check
+                            Command::perform(async {}, |_| Message::CheckForUpdates)
+                        }
                         MainViewMessage::TriggerConnectionError => {
                             self.toast_manager.ipc_error(
                                 "Unable to connect to the ZipLock backend service. Please ensure the daemon is running."
@@ -787,6 +805,78 @@ impl Application for ZipLockApp {
                 Command::none()
             }
 
+            Message::CheckForUpdates => {
+                info!("Manual update check requested");
+                let mut update_checker = self.update_checker.clone();
+                Command::perform(
+                    async move { update_checker.check_for_updates().await },
+                    |result| Message::UpdateCheckResult(result.map_err(|e| e.to_string())),
+                )
+            }
+
+            Message::UpdateCheckResult(result) => match result {
+                Ok(update_result) => {
+                    if update_result.update_available {
+                        info!(
+                            "Update available: {}",
+                            update_result
+                                .latest_version
+                                .as_ref()
+                                .unwrap_or(&"unknown".to_string())
+                        );
+
+                        Command::perform(async move { update_result }, Message::ShowUpdateDialog)
+                    } else {
+                        info!("No updates available");
+                        self.toast_manager
+                            .success("You are running the latest version of ZipLock!");
+                        Command::none()
+                    }
+                }
+                Err(error) => {
+                    error!("Update check failed: {}", error);
+                    self.toast_manager
+                        .error(&format!("Failed to check for updates: {}", error));
+                    Command::none()
+                }
+            },
+
+            Message::ShowUpdateDialog(update_result) => {
+                let update_dialog = UpdateDialog::new(update_result);
+                self.state = AppState::UpdateDialogActive(update_dialog);
+                Command::none()
+            }
+
+            Message::HideUpdateDialog => {
+                // Return to main interface
+                if self.config_manager.is_some() && self.session_id.is_some() {
+                    let main_view = MainView::new();
+                    self.state = AppState::MainInterface(main_view);
+                    return Command::perform(async {}, |_| {
+                        Message::MainView(MainViewMessage::RefreshCredentials)
+                    });
+                }
+                self.state = AppState::MainInterface(MainView::new());
+                Command::none()
+            }
+
+            Message::AutoUpdateCheck => {
+                // Check if auto-update checking is enabled and if we should check now
+                if let Some(config_manager) = &self.config_manager {
+                    if config_manager.config().app.auto_check_updates
+                        && self.update_checker.should_auto_check()
+                    {
+                        info!("Performing automatic update check");
+                        let mut update_checker = self.update_checker.clone();
+                        return Command::perform(
+                            async move { update_checker.check_for_updates().await },
+                            |result| Message::UpdateCheckResult(result.map_err(|e| e.to_string())),
+                        );
+                    }
+                }
+                Command::none()
+            }
+
             Message::Quit => {
                 info!("Application quit requested");
                 // If we have an active session, try to logout first
@@ -825,6 +915,35 @@ impl Application for ZipLockApp {
                 edit_view.view().map(Message::EditCredential)
             }
             AppState::SettingsActive(settings_view) => settings_view.view().map(Message::Settings),
+            AppState::UpdateDialogActive(update_dialog) => {
+                update_dialog.view().map(|dialog_msg| match dialog_msg {
+                    UpdateDialogMessage::Close => Message::HideUpdateDialog,
+                    UpdateDialogMessage::OpenReleasePage => {
+                        // Open URL in browser
+                        if let Some(url) =
+                            UpdateDialog::get_release_url(update_dialog.update_result())
+                        {
+                            if let Err(e) = open::that(&url) {
+                                tracing::warn!("Failed to open release URL: {}", e);
+                            }
+                        }
+                        Message::HideUpdateDialog
+                    }
+                    UpdateDialogMessage::CopyCommand => {
+                        // Copy command to clipboard
+                        if let Some(command) =
+                            UpdateDialog::get_copy_command(update_dialog.update_result())
+                        {
+                            if let Err(e) = arboard::Clipboard::new()
+                                .and_then(|mut clipboard| clipboard.set_text(&command))
+                            {
+                                tracing::warn!("Failed to copy to clipboard: {}", e);
+                            }
+                        }
+                        Message::HideUpdateDialog
+                    }
+                })
+            }
             AppState::MainInterface(main_view) => main_view.view().map(Message::MainView),
             AppState::Error(error) => self.view_error(error),
         };
@@ -883,11 +1002,24 @@ impl Application for ZipLockApp {
             _ => iced::Subscription::none(),
         };
 
+        // Auto update check subscription - check every hour if enabled
+        let auto_update_subscription = if let Some(config_manager) = &self.config_manager {
+            if config_manager.config().app.auto_check_updates {
+                time::every(std::time::Duration::from_secs(3600)) // Check every hour
+                    .map(|_| Message::AutoUpdateCheck)
+            } else {
+                iced::Subscription::none()
+            }
+        } else {
+            iced::Subscription::none()
+        };
+
         iced::Subscription::batch([
             close_subscription,
             activity_subscription,
             toast_subscription,
             auto_lock_subscription,
+            auto_update_subscription,
             view_subscription,
         ])
     }
@@ -906,7 +1038,7 @@ impl ZipLockApp {
             render_toast_overlay(&self.toast_manager, content, Message::DismissToast);
 
         // Then wrap with alert if present (for backwards compatibility)
-        if let Some(alert) = &self.current_alert {
+        let content_with_alerts = if let Some(alert) = &self.current_alert {
             column![
                 alerts::render_alert(alert, Some(Message::DismissAlert)),
                 Space::with_height(Length::Fixed(10.0)),
@@ -915,7 +1047,9 @@ impl ZipLockApp {
             .into()
         } else {
             content_with_toasts
-        }
+        };
+
+        content_with_alerts
     }
     /// View loading screen
     fn view_loading(&self) -> Element<'_, Message> {
