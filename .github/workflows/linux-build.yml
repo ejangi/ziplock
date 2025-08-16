@@ -485,9 +485,12 @@ jobs:
                 cd packaging/arch
                 sed -i "s/^pkgver=.*/pkgver=$VERSION/" PKGBUILD
 
-                # Update sha256sums using a temp file to avoid escaping issues
-                sed "s/^sha256sums=.*/sha256sums=('"'"'$SHA256'"'"')/" PKGBUILD > PKGBUILD.tmp
+                # Update sha256sums using printf to avoid escaping issues
+                cp PKGBUILD PKGBUILD.backup
+                grep -v "^sha256sums=" PKGBUILD.backup > PKGBUILD.tmp
+                printf "sha256sums=('%s')\n" "$SHA256" >> PKGBUILD.tmp
                 mv PKGBUILD.tmp PKGBUILD
+                rm PKGBUILD.backup
 
                 # Generate .SRCINFO from updated PKGBUILD
                 echo "Generating .SRCINFO..."
