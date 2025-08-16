@@ -7,15 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.8] - 2025-08-16
+
+Because of an issue with the build process, there is a gap in releases since 0.2.3. So, we've included the additions from the recent builds here as well:
+
+### Added
+- Clipboard is cleared after the amount of time we set in the settings
+- The app can now check for updates and notify the user when a new version is available.
+- Build instructions for Arch/Manjaro to the release notes.
+- Added credential type icons and made the title field larger
+- Added a settings UI to linux.
+
+### Fixed
+- Fixed the build process so it's quicker and more likely to succeed.
+- Fix an issue where the PKGBUILD file didn't have the correct version number and SHA checksums.
+
 ## [0.2.7] - 2025-08-16
 
 ### Added
 - Clipboard is cleared after the amount of time we set in the settings
 
 ## [0.2.6] - 2025-08-16
-
-### Fixed
-- The app can now check for updates and notify the user when a new version is available.
 
 ### Added
 - Build instructions for Arch/Manjaro to the release notes.
