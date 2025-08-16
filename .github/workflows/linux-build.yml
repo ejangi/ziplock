@@ -604,54 +604,34 @@ jobs:
 
       - name: Prepare release assets
         run: |
-          echo "=== DEBUGGING: Checking artifacts directory structure ==="
-          echo "Contents of artifacts directory:"
-          ls -la artifacts/
-
-          echo "Contents of each subdirectory in artifacts:"
-          for dir in artifacts/*/; do
-            if [ -d "$dir" ]; then
-              echo "=== Contents of $dir ==="
-              ls -la "$dir"
-              echo "=== Files in $dir (recursive) ==="
-              find "$dir" -type f 2>/dev/null || echo "No files found"
-            fi
-          done
-
-          echo "=== Searching for specific files ==="
-          echo "Looking for .deb files:"
-          find artifacts/ -name "*.deb" -type f 2>/dev/null || echo "No .deb files found"
-
-          echo "Looking for .tar.gz files:"
-          find artifacts/ -name "*.tar.gz" -type f 2>/dev/null || echo "No .tar.gz files found"
-
-          echo "Looking for PKGBUILD files:"
-          find artifacts/ -name "PKGBUILD" -type f 2>/dev/null || echo "No PKGBUILD files found"
-
-          echo "Looking for compiled binaries:"
-          find artifacts/ -type f -executable 2>/dev/null || echo "No executable files found"
-
-          echo "=== END DEBUGGING ==="
-
           mkdir -p release-assets
 
           # Copy Debian package
+          echo "Copying Debian package..."
           cp artifacts/debian-package/*.deb release-assets/
+          echo "✅ Debian package copied"
 
           # Copy Arch package files
+          echo "Copying Arch package files..."
           cp artifacts/arch-package/target/*.tar.gz release-assets/
           cp artifacts/arch-package/packaging/arch/PKGBUILD release-assets/
+          echo "✅ Arch package files copied"
 
           # Copy compiled binaries
+          echo "Copying compiled binaries..."
           mkdir -p release-assets/binaries
           cp artifacts/compiled-binaries/* release-assets/binaries/
+          echo "✅ Compiled binaries copied"
 
           # Create tarball of binaries
+          echo "Creating binary tarball..."
           cd release-assets
           tar -czf ziplock-linux-x86_64.tar.gz binaries/
           rm -rf binaries
+          echo "✅ Binary tarball created"
 
-          ls -la release-assets/
+          echo "Final contents of release-assets:"
+          ls -la
 
       - name: Extract version from tag
         id: version
