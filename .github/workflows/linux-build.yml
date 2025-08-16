@@ -604,6 +604,9 @@ jobs:
 
       - name: Prepare release assets
         run: |
+          pwd
+          ls -lah
+
           mkdir -p release-assets
 
           # Copy Debian package
