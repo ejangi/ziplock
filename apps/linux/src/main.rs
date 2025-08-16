@@ -409,7 +409,7 @@ impl Application for ZipLockApp {
                         return command;
                     }
 
-                    return command;
+                    command
                 } else {
                     Command::none()
                 }
@@ -873,7 +873,7 @@ impl Application for ZipLockApp {
                 Err(error) => {
                     error!("Update check failed: {}", error);
                     self.toast_manager
-                        .error(&format!("Failed to check for updates: {}", error));
+                        .error(format!("Failed to check for updates: {}", error));
                     Command::none()
                 }
             },
@@ -961,9 +961,9 @@ impl Application for ZipLockApp {
 
                 // Clear clipboard content before quitting
                 let clipboard_manager = self.clipboard_manager.clone();
-                let _ = tokio::spawn(async move {
+                std::mem::drop(tokio::spawn(async move {
                     clipboard_manager.clear_tracked_content().await;
-                });
+                }));
 
                 // If we have an active session, try to logout first
                 if self.session_id.is_some() {

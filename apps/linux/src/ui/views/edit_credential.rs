@@ -229,19 +229,15 @@ impl EditCredentialView {
                 match form_msg {
                     CredentialFormMessage::Save => {
                         tracing::debug!("Save button clicked in edit credential view");
-                        return Command::perform(async {}, |_| {
-                            EditCredentialMessage::UpdateCredential
-                        });
+                        Command::perform(async {}, |_| EditCredentialMessage::UpdateCredential)
                     }
                     CredentialFormMessage::Cancel => {
                         tracing::debug!("Cancel button clicked in edit credential view");
-                        return Command::perform(async {}, |_| EditCredentialMessage::Cancel);
+                        Command::perform(async {}, |_| EditCredentialMessage::Cancel)
                     }
                     CredentialFormMessage::Delete => {
                         tracing::debug!("Delete button clicked in edit credential view");
-                        return Command::perform(async {}, |_| {
-                            EditCredentialMessage::DeleteCredential
-                        });
+                        Command::perform(async {}, |_| EditCredentialMessage::DeleteCredential)
                     }
                     CredentialFormMessage::CopyFieldToClipboard {
                         field_name: _,
@@ -254,13 +250,13 @@ impl EditCredentialView {
                             content.len()
                         );
                         // Forward clipboard operations to main app
-                        return Command::perform(
+                        Command::perform(
                             async move { (content, content_type) },
                             |(content, content_type)| EditCredentialMessage::CopyToClipboard {
                                 content,
                                 content_type,
                             },
-                        );
+                        )
                     }
                     CredentialFormMessage::CopyToClipboard {
                         content,
@@ -272,18 +268,18 @@ impl EditCredentialView {
                             content.len()
                         );
                         // Forward clipboard operations to main app
-                        return Command::perform(
+                        Command::perform(
                             async move { (content, content_type) },
                             |(content, content_type)| EditCredentialMessage::CopyToClipboard {
                                 content,
                                 content_type,
                             },
-                        );
+                        )
                     }
                     _ => {
                         let form_command = self.form.update(form_msg);
                         // Map form commands to edit credential commands
-                        return form_command.map(EditCredentialMessage::FormMessage);
+                        form_command.map(EditCredentialMessage::FormMessage)
                     }
                 }
             }

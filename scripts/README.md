@@ -11,8 +11,6 @@ Scripts for compiling, building, and packaging ZipLock for distribution.
 - **`build-mobile.sh`** - Builds shared library for mobile platforms (iOS/Android)
 - **`package-deb.sh`** - Creates Debian packages for distribution
 - **`package-arch.sh`** - Creates Arch Linux packages and source archives for AUR
-- **`test-build.sh`** - Tests build process in CI environment
-- **`test-build-locally.sh`** - Tests complete build process locally with Docker
 - **`test-arch-packaging.sh`** - Tests Arch Linux packaging in containerized environment
 - **`test-pkgbuild-validation.sh`** - Validates PKGBUILD version and checksum accuracy without Docker
 
@@ -25,6 +23,7 @@ Scripts for development workflow, testing, and debugging.
 - **`run-clippy.sh`** - Quick Clippy linting check (same as GitHub CI)
 - **`run-format.sh`** - Quick code formatting check and fix
 - **`pre-push.sh`** - Quick pre-push validation (format + clippy, no tests)
+- **`test-in-container.sh`** - Test builds in the same containerized environment as CI
 
 ### `version/` - Version Management Scripts
 Scripts for managing versions and changelogs.
@@ -44,17 +43,23 @@ Reserved for future deployment automation scripts.
 
 ### Build and Package
 ```bash
-# Build for Linux
+# Build for Linux (native)
 ./scripts/build/build-linux.sh --profile release
 
-# Create Debian package
+# Build in same environment as CI (recommended)
+./scripts/dev/test-in-container.sh build
+
+# Create Debian package (native)
 ./scripts/build/package-deb.sh --arch amd64
+
+# Create Debian package in container (same as CI)
+./scripts/dev/test-in-container.sh package-deb
 
 # Create Arch Linux package
 ./scripts/build/package-arch.sh --source-only
 
-# Test build locally with Docker
-./scripts/build/test-build-locally.sh
+# Test in containerized environment (matches CI exactly)
+./scripts/dev/test-in-container.sh test
 
 # Test Arch packaging
 ./scripts/build/test-arch-packaging.sh
@@ -71,8 +76,14 @@ Reserved for future deployment automation scripts.
 # Run integration tests (FFI architecture)
 ./scripts/dev/run-integration-tests.sh
 
+# Test in exact CI environment (recommended)
+./scripts/dev/test-in-container.sh test
+
 # Run CI checks locally before pushing
 ./scripts/dev/run-ci-checks.sh
+
+# Interactive shell in CI environment for debugging
+./scripts/dev/test-in-container.sh shell-ubuntu
 
 # Quick clippy check
 ./scripts/dev/run-clippy.sh --fix
@@ -188,18 +199,7 @@ Validates PKGBUILD file for version and checksum accuracy without requiring Dock
 - Validates against actual source archive if available
 - Ensures PKGBUILD is ready for Arch Linux packaging
 
-### `build/test-build-locally.sh`
-Comprehensive local build testing using Docker containers.
 
-**Usage:**
-```bash
-./scripts/build/test-build-locally.sh [--clean] [--no-cache] [--skip-test]
-```
-
-**Options:**
-- `--clean`: Remove existing containers and images
-- `--no-cache`: Build Docker images without cache
-- `--skip-test`: Skip package installation test
 
 ## Development Scripts Details
 
@@ -294,6 +294,51 @@ Quick pre-push validation that runs formatting and Clippy checks (skips tests fo
 - Option to run full test suite when needed
 - Designed for quick developer feedback loop
 
+### `dev/test-in-container.sh`
+Test builds in the exact same containerized environment used by CI/CD pipelines.
+
+**Usage:**
+```bash
+./scripts/dev/test-in-container.sh [OPTIONS] COMMAND
+```
+
+**Commands:**
+- `test`: Run full test suite in Ubuntu container
+- `build`: Build binaries in Ubuntu container
+- `package-deb`: Create Debian package in Ubuntu container
+- `package-arch`: Create Arch package in Arch container
+- `shell-ubuntu`: Open interactive shell in Ubuntu container
+- `shell-arch`: Open interactive shell in Arch container
+- `update-images`: Pull latest container images
+
+**Options:**
+- `--no-cache`: Don't use Docker build cache
+- `--clean`: Clean target directory first
+- `--help`: Show help message
+
+**Features:**
+- Uses same pre-built container images as GitHub Actions
+- Eliminates "works locally, fails in CI" issues
+- Interactive debugging shells for troubleshooting
+- Automatic container image management
+- Perfect environment consistency with CI
+
+**Examples:**
+```bash
+# Test in exact CI environment
+./scripts/dev/test-in-container.sh test
+
+# Build with clean environment
+./scripts/dev/test-in-container.sh build --clean
+
+# Debug interactively
+./scripts/dev/test-in-container.sh shell-ubuntu
+
+# Create packages in containers
+./scripts/dev/test-in-container.sh package-deb
+./scripts/dev/test-in-container.sh package-arch
+```
+
 ## Quick Reference
 
 ### Most Common Workflows
@@ -306,7 +351,10 @@ Quick pre-push validation that runs formatting and Clippy checks (skips tests fo
 # Quick check with auto-fix
 ./scripts/dev/pre-push.sh --fix
 
-# Full validation (recommended before important commits)
+# Full validation in exact CI environment (recommended)
+./scripts/dev/test-in-container.sh test
+
+# Full validation native (alternative)
 ./scripts/dev/run-ci-checks.sh
 ```
 
@@ -318,18 +366,26 @@ Quick pre-push validation that runs formatting and Clippy checks (skips tests fo
 # Clippy only
 ./scripts/dev/run-clippy.sh
 
-# Full CI suite
+# Full CI suite (containerized - recommended)
+./scripts/dev/test-in-container.sh test
+
+# Full CI suite (native)
 ./scripts/dev/run-ci-checks.sh --fix-format
+
+# Build in CI environment
+./scripts/dev/test-in-container.sh build
 ```
 
 ### Script Comparison
 
-| Script | Format | Clippy | Tests | Speed | Use Case |
-|--------|--------|--------|-------|-------|----------|
-| `pre-push.sh` | ✓ | ✓ | ✗ | Fast | Quick pre-push validation |
-| `run-ci-checks.sh` | ✓ | ✓ | ✓ | Slow | Complete CI validation |
-| `run-format.sh` | ✓ | ✗ | ✗ | Very Fast | Format-only check |
-| `run-clippy.sh` | ✗ | ✓ | ✗ | Fast | Clippy-only check |
+| Script | Format | Clippy | Tests | Speed | Environment | Use Case |
+|--------|--------|--------|-------|-------|-------------|----------|
+| `pre-push.sh` | ✓ | ✓ | ✗ | Fast | Native | Quick pre-push validation |
+| `test-in-container.sh test` | ✓ | ✓ | ✓ | Medium | Container | Complete CI validation (recommended) |
+| `run-ci-checks.sh` | ✓ | ✓ | ✓ | Slow | Native | Complete CI validation (alternative) |
+| `test-in-container.sh build` | ✗ | ✗ | ✗ | Medium | Container | Build in CI environment |
+| `run-format.sh` | ✓ | ✗ | ✗ | Very Fast | Native | Format-only check |
+| `run-clippy.sh` | ✗ | ✓ | ✗ | Fast | Native | Clippy-only check |
 
 ## Arch Linux Packaging
 
@@ -441,7 +497,7 @@ Migrates configuration files from TOML to YAML format for v0.2.0+ compatibility.
 1. Make your changes
 2. Use `./scripts/version/update-version.sh` to bump version and update changelog
 3. Review changes: `git diff`
-4. Test thoroughly: `./scripts/build/test-build-locally.sh`
+4. Test thoroughly: `./scripts/dev/test-in-container.sh test`
 5. Commit: `git add . && git commit -m "Bump version to X.Y.Z"`
 6. Tag: `git tag vX.Y.Z`
 7. Push: `git push && git push --tags`

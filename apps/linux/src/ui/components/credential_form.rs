@@ -746,7 +746,6 @@ mod tests {
         let _command = form.update(form_msg);
 
         // If we get here without panicking, the basic message flow is working
-        assert!(true);
     }
 
     #[test]
@@ -785,6 +784,5 @@ mod tests {
         let _command = form.update(copy_msg);
 
         // Basic test to ensure the message is processed
-        assert!(true);
     }
 }

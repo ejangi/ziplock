@@ -992,7 +992,7 @@ impl SettingsView {
 
         // Validate font size
         if let Ok(size) = self.font_size.parse::<f32>() {
-            if size < 8.0 || size > 24.0 {
+            if !(8.0..=24.0).contains(&size) {
                 let error = "Font size must be between 8.0 and 24.0 points".to_string();
                 info!("Validation error: {} (font_size={})", error, self.font_size);
                 self.validation_errors.push(error);
@@ -1047,7 +1047,7 @@ impl SettingsView {
 
         // Validate backup count
         if let Ok(count) = self.backup_count.parse::<u32>() {
-            if count < 1 || count > 50 {
+            if !(1..=50).contains(&count) {
                 let error = "Number of backups must be between 1 and 50".to_string();
                 info!(
                     "Validation error: {} (backup_count={})",
@@ -1066,7 +1066,7 @@ impl SettingsView {
 
         // Validate password requirements
         if let Ok(min_len) = self.min_password_length.parse::<usize>() {
-            if min_len < 1 || min_len > 256 {
+            if !(1..=256).contains(&min_len) {
                 let error = "Minimum password length must be between 1 and 256".to_string();
                 info!(
                     "Validation error: {} (min_password_length={})",

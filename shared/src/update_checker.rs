@@ -101,8 +101,7 @@ impl InstallationMethod {
                    sudo apt-get install -f",
                 version, version, version
             ),
-            InstallationMethod::ArchAUR => format!(
-                "To update ZipLock:\n\
+            InstallationMethod::ArchAUR => "To update ZipLock:\n\
                 1. Update via your AUR helper:\n\
                    yay -Syu ziplock\n\
                    # or\n\
@@ -110,8 +109,7 @@ impl InstallationMethod {
                 2. Or manually:\n\
                    git clone https://aur.archlinux.org/ziplock.git\n\
                    cd ziplock\n\
-                   makepkg -si"
-            ),
+                   makepkg -si".to_string(),
             InstallationMethod::Manual => format!(
                 "To update ZipLock:\n\
                 1. Download the latest source:\n\

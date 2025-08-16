@@ -15,148 +15,43 @@ env:
   RUST_BACKTRACE: 1
 
 jobs:
-  test:
-    name: Test Suite
+  test-and-build:
+    name: Test and Build
     runs-on: ubuntu-22.04
-    strategy:
-      matrix:
-        rust: [stable, beta]
 
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: ${{ matrix.rust }}
-          components: rustfmt, clippy
-
-      - name: Cache cargo registry
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-
-
-      - name: Install system dependencies
-        run: |
-          # Update package lists
-          sudo apt-get update
-
-          # Install base development dependencies
-          sudo apt-get install -y \
-            build-essential \
-            curl \
-            pkg-config \
-            libfontconfig1-dev \
-            libfreetype6-dev \
-            libx11-dev \
-            libxft-dev \
-            liblzma-dev
-
-          # Install GTK4 and related libraries (using Ubuntu 22.04 default versions)
-          sudo apt-get install -y \
-            libgtk-4-dev \
-            libgtk-4-1 \
-            libgtk-4-common \
-            libadwaita-1-dev \
-            libadwaita-1-0 \
-            libatk1.0-dev \
-            libatk-bridge2.0-dev \
-            libgtk-3-dev \
-            libgdk-pixbuf-2.0-dev \
-            libglib2.0-dev \
-            libcairo2-dev \
-            libpango1.0-dev \
-            gir1.2-gtk-4.0
-
-          # Ensure pkg-config database is updated
-          sudo ldconfig
-
-          # Verify GTK4 installation
-          echo "=== GTK4 Installation Verification ==="
-          if pkg-config --exists gtk4; then
-            echo "✓ GTK4 found via pkg-config"
-            echo "GTK4 version: $(pkg-config --modversion gtk4)"
-            echo "GTK4 prefix: $(pkg-config --variable=prefix gtk4)"
-            echo "GTK4 cflags: $(pkg-config --cflags gtk4)"
-            echo "GTK4 libs: $(pkg-config --libs gtk4)"
-
-            # Note: Ubuntu 22.04 provides GTK4 4.6.x which should be sufficient
-            GTK_VERSION=$(pkg-config --modversion gtk4)
-            echo "Using GTK4 version $GTK_VERSION from Ubuntu repositories"
-          else
-            echo "✗ GTK4 not found via pkg-config"
-            echo "Available GTK packages:"
-            dpkg -l | grep -i gtk
-            echo "PKG_CONFIG_PATH: $PKG_CONFIG_PATH"
-            ls -la /usr/lib/x86_64-linux-gnu/pkgconfig/gtk* || true
-            exit 1
-          fi
-          echo "==================================="
-
-      - name: Check formatting
-        run: cargo fmt --all -- --check
-
-      - name: Run clippy
-        run: |
-          # Run clippy on shared library (no GUI dependencies)
-          cargo clippy -p ziplock-shared --all-targets -- -D warnings -A clippy::uninlined-format-args -A unused-imports -A dead-code
-
-          # Run clippy on unified application with only iced-gui features (avoiding GTK)
-          cargo clippy -p ziplock-linux --no-default-features --features "iced-gui,wayland-support,file-dialog" --all-targets -- -D warnings -A clippy::uninlined-format-args -A unused-imports -A dead-code
-
-      - name: Run tests
-        run: |
-          # Run tests on shared library
-          cargo test --verbose -p ziplock-shared
-
-          # Run tests on unified application with only iced-gui features (avoiding GTK)
-          cargo test --verbose -p ziplock-linux --no-default-features --features "iced-gui,wayland-support,file-dialog"
-
-  security-audit:
-    name: Security Audit
-    runs-on: ubuntu-22.04
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
 
-      - name: Install cargo-audit
-        run: cargo install cargo-audit
+      - name: Cache cargo dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}-${{ hashFiles('**/*.rs') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}-
+            ${{ runner.os }}-cargo-
 
-      - name: Run security audit
-        run: cargo audit
+      - name: Install system dependencies
+        uses: actions/cache@v4
+        id: deps-cache
+        with:
+          path: /var/cache/apt
+          key: ${{ runner.os }}-deps-${{ hashFiles('.github/workflows/linux-build.yml') }}
 
-  build-linux:
-    name: Build Linux Packages
-    runs-on: ubuntu-22.04
-    needs: [test, security-audit]
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Create containerized build environment
+      - name: Install dependencies
+        if: steps.deps-cache.outputs.cache-hit != 'true'
         run: |
-          # Create Dockerfile for consistent build environment
-          cat > Dockerfile.build << 'EOF'
-          FROM ubuntu:22.04
-
-          # Prevent interactive prompts during package installation
-          ENV DEBIAN_FRONTEND=noninteractive
-          ENV TZ=UTC
-
-          # Install system dependencies
-          RUN apt-get update && apt-get install -y \
-            curl \
+          sudo apt-get update
+          sudo apt-get install -y \
             build-essential \
             pkg-config \
             libfontconfig1-dev \
@@ -170,762 +65,215 @@ jobs:
             libatk-bridge2.0-dev \
             libgtk-3-dev \
             libgdk-pixbuf-2.0-dev \
-            dpkg-dev \
-            fakeroot \
-            ca-certificates \
-            file \
-            binutils \
-            && rm -rf /var/lib/apt/lists/*
+            libglib2.0-dev \
+            libcairo2-dev \
+            libpango1.0-dev
 
-          # Install Rust
-          RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y \
-            --default-toolchain stable \
-            --target x86_64-unknown-linux-gnu
-          ENV PATH="/root/.cargo/bin:${PATH}"
-
-          # Verify Rust installation immediately
-          RUN /root/.cargo/bin/rustc --version && /root/.cargo/bin/cargo --version
-
-          # Verify environment
-          RUN echo "=== Build Container Environment ===" && \
-            echo "OS Release:" && cat /etc/os-release && \
-            echo "glibc version:" && (ldd --version 2>/dev/null || echo "ldd not available") && \
-            echo "PATH: $PATH" && \
-            echo "Rust version:" && /root/.cargo/bin/rustc --version && \
-            echo "Cargo version:" && /root/.cargo/bin/cargo --version && \
-            echo "=================================="
-
-          # Create cargo cache directory
-          RUN mkdir -p /root/.cargo
-
-          WORKDIR /workspace
-          EOF
-
-      - name: Build Docker image
+      - name: Verify GTK4 installation
         run: |
-          docker build -f Dockerfile.build -t ziplock-builder .
-
-      - name: Cache cargo dependencies
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-cargo-ubuntu-22.04-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-ubuntu-22.04-
-
-      - name: Build binaries in container
-        run: |
-          docker run --rm \
-            -v $PWD:/workspace \
-            -v ~/.cargo:/root/.cargo \
-            -e TARGET_ARCH=x86_64-unknown-linux-gnu \
-            -e CARGO_TARGET_DIR=/workspace/target \
-            -e RUSTFLAGS="-C target-cpu=x86-64" \
-            ziplock-builder bash -c "
-              # Use safer error handling - avoid pipefail with head/tail commands
-              set -euo
-              trap 'echo \"ERROR: Build failed at line \$LINENO. Exit code: \$?\"' ERR
-
-              echo 'Starting containerized build process...'
-
-              # Set permissions
-              chmod +x scripts/build/build-linux.sh
-              chmod +x scripts/build/package-deb.sh
-
-              # Verify Rust environment
-              echo 'Container Rust environment:'
-              rustc --version
-              cargo --version
-
-              echo 'Target glibc version in container:'
-              glibc_version=\$(ldd --version 2>/dev/null | sed -n '1p') || glibc_version='unknown'
-              echo \"\$glibc_version\"
-
-              echo 'Running build script...'
-              # Build with container environment
-              if ./scripts/build/build-linux.sh \
-                --target x86_64-unknown-linux-gnu \
-                --profile release; then
-                echo 'Build script completed successfully'
-              else
-                echo 'ERROR: Build script failed'
-                echo 'Checking what was built:'
-                find /workspace/target -name 'libziplock*' -type f 2>/dev/null || echo 'No libziplock files found'
-                exit 1
-              fi
-
-              echo 'Build script completed, verifying outputs...'
-
-              # Debug: Check cargo environment variables
-              echo 'Debug: Container environment verification...'
-              echo 'CARGO_TARGET_DIR:' \"\$CARGO_TARGET_DIR\"
-              echo 'PATH:' \"\$PATH\"
-              echo 'Current directory:' \$(pwd)
-              echo 'Cargo version:' \$(/root/.cargo/bin/cargo --version)
-              echo 'Rustc version:' \$(/root/.cargo/bin/rustc --version)
-
-              # Debug: Explicitly verify shared library build command
-              echo 'Debug: Manually verifying shared library build...'
-              /root/.cargo/bin/cargo build --profile release --target x86_64-unknown-linux-gnu -p ziplock-shared --features c-api --verbose
-
-              # Debug: Check if shared library exists after explicit build
-              if [ -f '/workspace/target/x86_64-unknown-linux-gnu/release/libziplock_shared.so' ]; then
-                echo 'Shared library confirmed after explicit build'
-                ls -la /workspace/target/x86_64-unknown-linux-gnu/release/libziplock_shared.so
-              else
-                echo 'ERROR: Shared library still missing after explicit build'
-                echo 'Available files in release directory:'
-                ls -la /workspace/target/x86_64-unknown-linux-gnu/release/ || echo 'Release directory not found'
-                echo 'Checking if target directory structure exists:'
-                find /workspace/target -name 'libziplock*' -type f 2>/dev/null || echo 'No libziplock files found anywhere'
-                exit 1
-              fi
-
-              # Debug: Verify shared library was actually built during build script
-              echo 'Debug: Checking if shared library build step succeeded...'
-              if [ -f '/workspace/target/x86_64-unknown-linux-gnu/release/libziplock_shared.so' ]; then
-                echo 'Shared library binary exists after build script'
-                file '/workspace/target/x86_64-unknown-linux-gnu/release/libziplock_shared.so'
-              else
-                echo 'ERROR: Shared library binary missing after build script'
-                echo 'Available release binaries:'
-                ls -la /workspace/target/x86_64-unknown-linux-gnu/release/ | grep -E '(ziplock|lib.*\.so)' || echo 'No relevant binaries found'
-                exit 1
-              fi
-
-              # Verify built binaries exist
-              echo 'Verifying built binaries:'
-              app_path='/workspace/target/x86_64-unknown-linux-gnu/release/ziplock'
-              shared_lib_path='/workspace/target/x86_64-unknown-linux-gnu/release/libziplock_shared.so'
-
-              if [ -f \"\$app_path\" ]; then
-                echo 'ZipLock application binary found:'
-                file \"\$app_path\"
-                echo 'Application binary dependencies (first 5):'
-                app_deps=\$(ldd \"\$app_path\" 2>/dev/null | sed -n '1,5p') || app_deps='dependency check failed'
-                echo \"\$app_deps\"
-              else
-                echo 'ERROR: ZipLock application binary not found at:' \"\$app_path\"
-                echo 'Available files in target directory:'
-                find /workspace/target -name 'ziplock*' -type f || echo 'No ziplock files found'
-                exit 1
-              fi
-
-              if [ -f \"\$shared_lib_path\" ]; then
-                echo 'Shared library found:'
-                file \"\$shared_lib_path\"
-                echo 'Shared library dependencies (first 5):'
-                lib_deps=\$(ldd \"\$shared_lib_path\" 2>/dev/null | sed -n '1,5p') || lib_deps='dependency check failed'
-                echo \"\$lib_deps\"
-              else
-                echo 'ERROR: Shared library not found at:' \"\$shared_lib_path\"
-                echo 'Available files in target directory:'
-                find /workspace/target -name 'libziplock*' -type f || echo 'No shared library files found'
-                echo 'Debug: Checking all .so files in target:'
-                find /workspace/target -name '*.so' -type f | head -10 || echo 'No .so files found'
-                echo 'Debug: Checking build script execution:'
-                ls -la /workspace/scripts/build/build-linux.sh || echo 'Build script not found'
-                exit 1
-              fi
-
-              echo 'Build completed successfully'
-            "
-
-      - name: Fix cargo cache permissions after build
-        run: |
-          # Fix ownership of cargo cache files created by Docker container
-          # The container runs as root, but the runner needs to access these files for caching
-          echo "Fixing permissions for cargo cache and target directories..."
-          if [ -d ~/.cargo/registry ]; then
-            sudo chown -R $USER:$USER ~/.cargo/registry || true
-            echo "Fixed ~/.cargo/registry permissions"
-          fi
-          if [ -d ~/.cargo/git ]; then
-            sudo chown -R $USER:$USER ~/.cargo/git || true
-            echo "Fixed ~/.cargo/git permissions"
-          fi
-          if [ -d target ]; then
-            sudo chown -R $USER:$USER target || true
-            echo "Fixed target directory permissions"
-          fi
-
-      - name: Create Debian package in container
-        run: |
-          # Clean up old package files first
-          echo "Cleaning up old package files..."
-          rm -f target/ziplock_*.deb || true
-
-          docker run --rm \
-            -v $PWD:/workspace \
-            -e PACKAGE_ARCH=amd64 \
-            ziplock-builder bash -c "
-              set -euo pipefail
-              trap 'echo \"ERROR: Packaging failed at line \$LINENO. Exit code: \$?\"' ERR
-
-              # Clean up any old packages in container as well
-              rm -f /workspace/target/ziplock_*.deb || true
-
-              # Verify installation structure exists
-              if [ ! -d '/workspace/target/install' ]; then
-                echo 'ERROR: Installation structure not found'
-                echo 'Available directories in target:'
-                ls -la /workspace/target/ || echo 'Target directory not found'
-                exit 1
-              fi
-
-              # Debug: Check if shared library exists before packaging
-              echo 'DEBUG: Checking shared library before packaging:'
-              if [ -f '/workspace/target/install/usr/lib/libziplock_shared.so' ]; then
-                echo 'Shared library found in install directory'
-                ls -la /workspace/target/install/usr/lib/libziplock_shared.so
-              else
-                echo 'ERROR: Shared library missing from install directory'
-                echo 'Contents of install/usr/lib:'
-                ls -la /workspace/target/install/usr/lib/ || echo 'usr/lib directory not found'
-                echo 'All files in install directory:'
-                find /workspace/target/install -type f | head -10 || echo 'Install directory empty'
-                exit 1
-              fi
-
-              # Debug: Show install directory contents before packaging
-              echo 'DEBUG: Install directory structure before packaging:'
-              find /workspace/target/install -type f | head -20
-              echo 'DEBUG: Contents of usr/lib in install directory:'
-              ls -la /workspace/target/install/usr/lib/ || echo 'usr/lib directory not found'
-              echo 'DEBUG: Checking for shared library in install directory:'
-              if [ -f '/workspace/target/install/usr/lib/libziplock_shared.so' ]; then
-                echo 'Shared library found in install directory:'
-                ls -la /workspace/target/install/usr/lib/libziplock_shared.so
-                file /workspace/target/install/usr/lib/libziplock_shared.so
-              else
-                echo 'ERROR: Shared library NOT found in install directory'
-                echo 'Available files in install directory:'
-                find /workspace/target/install -name '*ziplock*' -type f || echo 'No ziplock files found'
-              fi
-
-              echo 'Creating Debian package...'
-              if ./scripts/build/package-deb.sh --arch amd64; then
-                echo 'Package creation completed'
-              else
-                echo 'ERROR: Package creation failed'
-                echo 'Available files in target:'
-                ls -la /workspace/target/ || echo 'Target directory not accessible'
-                exit 1
-              fi
-
-              # Verify package was created
-              package_file=\$(ls /workspace/target/ziplock_*_amd64.deb 2>/dev/null) || package_file=''
-              if [ -z \"\$package_file\" ]; then
-                echo 'ERROR: Debian package was not created'
-                echo 'Available files in target:'
-                ls -la /workspace/target/
-                exit 1
-              fi
-
-              echo 'Package created successfully:'
-              ls -la /workspace/target/*.deb
-
-              # Debug: Verify package contents immediately after creation
-              echo 'DEBUG: Verifying package contents immediately:'
-              dpkg-deb --contents \"\$package_file\" | grep 'usr/lib/' || echo 'No usr/lib files found in package'
-              dpkg-deb --contents \"\$package_file\" | grep 'libziplock_shared.so' || echo 'libziplock_shared.so not found in package'
-
-              # Debug: Verify installation structure before packaging
-              echo 'Debug: Installation structure verification:'
-              if [ -d '/workspace/target/install' ]; then
-                echo 'Install directory exists'
-                echo 'Install directory structure:'
-                find /workspace/target/install -type f | head -20
-                if [ -f '/workspace/target/install/usr/lib/libziplock_shared.so' ]; then
-                  echo 'Shared library found in install directory:'
-                  ls -la /workspace/target/install/usr/lib/libziplock_shared.so
-                else
-                  echo 'ERROR: Shared library NOT found in install directory'
-                  echo 'Contents of usr/lib:'
-                  ls -la /workspace/target/install/usr/lib/ || echo 'usr/lib directory not found'
-                fi
-              else
-                echo 'ERROR: Install directory not found'
-              fi
-            "
-
-      - name: Fix permissions after packaging
-        run: |
-          # Fix ownership of all files created by Docker container
-          # The container runs as root, but the runner needs to access these files for caching
-          echo "Fixing permissions after packaging..."
-          if [ -d ~/.cargo/registry ]; then
-            sudo chown -R $USER:$USER ~/.cargo/registry || true
-            echo "Fixed ~/.cargo/registry permissions"
-          fi
-          if [ -d ~/.cargo/git ]; then
-            sudo chown -R $USER:$USER ~/.cargo/git || true
-            echo "Fixed ~/.cargo/git permissions"
-          fi
-          if [ -d target ]; then
-            sudo chown -R $USER:$USER target || true
-            echo "Fixed target directory permissions"
-          fi
-
-      - name: Test package installation
-        run: |
-          # Test package in clean Ubuntu 22.04 container
-          echo "Testing package installation in Ubuntu 22.04..."
-          docker run --rm -v $PWD:/workspace ubuntu:22.04 bash -c "
-            set -eu
-            cd /workspace
-            export DEBIAN_FRONTEND=noninteractive
-
-            # Update package lists
-            apt-get update
-
-            # Check glibc version in test container
-            echo 'Test container glibc version:'
-            ldd --version 2>/dev/null | head -1 || echo 'glibc version check failed'
-
-            # Install the package (this will automatically install dependencies)
-            echo 'Installing ZipLock package...'
-            apt-get install -y ./target/ziplock_*_amd64.deb
-
-            # Verify installation
-            echo 'Verifying installation...'
-            dpkg -l | grep ziplock || echo 'no ziplock packages found'
-
-            # Test binaries exist and are executable
-            echo 'Testing binary existence...'
-            test -x /usr/bin/ziplock || (echo 'ZipLock application binary not found or not executable' && exit 1)
-            test -f /usr/lib/libziplock_shared.so || (echo 'Shared library not found' && exit 1)
-
-            # Check binary dependencies
-            echo 'Checking binary dependencies...'
-            ldd /usr/bin/ziplock && echo 'Application: dependencies resolved'
-            ldd /usr/lib/libziplock_shared.so && echo 'Shared library: dependencies resolved'
-
-            # Test basic functionality (GUI app, skip version check as it requires display)
-            echo 'Testing basic functionality...'
-            echo 'ZipLock is a GUI application - skipping version check (requires display)'
-
-            # Test frontend version (in non-GUI mode)
-            /usr/bin/ziplock --version || echo 'Frontend version check: OK (may require display)'
-
-            echo 'Package installation test completed successfully!'
-          " || {
-            echo "Package installation test failed!"
-            echo "Checking package contents for debugging:"
-            docker run --rm -v $PWD:/workspace ubuntu:22.04 bash -c "
-              cd /workspace
-              apt-get update > /dev/null 2>&1
-              dpkg --info ./target/ziplock_*_amd64.deb
-              echo 'Package file listing:'
-              dpkg --contents ./target/ziplock_*_amd64.deb 2>/dev/null | head -20 || echo 'package listing failed'
-            "
-            exit 1
-          }
-
-      - name: Analyze binary dependencies
-        run: |
-          echo "=== Binary Dependency Analysis ==="
-          echo "Build environment glibc version:"
-          glibc_version=$(docker run --rm ziplock-builder bash -c "ldd --version 2>/dev/null | sed -n '1p'") || glibc_version='glibc version check failed'
-          echo "$glibc_version"
-          echo ""
-          echo "Application binary glibc requirements:"
-          app_glibc=$(objdump -T target/x86_64-unknown-linux-gnu/release/ziplock 2>/dev/null | grep GLIBC | sort -V | tail -5) || app_glibc="No GLIBC symbols found"
-          echo "$app_glibc"
-          echo ""
-          echo "Shared library glibc requirements:"
-          lib_glibc=$(objdump -T target/x86_64-unknown-linux-gnu/release/libziplock_shared.so 2>/dev/null | grep GLIBC | sort -V | tail -5) || lib_glibc="No GLIBC symbols found"
-          echo "$lib_glibc"
-          echo ""
-          echo "Maximum glibc version required:"
-          echo "Application:"
-          app_version=$(readelf -V target/x86_64-unknown-linux-gnu/release/ziplock 2>/dev/null | grep GLIBC | sort -V | sed -n '$p') || app_version="No version info"
-          echo "$app_version"
-          echo "Shared Library:"
-          lib_version=$(readelf -V target/x86_64-unknown-linux-gnu/release/libziplock_shared.so 2>/dev/null | grep GLIBC | sort -V | sed -n '$p') || lib_version="No version info"
-          echo "$lib_version"
-          echo "================================="
-
-      - name: Comprehensive package validation
-        run: |
-          echo "=== Comprehensive Package Validation ==="
-
-          # Debug: Show build context first
-          echo "DEBUG: Current directory contents:"
-          ls -la target/ | head -10
-          echo "DEBUG: Looking for .deb files:"
-          find target/ -name "*.deb" -type f 2>/dev/null || echo "No .deb files found"
-          echo "DEBUG: Install directory status:"
-          ls -la target/install/usr/lib/ 2>/dev/null || echo "Install directory not accessible"
-
-          # Check package file exists and has reasonable size
-          # Get the most recently created package file
-          PACKAGE_FILE=$(ls -t target/ziplock_*_amd64.deb 2>/dev/null | head -n1) || PACKAGE_FILE=""
-
-          if [ -z "$PACKAGE_FILE" ] || [ ! -f "$PACKAGE_FILE" ]; then
-            echo "ERROR: No package file found"
-            echo "DEBUG: Available files in target directory:"
-            ls -la target/
+          if pkg-config --exists gtk4; then
+            echo "✓ GTK4 found - version: $(pkg-config --modversion gtk4)"
+          else
+            echo "✗ GTK4 not found"
             exit 1
           fi
 
-          echo "DEBUG: Using package file: $PACKAGE_FILE"
-          echo "DEBUG: Package file details:"
-          ls -la "$PACKAGE_FILE"
-          echo "DEBUG: Package creation time verification:"
-          stat "$PACKAGE_FILE" | grep -E "(Modify|Birth)" || echo "Could not get file timestamps"
-          echo "DEBUG: Current time for reference:"
-          date
-          PACKAGE_SIZE=$(stat -c%s "$PACKAGE_FILE")
-          echo "Package size: $PACKAGE_SIZE bytes"
-          if [ "$PACKAGE_SIZE" -lt 1000000 ]; then  # Less than 1MB
-            echo "WARNING: Package seems too small"
-          fi
+      - name: Check formatting
+        run: cargo fmt --all -- --check
 
-          # Validate package structure
-          echo "Validating package structure..."
-
-          # Debug: Show complete package contents first
-          echo "DEBUG: Complete package contents:"
-          dpkg-deb --contents "$PACKAGE_FILE" 2>/dev/null | head -20
-          echo "DEBUG: All library files in package:"
-          dpkg-deb --contents "$PACKAGE_FILE" 2>/dev/null | grep "lib" | head -10
-          echo "DEBUG: Searching for any .so files:"
-          dpkg-deb --contents "$PACKAGE_FILE" 2>/dev/null | grep "\.so" | head -10
-
-          # Use safer approach to avoid SIGPIPE errors
-          set +e  # Temporarily disable exit on error for pipe operations
-
-          app_found=$(dpkg-deb --contents "$PACKAGE_FILE" 2>/dev/null | grep "usr/bin/ziplock" | wc -l)
-          if [ "$app_found" -eq 0 ]; then
-            echo "ERROR: ZipLock application binary not found in package"
-            echo "DEBUG: Looking for any ziplock files:"
-            dpkg-deb --contents "$PACKAGE_FILE" 2>/dev/null | grep "ziplock"
-            exit 1
-          fi
-
-          lib_found=$(dpkg-deb --contents "$PACKAGE_FILE" 2>/dev/null | grep "usr/lib/libziplock_shared.so" | wc -l)
-          if [ "$lib_found" -eq 0 ]; then
-            echo "ERROR: Shared library not found in package"
-            echo "DEBUG: Contents of usr/lib directory in package:"
-            dpkg-deb --contents "$PACKAGE_FILE" 2>/dev/null | grep "usr/lib/"
-            echo "DEBUG: All files with 'ziplock' in name:"
-            dpkg-deb --contents "$PACKAGE_FILE" 2>/dev/null | grep "ziplock"
-            exit 1
-          fi
-
-          desktop_found=$(dpkg-deb --contents "$PACKAGE_FILE" 2>/dev/null | grep "usr/share/applications/ziplock.desktop" | wc -l)
-          if [ "$desktop_found" -eq 0 ]; then
-            echo "WARNING: Desktop file not found in package"
-          fi
-
-          set -e  # Re-enable exit on error
-
-          # Check package metadata
-          echo "Package control information:"
-          package_info=$(dpkg-deb --info "$PACKAGE_FILE" 2>/dev/null | grep -E "(Package|Version|Architecture|Depends)") || package_info="metadata check failed"
-          echo "$package_info"
-
-          # Verify binary architecture
-          echo "Verifying binary architecture..."
-          docker run --rm -v $PWD:/workspace ubuntu:22.04 bash -c "
-            set -euo
-            cd /workspace
-            apt-get update -qq && apt-get install -y -qq file > /dev/null 2>&1
-            dpkg --add-architecture amd64
-            PACKAGE_FILE=\$(ls ./target/ziplock_*_amd64.deb | head -n1)
-            dpkg-deb --extract \"\$PACKAGE_FILE\" /tmp/extract
-
-            # Check application binary architecture
-            app_arch=\$(file /tmp/extract/usr/bin/ziplock 2>/dev/null | grep 'x86-64') || app_arch=''
-            if [ -z \"\$app_arch\" ]; then
-              echo 'ERROR: Application binary is not x86-64'
-              exit 1
-            fi
-
-            # Check shared library architecture
-            lib_arch=\$(file /tmp/extract/usr/lib/libziplock_shared.so 2>/dev/null | grep 'x86-64') || lib_arch=''
-            if [ -z \"\$lib_arch\" ]; then
-              echo 'ERROR: Shared library is not x86-64'
-              exit 1
-            fi
-
-            echo 'Binary architecture validation: PASSED'
-          "
-
-          # Debug: Show actual package contents for shared library
-          echo "Debug: Searching for shared library in package contents..."
-          package_contents_lib=$(dpkg-deb --contents "$PACKAGE_FILE" 2>/dev/null | grep "lib.*\.so" | head -10) || package_contents_lib="No .so files found"
-          echo "Shared library files in package:"
-          echo "$package_contents_lib"
-
-          # Debug: Show exact search pattern
-          echo "Debug: Exact search for libziplock_shared.so:"
-          dpkg-deb --contents "$PACKAGE_FILE" 2>/dev/null | grep "libziplock_shared.so" || echo "libziplock_shared.so not found in package"
-
-          echo "Package validation completed successfully!"
-
-      - name: Generate build report
+      - name: Run clippy
         run: |
-          echo "=== ZipLock Build Report ===" > build-report.txt
-          echo "Build Date: $(date)" >> build-report.txt
-          echo "Commit: ${{ github.sha }}" >> build-report.txt
-          echo "Branch: ${{ github.ref_name }}" >> build-report.txt
-          echo "" >> build-report.txt
+          cargo clippy -p ziplock-shared --all-targets -- -D warnings -A clippy::uninlined-format-args -A unused-imports -A dead-code
+          cargo clippy -p ziplock-linux --no-default-features --features "iced-gui,wayland-support,file-dialog" --all-targets -- -D warnings -A clippy::uninlined-format-args -A unused-imports -A dead-code
 
-          echo "=== Build Environment ===" >> build-report.txt
-          docker run --rm ziplock-builder bash -c "
-            os_info=\$(cat /etc/os-release | grep PRETTY_NAME | cut -d= -f2 | tr -d \\\")
-            glibc_info=\$(ldd --version 2>/dev/null | sed -n '1p') || glibc_info='unknown'
-            rust_info=\$(rustc --version)
-            gcc_info=\$(gcc --version 2>/dev/null | sed -n '1p') || gcc_info='unknown'
-            echo \"OS: \$os_info\"
-            echo \"glibc: \$glibc_info\"
-            echo \"Rust: \$rust_info\"
-            echo \"GCC: \$gcc_info\"
-          " >> build-report.txt
-          echo "" >> build-report.txt
-
-          echo "=== Package Information ===" >> build-report.txt
-          PACKAGE_FILE=$(ls target/ziplock_*_amd64.deb | sed -n '1p')
-          echo "File: $(basename $PACKAGE_FILE)" >> build-report.txt
-          echo "Size: $(du -h $PACKAGE_FILE | cut -f1)" >> build-report.txt
-          dpkg-deb --info "$PACKAGE_FILE" | grep -E "(Package|Version|Architecture|Depends|Description)" >> build-report.txt
-          echo "" >> build-report.txt
-
-          echo "=== Binary Analysis ===" >> build-report.txt
-          echo "Application binary size: $(du -h target/x86_64-unknown-linux-gnu/release/ziplock | cut -f1)" >> build-report.txt
-          echo "Shared library size: $(du -h target/x86_64-unknown-linux-gnu/release/libziplock_shared.so | cut -f1)" >> build-report.txt
-          echo "Max glibc version required:" >> build-report.txt
-          max_glibc=$(objdump -T target/x86_64-unknown-linux-gnu/release/ziplock 2>/dev/null | grep GLIBC | sort -V | sed -n '$p') || max_glibc="No GLIBC info available"
-          echo "$max_glibc" >> build-report.txt
-          echo "" >> build-report.txt
-
-          echo "=== Test Results ===" >> build-report.txt
-          echo "Package installation: PASSED" >> build-report.txt
-          echo "Binary dependencies: RESOLVED" >> build-report.txt
-          echo "Architecture validation: PASSED" >> build-report.txt
-          echo "=========================" >> build-report.txt
-
-          echo "Build report generated:"
-          cat build-report.txt
-
-      - name: Upload build report
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-report
-          path: build-report.txt
-          retention-days: 30
-
-      - name: Cleanup build artifacts
+      - name: Run tests
         run: |
-          # Remove temporary build files
-          rm -f Dockerfile.build
-          docker rmi ziplock-builder || true
+          cargo test --verbose -p ziplock-shared
+          cargo test --verbose -p ziplock-linux --no-default-features --features "iced-gui,wayland-support,file-dialog"
+
+      - name: Build all binaries
+        run: |
+          echo "Building shared library..."
+          cargo build --release --target x86_64-unknown-linux-gnu -p ziplock-shared --features c-api
+
+          echo "Building unified application..."
+          cargo build --release --target x86_64-unknown-linux-gnu -p ziplock-linux --no-default-features --features "iced-gui,wayland-support,file-dialog"
+
+          echo "Verifying built binaries..."
+          ls -la target/x86_64-unknown-linux-gnu/release/ziplock
+          ls -la target/x86_64-unknown-linux-gnu/release/libziplock_shared.so
+
+          echo "Binary dependencies check..."
+          ldd target/x86_64-unknown-linux-gnu/release/ziplock | head -5
+          ldd target/x86_64-unknown-linux-gnu/release/libziplock_shared.so | head -5
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: ziplock-linux-amd64
+          name: compiled-binaries
           path: |
-            target/ziplock_*_amd64.deb
             target/x86_64-unknown-linux-gnu/release/ziplock
             target/x86_64-unknown-linux-gnu/release/libziplock_shared.so
-          retention-days: 30
+          retention-days: 7
 
-  build-arch:
-    name: Build Arch Linux Package
+  security-audit:
+    name: Security Audit
     runs-on: ubuntu-22.04
-    needs: [test, security-audit]
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Create Arch build environment
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo-audit
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/cargo-audit
+          key: cargo-audit-${{ runner.os }}
+
+      - name: Install cargo-audit
         run: |
-          # Create Dockerfile for Arch Linux build environment
-          cat > Dockerfile.arch << 'EOF'
-          FROM archlinux:latest
+          if ! command -v cargo-audit &> /dev/null; then
+            cargo install cargo-audit
+          fi
 
-          # Update system and install dependencies
-          RUN pacman -Syu --noconfirm && \
-              pacman -S --noconfirm \
-                base-devel \
-                rust \
-                cargo \
-                pkg-config \
-                git \
-                curl \
-                wget \
-                file \
-                fakeroot \
-                openssl \
-                xz \
-                rsync \
-                fontconfig \
-                freetype2 \
-                libx11 \
-                libxft \
-                glib2 \
-                cairo \
-                pango \
-                gdk-pixbuf2 \
-                atk \
-                at-spi2-core \
-                at-spi2-atk \
-                gtk3 \
-                gtk4 \
-                libadwaita \
-                libappindicator-gtk3 \
-                librsvg \
-                webkit2gtk-4.1 \
-                && pacman -Scc --noconfirm
+      - name: Run security audit
+        run: cargo audit
 
-          # Create non-root user for makepkg (required)
-          RUN useradd -m -G wheel builder && \
-              echo '%wheel ALL=(ALL) NOPASSWD: ALL' >> /etc/sudoers
+  package-debian:
+    name: Create Debian Package
+    runs-on: ubuntu-22.04
+    needs: [test-and-build, security-audit]
 
-          # Set up Rust environment
-          USER builder
-          WORKDIR /home/builder
-          ENV PATH="/home/builder/.cargo/bin:${PATH}"
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-          # Verify environment
-          RUN echo "=== Arch Build Environment ===" && \
-              echo "OS Release:" && cat /etc/os-release && \
-              echo "Rust version:" && rustc --version && \
-              echo "Cargo version:" && cargo --version && \
-              echo "=================================="
-          EOF
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: compiled-binaries
+          path: target/x86_64-unknown-linux-gnu/release/
 
-      - name: Build Arch Docker image
+      - name: Make binaries executable
         run: |
-          docker build -f Dockerfile.arch -t ziplock-arch-builder .
+          chmod +x target/x86_64-unknown-linux-gnu/release/ziplock
+          ls -la target/x86_64-unknown-linux-gnu/release/
 
-      - name: Build binaries in Arch container
+      - name: Create Debian package
         run: |
+          echo "Creating Debian package from pre-built binaries..."
           docker run --rm \
             -v $PWD:/workspace \
-            -e TARGET_ARCH=x86_64-unknown-linux-gnu \
-            -e CARGO_TARGET_DIR=/workspace/target \
-            -e RUSTFLAGS="-C target-cpu=x86-64" \
-            ziplock-arch-builder bash -c "
-              set -euo pipefail
-
-              # Fix workspace permissions for builder user
-              sudo chown -R builder:builder /workspace
+            ghcr.io/${{ github.repository }}/ubuntu-builder:latest \
+            bash -c "
               cd /workspace
-
-              echo 'Building ZipLock for Arch Linux...'
-              echo 'Workspace contents:'
-              ls -la
-
-              # Build the project
-              export RUST_BACKTRACE=1
-              cargo build --release --workspace --locked
-
-              echo 'Build completed. Binaries:'
-              ls -la target/release/ziplock* || echo 'No binaries found in target/release/'
-
-              # Create installation structure
-              ./scripts/build/build-linux.sh --profile release
+              chmod +x scripts/build/package-deb.sh
+              ./scripts/build/package-deb.sh --arch amd64
             "
 
-      - name: Create Arch package
+      - name: Test package installation
         run: |
+          echo "Testing package installation in clean environment..."
           docker run --rm \
             -v $PWD:/workspace \
-            ziplock-arch-builder bash -c "
-              set -euo pipefail
-
-              # Fix workspace permissions for builder user
-              sudo chown -R builder:builder /workspace
+            ubuntu:22.04 \
+            bash -c "
               cd /workspace
-
-              echo 'Creating Arch Linux package...'
-
-              # Create source archive for packaging
-              ./scripts/build/package-arch.sh --source-only
-
-              # Verify source archive was created
-              archive_file=\$(ls target/ziplock-*.tar.gz 2>/dev/null | head -n1) || archive_file=''
-              if [ -z \"\$archive_file\" ]; then
-                echo 'ERROR: Source archive was not created'
-                exit 1
-              fi
-
-              echo 'Source archive created successfully:'
-              ls -la target/ziplock-*.tar.gz
-              echo 'SHA256:' \$(cat target/archive.sha256)
+              apt-get update -qq
+              apt-get install -y ./target/ziplock_*_amd64.deb
+              dpkg -l | grep ziplock
+              test -x /usr/bin/ziplock
+              test -f /usr/lib/libziplock_shared.so
+              echo 'Package installation test: PASSED'
             "
 
-      - name: Fix permissions after Arch packaging
-        run: |
-          # Fix ownership of all files created by Docker container
-          # The container runs as builder user, but the runner needs to access these files
-          echo "Fixing permissions after Arch packaging..."
-          if [ -d ~/.cargo/registry ]; then
-            sudo chown -R $USER:$USER ~/.cargo/registry || true
-            echo "Fixed ~/.cargo/registry permissions"
-          fi
-          if [ -d ~/.cargo/git ]; then
-            sudo chown -R $USER:$USER ~/.cargo/git || true
-            echo "Fixed ~/.cargo/git permissions"
-          fi
-          if [ -d target ]; then
-            sudo chown -R $USER:$USER target || true
-            echo "Fixed target directory permissions"
-          fi
-          if [ -d packaging ]; then
-            sudo chown -R $USER:$USER packaging || true
-            echo "Fixed packaging directory permissions"
-          fi
-          # Fix git directory permissions to allow cleanup
-          if [ -d .git ]; then
-            sudo chown -R $USER:$USER .git || true
-            echo "Fixed .git directory permissions"
-          fi
-
-      - name: Test Arch package structure
-        run: |
-          echo "Verifying Arch package files..."
-
-          # Check if required files exist
-          if [ ! -f packaging/arch/PKGBUILD ]; then
-            echo "ERROR: PKGBUILD not found"
-            exit 1
-          fi
-
-          if [ ! -f packaging/arch/ziplock.install ]; then
-            echo "ERROR: ziplock.install not found"
-            exit 1
-          fi
-
-          echo "PKGBUILD contents:"
-          head -20 packaging/arch/PKGBUILD
-
-          echo "Source archive info:"
-          ls -la target/ziplock-*.tar.gz || echo "No source archive found"
-
-      - name: Upload Arch artifacts
+      - name: Upload Debian package
         uses: actions/upload-artifact@v4
         with:
-          name: ziplock-arch-package
+          name: debian-package
+          path: target/ziplock_*_amd64.deb
+          retention-days: 30
+
+  package-arch:
+    name: Create Arch Linux Package
+    runs-on: ubuntu-22.04
+    needs: [test-and-build, security-audit]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: compiled-binaries
+          path: target/x86_64-unknown-linux-gnu/release/
+
+      - name: Create Arch package structure
+        run: |
+          echo "Creating Arch source package from pre-built binaries..."
+          docker run --rm \
+            -v $PWD:/workspace \
+            ghcr.io/${{ github.repository }}/arch-builder:latest \
+            bash -c "
+              sudo chown -R builder:builder /workspace
+              cd /workspace
+              chmod +x scripts/build/package-arch.sh
+              ./scripts/build/package-arch.sh --source-only
+            "
+
+      - name: Upload Arch package
+        uses: actions/upload-artifact@v4
+        with:
+          name: arch-package
           path: |
             target/ziplock-*.tar.gz
-            target/archive.sha256
             packaging/arch/PKGBUILD
-            packaging/arch/ziplock.install
+            packaging/arch/.SRCINFO
+          retention-days: 30
+
+  benchmark:
+    name: Performance Benchmarks
+    runs-on: ubuntu-22.04
+    needs: [test-and-build]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: compiled-binaries
+          path: target/x86_64-unknown-linux-gnu/release/
+
+      - name: Run benchmarks
+        run: |
+          # Run any performance benchmarks (if they exist)
+          cargo bench --workspace || echo "No benchmarks found"
+
+          # Measure binary sizes from pre-built artifacts
+          echo "## Binary Sizes" > benchmark-results.md
+          echo "| Binary | Size |" >> benchmark-results.md
+          echo "|--------|------|" >> benchmark-results.md
+          echo "| ziplock | $(du -h target/x86_64-unknown-linux-gnu/release/ziplock | cut -f1) |" >> benchmark-results.md
+          echo "| libziplock_shared.so | $(du -h target/x86_64-unknown-linux-gnu/release/libziplock_shared.so | cut -f1) |" >> benchmark-results.md
+
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results
+          path: benchmark-results.md
           retention-days: 30
 
   release:
     name: Create Release
     runs-on: ubuntu-22.04
-    needs: [build-linux, build-arch]
+    needs: [package-debian, package-arch]
     if: startsWith(github.ref, 'refs/tags/v')
 
     steps:
@@ -941,20 +289,23 @@ jobs:
         run: |
           mkdir -p release-assets
 
-          # Copy .deb packages
-          find artifacts -name "*.deb" -exec cp {} release-assets/ \;
+          # Copy Debian package
+          cp artifacts/debian-package/*.deb release-assets/
 
-          # Copy Arch packages
-          find artifacts -name "ziplock-*.tar.gz" -exec cp {} release-assets/ \;
-          find artifacts -name "PKGBUILD" -exec cp {} release-assets/ \;
-          find artifacts -name "ziplock.install" -exec cp {} release-assets/ \;
+          # Copy Arch package files
+          cp artifacts/arch-package/*.tar.gz release-assets/
+          cp artifacts/arch-package/PKGBUILD release-assets/
 
-          # Create checksums
+          # Copy compiled binaries
+          mkdir -p release-assets/binaries
+          cp artifacts/compiled-binaries/* release-assets/binaries/
+
+          # Create tarball of binaries
           cd release-assets
-          sha256sum *.deb *.tar.gz > SHA256SUMS
+          tar -czf ziplock-linux-x86_64.tar.gz binaries/
+          rm -rf binaries
 
-          # List files for verification
-          ls -la
+          ls -la release-assets/
 
       - name: Extract version from tag
         id: version
@@ -963,192 +314,54 @@ jobs:
       - name: Extract changelog for version
         id: changelog
         run: |
-          # Extract the version section from CHANGELOG.md
-          VERSION="${{ steps.version.outputs.VERSION }}"
-
-          # First try to find a specific version entry [x.y.z]
-          CHANGELOG_SECTION=""
-          if grep -q "## \[$VERSION\]" CHANGELOG.md; then
-            # Extract from version header to next version header or end of file
-            CHANGELOG_SECTION=$(awk "/^## \[$VERSION\]/{flag=1; next} /^## \[/{flag=0} flag" CHANGELOG.md)
-          elif grep -q "## \[Unreleased\]" CHANGELOG.md; then
-            # If no specific version found, use Unreleased section
-            CHANGELOG_SECTION=$(awk "/^## \[Unreleased\]/{flag=1; next} /^## \[/{flag=0} flag" CHANGELOG.md)
-          fi
-
-          # Clean up and format the changelog section
-          if [ -n "$CHANGELOG_SECTION" ]; then
-            # Remove empty lines at the beginning and end, format for release notes
-            CHANGELOG_SECTION=$(echo "$CHANGELOG_SECTION" | sed '/^$/d' | sed 's/^### /## /')
-            echo "CHANGELOG_CONTENT<<EOF" >> $GITHUB_OUTPUT
-            echo "$CHANGELOG_SECTION" >> $GITHUB_OUTPUT
-            echo "EOF" >> $GITHUB_OUTPUT
+          if [ -f "CHANGELOG.md" ]; then
+            # Extract changelog section for this version
+            awk "/^## \[?${{ steps.version.outputs.VERSION }}\]?/ {flag=1; next} /^## / {flag=0} flag" CHANGELOG.md > version-changelog.md
+            if [ -s version-changelog.md ]; then
+              echo "CHANGELOG_CONTENT<<EOF" >> $GITHUB_OUTPUT
+              cat version-changelog.md >> $GITHUB_OUTPUT
+              echo "EOF" >> $GITHUB_OUTPUT
+            else
+              echo "CHANGELOG_CONTENT=No changelog found for this version." >> $GITHUB_OUTPUT
+            fi
           else
-            echo "CHANGELOG_CONTENT=No changelog entries found for this version." >> $GITHUB_OUTPUT
+            echo "CHANGELOG_CONTENT=No changelog file found." >> $GITHUB_OUTPUT
           fi
-
-      - name: Create release notes
-        run: |
-          cat > release-notes.md << EOF
-          # ZipLock v${{ steps.version.outputs.VERSION }}
-
-          ## 🚀 What's New
-
-          ${{ steps.changelog.outputs.CHANGELOG_CONTENT }}
-
-          ## 📦 Installation
-
-          ### Ubuntu/Debian
-          \`\`\`bash
-          # Download and install the .deb package
-          wget https://github.com/ejangi/ziplock/releases/download/v${{ steps.version.outputs.VERSION }}/ziplock_${{ steps.version.outputs.VERSION }}_amd64.deb
-          sudo dpkg -i ziplock_${{ steps.version.outputs.VERSION }}_amd64.deb
-          sudo apt-get install -f  # Fix any dependency issues
-          \`\`\`
-
-          ### Arch Linux/Manjaro
-          \`\`\`bash
-          # Install from AUR (recommended)
-          yay -S ziplock
-          # or
-          paru -S ziplock
-
-          # Or manually install from source archive
-          wget https://github.com/ejangi/ziplock/releases/download/v${{ steps.version.outputs.VERSION }}/ziplock-${{ steps.version.outputs.VERSION }}.tar.gz
-          wget https://github.com/ejangi/ziplock/releases/download/v${{ steps.version.outputs.VERSION }}/PKGBUILD
-          wget https://github.com/ejangi/ziplock/releases/download/v${{ steps.version.outputs.VERSION }}/ziplock.install
-          mkdir ziplock-build && cd ziplock-build
-          mv ../ziplock-${{ steps.version.outputs.VERSION }}.tar.gz .
-          mv ../PKGBUILD .
-          mv ../ziplock.install .
-          makepkg -si
-          \`\`\`
-
-          ### Build from Source
-          \`\`\`bash
-          # Install dependencies (Ubuntu/Debian)
-          sudo apt-get update
-          sudo apt-get install -y build-essential pkg-config libfontconfig1-dev \\
-              libfreetype6-dev libx11-dev libxft-dev liblzma-dev git curl \\
-              libgtk-4-dev libadwaita-1-dev dpkg-dev fakeroot
-
-          # Install dependencies (Arch/Manjaro)
-          sudo pacman -S --needed base-devel rust pkg-config fontconfig \\
-              freetype2 libx11 libxft xz gtk4 libadwaita
-
-          # Install Rust (if not already installed)
-          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-          source ~/.cargo/env
-
-          # Clone and build
-          git clone https://github.com/ejangi/ziplock.git
-          cd ziplock
-          chmod +x scripts/build/build-linux.sh
-          ./scripts/build/build-linux.sh --profile release
-
-          # Install locally
-          sudo cp target/release/ziplock /usr/local/bin/
-          sudo cp apps/linux/resources/ziplock.desktop /usr/share/applications/
-          sudo update-desktop-database
-          \`\`\`
-
-          ## 🔧 Usage
-
-          After installation:
-          1. Launch ZipLock from your applications menu or run \`ziplock\` in terminal
-          2. The backend service will start automatically and run on boot
-          3. Create your first password vault or import from another password manager
-
-          ## 🛡️ Security
-
-          - All sensitive operations handled by secure backend service
-          - Master key never leaves your device
-          - Zero-knowledge architecture
-          - Automatic security audits via GitHub Actions
-
-          ## 📋 System Requirements
-
-          - **Ubuntu 20.04+** or **Debian 11+** or **Arch Linux**
-          - X11 or Wayland display server
-          - 50MB disk space
-          - systemd (for backend service)
-          - For building from source: 1GB free space + development tools
-
-          ## 📝 Full Changelog
-
-          See [CHANGELOG.md](https://github.com/ejangi/ziplock/blob/v${{ steps.version.outputs.VERSION }}/CHANGELOG.md) for detailed changes.
-          EOF
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
         with:
           name: "ZipLock v${{ steps.version.outputs.VERSION }}"
-          body_path: release-notes.md
+          body: |
+            ## ZipLock v${{ steps.version.outputs.VERSION }}
+
+            ${{ steps.changelog.outputs.CHANGELOG_CONTENT }}
+
+            ### Installation
+
+            **Debian/Ubuntu:**
+            ```bash
+            wget https://github.com/ejangi/ziplock/releases/download/v${{ steps.version.outputs.VERSION }}/ziplock_${{ steps.version.outputs.VERSION }}_amd64.deb
+            sudo dpkg -i ziplock_${{ steps.version.outputs.VERSION }}_amd64.deb
+            sudo apt-get install -f  # Install any missing dependencies
+            ```
+
+            **Arch Linux:**
+            ```bash
+            yay -S ziplock
+            ```
+
+            **Manual Installation:**
+            ```bash
+            wget https://github.com/ejangi/ziplock/releases/download/v${{ steps.version.outputs.VERSION }}/ziplock-linux-x86_64.tar.gz
+            tar -xzf ziplock-linux-x86_64.tar.gz
+            sudo cp ziplock /usr/local/bin/
+            sudo cp libziplock_shared.so /usr/local/lib/
+            ```
           draft: false
           prerelease: ${{ contains(steps.version.outputs.VERSION, '-') }}
           files: |
-            release-assets/*.deb
-            release-assets/*.tar.gz
-            release-assets/PKGBUILD
-            release-assets/ziplock.install
-            release-assets/SHA256SUMS
+            release-assets/*
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Upload to package repositories
-        if: "!contains(steps.version.outputs.VERSION, '-')"
-        run: |
-          echo "🚀 Release v${{ steps.version.outputs.VERSION }} created successfully!"
-          echo "📦 .deb packages are available for download"
-          echo "🔄 Consider setting up automatic package repository deployment"
-
-  benchmark:
-    name: Performance Benchmarks
-    runs-on: ubuntu-22.04
-    needs: [test]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libfontconfig1-dev \
-            libfreetype6-dev \
-            libx11-dev \
-            libxft-dev \
-            liblzma-dev \
-            pkg-config \
-            libgtk-4-dev \
-            libadwaita-1-dev \
-            libatk1.0-dev \
-            libatk-bridge2.0-dev \
-            libgtk-3-dev \
-            libgdk-pixbuf-2.0-dev
-
-      - name: Run benchmarks
-        run: |
-          # Run any performance benchmarks
-          cargo bench --workspace || true
-
-          # Measure binary sizes
-          cargo build --release
-          echo "## Binary Sizes" >> benchmark-results.md
-          echo "| Binary | Size |" >> benchmark-results.md
-          echo "|--------|------|" >> benchmark-results.md
-          echo "| ziplock | $(du -h target/release/ziplock | cut -f1) |" >> benchmark-results.md
-          echo "| libziplock_shared.so | $(du -h target/release/libziplock_shared.so | cut -f1) |" >> benchmark-results.md
-
-      - name: Upload benchmark results
-        uses: actions/upload-artifact@v4
-        with:
-          name: benchmark-results
-          path: benchmark-results.md
-          retention-days: 30

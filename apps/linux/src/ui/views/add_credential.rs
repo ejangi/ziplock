@@ -226,13 +226,11 @@ impl AddCredentialView {
                 match form_msg {
                     CredentialFormMessage::Save => {
                         tracing::debug!("Save button clicked in add credential view");
-                        return Command::perform(async {}, |_| {
-                            AddCredentialMessage::CreateCredential
-                        });
+                        Command::perform(async {}, |_| AddCredentialMessage::CreateCredential)
                     }
                     CredentialFormMessage::Cancel => {
                         tracing::debug!("Cancel button clicked in add credential view");
-                        return Command::perform(async {}, |_| AddCredentialMessage::Cancel);
+                        Command::perform(async {}, |_| AddCredentialMessage::Cancel)
                     }
                     CredentialFormMessage::CopyToClipboard {
                         content,
@@ -244,13 +242,13 @@ impl AddCredentialView {
                             content.len()
                         );
                         // Forward clipboard operations to main app
-                        return Command::perform(
+                        Command::perform(
                             async move { (content, content_type) },
                             |(content, content_type)| AddCredentialMessage::CopyToClipboard {
                                 content,
                                 content_type,
                             },
-                        );
+                        )
                     }
                     CredentialFormMessage::CopyFieldToClipboard {
                         field_name: _,
@@ -263,18 +261,18 @@ impl AddCredentialView {
                             content.len()
                         );
                         // Forward clipboard operations to main app
-                        return Command::perform(
+                        Command::perform(
                             async move { (content, content_type) },
                             |(content, content_type)| AddCredentialMessage::CopyToClipboard {
                                 content,
                                 content_type,
                             },
-                        );
+                        )
                     }
                     _ => {
                         let form_command = self.form.update(form_msg);
                         // Map form commands to add credential commands
-                        return form_command.map(AddCredentialMessage::FormMessage);
+                        form_command.map(AddCredentialMessage::FormMessage)
                     }
                 }
             }
