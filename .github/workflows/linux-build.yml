@@ -546,25 +546,23 @@ jobs:
                 SHA256=\$(sha256sum \"target/ziplock-\$VERSION.tar.gz\" | cut -d' ' -f1)
                 echo \"Source archive SHA256: \$SHA256\"
 
-                # Update PKGBUILD with current version and SHA256
-                cd packaging/arch
-                sed -i \"s/^pkgver=.*/pkgver=\$VERSION/\" PKGBUILD
+                # Update PKGBUILD with current version and SHA256 using script
 
-                echo \"DEBUG: Updating sha256sums using simple substitution...\"
+                echo \"DEBUG: Updating PKGBUILD using dedicated script...\"
                 echo \"DEBUG: SHA256 value: \$SHA256\"
                 echo \"DEBUG: Original PKGBUILD sha256sums line:\"
-                grep \"^sha256sums=\" PKGBUILD || echo \"No sha256sums line found\"
+                grep \"^sha256sums=\" packaging/arch/PKGBUILD || echo \"No sha256sums line found\"
 
-                # Update sha256sums using printf to avoid escaping issues completely
-                grep -v \"^sha256sums=\" PKGBUILD > PKGBUILD.tmp
-                printf \"sha256sums=(\\\"%s\\\")\\n\" \"\\$SHA256\" >> PKGBUILD.tmp
-                mv PKGBUILD.tmp PKGBUILD
+                # Use dedicated script to avoid all shell escaping issues
+                chmod +x scripts/build/update-pkgbuild.sh
+                ./scripts/build/update-pkgbuild.sh \"\$VERSION\" \"\$SHA256\"
 
                 echo \"DEBUG: Updated PKGBUILD sha256sums line:\"
-                grep \"^sha256sums=\" PKGBUILD || echo \"No sha256sums line found after update\"
+                grep \"^sha256sums=\" packaging/arch/PKGBUILD || echo \"No sha256sums line found after update\"
 
                 # Generate .SRCINFO from updated PKGBUILD
                 echo \"Generating .SRCINFO...\"
+                cd packaging/arch
                 makepkg --printsrcinfo > .SRCINFO
 
                 echo \"Arch package creation completed successfully\"
