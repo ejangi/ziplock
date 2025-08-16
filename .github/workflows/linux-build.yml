@@ -449,21 +449,60 @@ jobs:
               # Change ownership for build process
               sudo chown -R builder:builder /tmp/build
 
-              # Switch to builder user and run packaging with error checking
-              if ! sudo -u builder bash -c '
+              # Create Arch package with proper PKGBUILD and .SRCINFO
+              sudo -u builder bash -c '
                 set -euo pipefail
                 cd /tmp/build
-                chmod +x scripts/build/package-arch.sh
-                ./scripts/build/package-arch.sh --source-only
-              '; then
-                echo 'ERROR: Arch packaging script failed'
+
+                # Get version from Cargo.toml
+                VERSION=$(grep "^version" Cargo.toml | head -1 | sed "s/.*= \"\\(.*\\)\"/\\1/")
+                echo "Creating Arch package for version: $VERSION"
+
+                # Create source archive manually (same as script but with control)
+                mkdir -p target/src
+                rm -rf target/src/*
+
+                # Copy project files excluding build artifacts
+                rsync -av \
+                  --exclude=".git/" \
+                  --exclude="target/" \
+                  --exclude="tests/results/" \
+                  --exclude="*.deb" \
+                  --exclude="*.pkg.tar.*" \
+                  --exclude=".DS_Store" \
+                  ./ target/src/ziplock-$VERSION/
+
+                # Create source archive
+                cd target/src
+                tar -czf "../ziplock-$VERSION.tar.gz" "ziplock-$VERSION/"
+                cd ../..
+
+                # Calculate SHA256
+                SHA256=$(sha256sum "target/ziplock-$VERSION.tar.gz" | cut -d" " -f1)
+                echo "Source archive SHA256: $SHA256"
+
+                # Update PKGBUILD with current version and SHA256
+                cd packaging/arch
+                sed -i "s/^pkgver=.*/pkgver=$VERSION/" PKGBUILD
+                sed -i "s/^sha256sums=.*/sha256sums=(\"$SHA256\")/" PKGBUILD
+
+                # Generate .SRCINFO from updated PKGBUILD
+                echo "Generating .SRCINFO..."
+                makepkg --printsrcinfo > .SRCINFO
+
+                echo "Arch package creation completed successfully"
+              '
+
+              # Verify created files
+              if [ ! -f /tmp/build/target/ziplock-*.tar.gz ]; then
+                echo 'ERROR: Source archive was not created'
+                ls -la /tmp/build/target/ || true
                 exit 1
               fi
 
-              # Verify package files were created
-              if [ ! -f /tmp/build/target/ziplock-*.tar.gz ]; then
-                echo 'ERROR: Arch package tar.gz was not created'
-                ls -la /tmp/build/target/ || true
+              if [ ! -f /tmp/build/packaging/arch/.SRCINFO ]; then
+                echo 'ERROR: .SRCINFO was not created'
+                ls -la /tmp/build/packaging/arch/ || true
                 exit 1
               fi
 
