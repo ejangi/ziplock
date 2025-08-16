@@ -556,7 +556,7 @@ jobs:
                 grep \"^sha256sums=\" PKGBUILD || echo \"No sha256sums line found\"
 
                 # Update sha256sums using simple substitution to avoid escaping issues
-                sed -i \"s/^sha256sums=.*/sha256sums=('\$SHA256')/g\" PKGBUILD
+                sed -i \"s/^sha256sums=.*/sha256sums=(\\\"\\$SHA256\\\")/g\" PKGBUILD
 
                 echo \"DEBUG: Updated PKGBUILD sha256sums line:\"
                 grep \"^sha256sums=\" PKGBUILD || echo \"No sha256sums line found after update\"
