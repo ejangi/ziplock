@@ -1000,9 +1000,56 @@ jobs:
 
           ### Ubuntu/Debian
           \`\`\`bash
+          # Download and install the .deb package
           wget https://github.com/ejangi/ziplock/releases/download/v${{ steps.version.outputs.VERSION }}/ziplock_${{ steps.version.outputs.VERSION }}_amd64.deb
           sudo dpkg -i ziplock_${{ steps.version.outputs.VERSION }}_amd64.deb
           sudo apt-get install -f  # Fix any dependency issues
+          \`\`\`
+
+          ### Arch Linux/Manjaro
+          \`\`\`bash
+          # Install from AUR (recommended)
+          yay -S ziplock
+          # or
+          paru -S ziplock
+
+          # Or manually install from source archive
+          wget https://github.com/ejangi/ziplock/releases/download/v${{ steps.version.outputs.VERSION }}/ziplock-${{ steps.version.outputs.VERSION }}.tar.gz
+          wget https://github.com/ejangi/ziplock/releases/download/v${{ steps.version.outputs.VERSION }}/PKGBUILD
+          wget https://github.com/ejangi/ziplock/releases/download/v${{ steps.version.outputs.VERSION }}/ziplock.install
+          mkdir ziplock-build && cd ziplock-build
+          mv ../ziplock-${{ steps.version.outputs.VERSION }}.tar.gz .
+          mv ../PKGBUILD .
+          mv ../ziplock.install .
+          makepkg -si
+          \`\`\`
+
+          ### Build from Source
+          \`\`\`bash
+          # Install dependencies (Ubuntu/Debian)
+          sudo apt-get update
+          sudo apt-get install -y build-essential pkg-config libfontconfig1-dev \\
+              libfreetype6-dev libx11-dev libxft-dev liblzma-dev git curl \\
+              libgtk-4-dev libadwaita-1-dev dpkg-dev fakeroot
+
+          # Install dependencies (Arch/Manjaro)
+          sudo pacman -S --needed base-devel rust pkg-config fontconfig \\
+              freetype2 libx11 libxft xz gtk4 libadwaita
+
+          # Install Rust (if not already installed)
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+          source ~/.cargo/env
+
+          # Clone and build
+          git clone https://github.com/ejangi/ziplock.git
+          cd ziplock
+          chmod +x scripts/build/build-linux.sh
+          ./scripts/build/build-linux.sh --profile release
+
+          # Install locally
+          sudo cp target/release/ziplock /usr/local/bin/
+          sudo cp apps/linux/resources/ziplock.desktop /usr/share/applications/
+          sudo update-desktop-database
           \`\`\`
 
           ## 🔧 Usage
@@ -1021,10 +1068,11 @@ jobs:
 
           ## 📋 System Requirements
 
-          - Ubuntu 20.04+ or Debian 11+
+          - **Ubuntu 20.04+** or **Debian 11+** or **Arch Linux**
           - X11 or Wayland display server
           - 50MB disk space
           - systemd (for backend service)
+          - For building from source: 1GB free space + development tools
 
           ## 📝 Full Changelog
 
