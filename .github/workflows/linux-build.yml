@@ -493,114 +493,31 @@ jobs:
             -e USER_ID="$USER_ID" \
             -e GROUP_ID="$GROUP_ID" \
             ghcr.io/${{ github.repository }}/arch-builder:latest \
-            bash -c "
+            bash -c '
               set -euo pipefail
 
               # Copy workspace to avoid permission issues with git
-              echo 'Copying workspace to avoid git permission conflicts...'
+              echo "Copying workspace to avoid git permission conflicts..."
               cp -r /workspace /tmp/build
               cd /tmp/build
-
-              # Validate copied structure
-              if [ ! -f 'target/install/usr/bin/ziplock' ]; then
-                echo 'ERROR: Binary not found in copied workspace'
-                exit 1
-              fi
 
               # Change ownership for build process
               sudo chown -R builder:builder /tmp/build
 
-              # Create Arch package with proper PKGBUILD and .SRCINFO
-              sudo -u builder bash -c '
-                set -euo pipefail
-                cd /tmp/build
-
-                echo \"DEBUG: About to execute sha256sums update commands...\"
-                echo \"DEBUG: Method being used for sha256sums update:\"
-                echo \"  - Using printf approach (new method)\"
-
-                # Get version from Cargo.toml
-                VERSION=\$(grep '^version' Cargo.toml | head -1 | cut -d'\"' -f2)
-                echo \"Creating Arch package for version: \$VERSION\"
-
-                # Create source archive manually (same as script but with control)
-                mkdir -p target/src
-                rm -rf target/src/*
-
-                # Copy project files excluding build artifacts
-                rsync -av \
-                  --exclude=\".git/\" \
-                  --exclude=\"target/\" \
-                  --exclude=\"tests/results/\" \
-                  --exclude=\"*.deb\" \
-                  --exclude=\"*.pkg.tar.*\" \
-                  --exclude=\".DS_Store\" \
-                  ./ target/src/ziplock-\$VERSION/
-
-                # Create source archive
-                cd target/src
-                tar -czf \"../ziplock-\$VERSION.tar.gz\" \"ziplock-\$VERSION/\"
-                cd ../..
-
-                # Calculate SHA256
-                SHA256=\$(sha256sum \"target/ziplock-\$VERSION.tar.gz\" | cut -d' ' -f1)
-                echo \"Source archive SHA256: \$SHA256\"
-
-                # Update PKGBUILD with current version and SHA256 using script
-
-                echo \"DEBUG: Updating PKGBUILD using dedicated script...\"
-                echo \"DEBUG: SHA256 value: \$SHA256\"
-                echo \"DEBUG: Original PKGBUILD sha256sums line:\"
-                grep \"^sha256sums=\" packaging/arch/PKGBUILD || echo \"No sha256sums line found\"
-
-                # Use dedicated script to avoid all shell escaping issues
-                chmod +x scripts/build/update-pkgbuild.sh
-                ./scripts/build/update-pkgbuild.sh \"\$VERSION\" \"\$SHA256\"
-
-                echo \"DEBUG: Updated PKGBUILD sha256sums line:\"
-                grep \"^sha256sums=\" packaging/arch/PKGBUILD || echo \"No sha256sums line found after update\"
-
-                # Generate .SRCINFO from updated PKGBUILD
-                echo \"Generating .SRCINFO...\"
-                cd packaging/arch
-                makepkg --printsrcinfo > .SRCINFO
-
-                echo \"Arch package creation completed successfully\"
-              '
-
-              # Verify created files
-              if [ ! -f /tmp/build/target/ziplock-*.tar.gz ]; then
-                echo 'ERROR: Source archive was not created'
-                ls -la /tmp/build/target/ || true
-                exit 1
-              fi
-
-              if [ ! -f /tmp/build/packaging/arch/.SRCINFO ]; then
-                echo 'ERROR: .SRCINFO was not created'
-                ls -la /tmp/build/packaging/arch/ || true
-                exit 1
-              fi
+              # Run the comprehensive package creation script as builder user
+              sudo -u builder bash scripts/build/create-arch-package-in-docker.sh
 
               # Copy results back to workspace with correct ownership
-              echo 'Copying build results back...'
-              sudo cp /tmp/build/target/ziplock-*.tar.gz /workspace/target/ || {
-                echo 'ERROR: Failed to copy Arch package'
-                exit 1
-              }
-              sudo cp /tmp/build/packaging/arch/PKGBUILD /workspace/packaging/arch/ || {
-                echo 'ERROR: Failed to copy PKGBUILD'
-                exit 1
-              }
-              sudo cp /tmp/build/packaging/arch/.SRCINFO /workspace/packaging/arch/ || {
-                echo 'ERROR: Failed to copy .SRCINFO'
-                exit 1
-              }
+              echo "Copying build results back..."
+              sudo cp target/ziplock-*.tar.gz /workspace/target/
+              sudo cp packaging/arch/PKGBUILD /workspace/packaging/arch/
+              sudo cp packaging/arch/.SRCINFO /workspace/packaging/arch/
 
               # Restore original ownership
-              sudo chown -R \$USER_ID:\$GROUP_ID /workspace
+              sudo chown -R $USER_ID:$GROUP_ID /workspace
 
-              echo 'Arch package creation completed successfully'
-            "
+              echo "Docker operation completed successfully"
+            '
 
           # Final verification of build results
           echo "Verifying Arch package build results..."
