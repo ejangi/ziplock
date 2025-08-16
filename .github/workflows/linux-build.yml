@@ -143,6 +143,13 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Fix Git permissions
+        run: |
+          # Set safe ownership for Git operations
+          git config --global --add safe.directory $PWD
+          # Make sure we have proper permissions for cleanup
+          chmod -R u+w .git/
+
       - name: Download build artifacts
         uses: actions/download-artifact@v4
         with:
@@ -213,14 +220,89 @@ jobs:
       - name: Create Debian package
         run: |
           echo "Creating Debian package from installation structure..."
+
+          # Validate prerequisites
+          if [ ! -f "target/install/usr/bin/ziplock" ]; then
+            echo "ERROR: Required binary not found in installation structure"
+            exit 1
+          fi
+
+          if [ ! -f "target/install/usr/lib/libziplock_shared.so" ]; then
+            echo "ERROR: Required shared library not found in installation structure"
+            exit 1
+          fi
+
+          # Get current user and group IDs for proper permission handling
+          USER_ID=$(id -u)
+          GROUP_ID=$(id -g)
+
+          # Run with proper error handling and permission management
+          set -e
           docker run --rm \
             -v $PWD:/workspace \
+            -e USER_ID="$USER_ID" \
+            -e GROUP_ID="$GROUP_ID" \
             ghcr.io/${{ github.repository }}/ubuntu-builder:latest \
             bash -c "
-              cd /workspace
+              set -euo pipefail
+
+              # Copy workspace to avoid permission issues with git
+              echo 'Copying workspace to avoid git permission conflicts...'
+              cp -r /workspace /tmp/build
+              cd /tmp/build
+
+              # Validate copied structure
+              if [ ! -f 'target/install/usr/bin/ziplock' ]; then
+                echo 'ERROR: Binary not found in copied workspace'
+                exit 1
+              fi
+
+              # Run packaging
               chmod +x scripts/build/package-deb.sh
-              ./scripts/build/package-deb.sh --arch amd64
+              if ! ./scripts/build/package-deb.sh --arch amd64; then
+                echo 'ERROR: Debian packaging script failed'
+                exit 1
+              fi
+
+              # Verify package was created
+              if [ ! -f target/ziplock_*_amd64.deb ]; then
+                echo 'ERROR: Debian package was not created'
+                ls -la target/ || true
+                exit 1
+              fi
+
+              # Copy results back to workspace with correct ownership
+              echo 'Copying build results back...'
+              cp target/ziplock_*_amd64.deb /workspace/target/
+
+              # Restore original ownership
+              chown -R \$USER_ID:\$GROUP_ID /workspace
+
+              echo 'Debian package creation completed successfully'
             "
+
+          # Final verification of build results
+          echo "Verifying Debian package build results..."
+          if ! ls target/ziplock_*_amd64.deb 1> /dev/null 2>&1; then
+            echo "ERROR: Debian package .deb not found after build"
+            echo "Contents of target directory:"
+            ls -la target/ || true
+            exit 1
+          fi
+
+          # Verify package integrity
+          if ! dpkg-deb --info target/ziplock_*_amd64.deb > /dev/null; then
+            echo "ERROR: Debian package is corrupted or invalid"
+            exit 1
+          fi
+
+          echo "Debian package build completed successfully"
+
+      - name: Restore Git permissions after Docker
+        run: |
+          # Restore proper ownership for Git cleanup
+          sudo chown -R $(id -u):$(id -g) .git/ || true
+          chmod -R u+w .git/ || true
 
       - name: Test package installation
         run: |
@@ -253,6 +335,13 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Fix Git permissions
+        run: |
+          # Set safe ownership for Git operations
+          git config --global --add safe.directory $PWD
+          # Make sure we have proper permissions for cleanup
+          chmod -R u+w .git/
 
       - name: Download build artifacts
         uses: actions/download-artifact@v4
@@ -320,15 +409,107 @@ jobs:
       - name: Create Arch package structure
         run: |
           echo "Creating Arch source package from installation structure..."
+
+          # Validate prerequisites
+          if [ ! -f "target/install/usr/bin/ziplock" ]; then
+            echo "ERROR: Required binary not found in installation structure"
+            exit 1
+          fi
+
+          if [ ! -f "target/install/usr/lib/libziplock_shared.so" ]; then
+            echo "ERROR: Required shared library not found in installation structure"
+            exit 1
+          fi
+
+          # Get current user and group IDs for proper permission handling
+          USER_ID=$(id -u)
+          GROUP_ID=$(id -g)
+
+          # Run with proper error handling and permission management
+          set -e
           docker run --rm \
             -v $PWD:/workspace \
+            -e USER_ID="$USER_ID" \
+            -e GROUP_ID="$GROUP_ID" \
             ghcr.io/${{ github.repository }}/arch-builder:latest \
             bash -c "
-              sudo chown -R builder:builder /workspace
-              cd /workspace
-              chmod +x scripts/build/package-arch.sh
-              ./scripts/build/package-arch.sh --source-only
+              set -euo pipefail
+
+              # Copy workspace to avoid permission issues with git
+              echo 'Copying workspace to avoid git permission conflicts...'
+              cp -r /workspace /tmp/build
+              cd /tmp/build
+
+              # Validate copied structure
+              if [ ! -f 'target/install/usr/bin/ziplock' ]; then
+                echo 'ERROR: Binary not found in copied workspace'
+                exit 1
+              fi
+
+              # Change ownership for build process
+              sudo chown -R builder:builder /tmp/build
+
+              # Switch to builder user and run packaging with error checking
+              if ! sudo -u builder bash -c '
+                set -euo pipefail
+                cd /tmp/build
+                chmod +x scripts/build/package-arch.sh
+                ./scripts/build/package-arch.sh --source-only
+              '; then
+                echo 'ERROR: Arch packaging script failed'
+                exit 1
+              fi
+
+              # Verify package files were created
+              if [ ! -f /tmp/build/target/ziplock-*.tar.gz ]; then
+                echo 'ERROR: Arch package tar.gz was not created'
+                ls -la /tmp/build/target/ || true
+                exit 1
+              fi
+
+              # Copy results back to workspace with correct ownership
+              echo 'Copying build results back...'
+              sudo cp /tmp/build/target/ziplock-*.tar.gz /workspace/target/ || {
+                echo 'ERROR: Failed to copy Arch package'
+                exit 1
+              }
+              sudo cp /tmp/build/packaging/arch/PKGBUILD /workspace/packaging/arch/ || {
+                echo 'ERROR: Failed to copy PKGBUILD'
+                exit 1
+              }
+              sudo cp /tmp/build/packaging/arch/.SRCINFO /workspace/packaging/arch/ || {
+                echo 'ERROR: Failed to copy .SRCINFO'
+                exit 1
+              }
+
+              # Restore original ownership
+              sudo chown -R \$USER_ID:\$GROUP_ID /workspace
+
+              echo 'Arch package creation completed successfully'
             "
+
+          # Final verification of build results
+          echo "Verifying Arch package build results..."
+          if ! ls target/ziplock-*.tar.gz 1> /dev/null 2>&1; then
+            echo "ERROR: Arch package tar.gz not found after build"
+            echo "Contents of target directory:"
+            ls -la target/ || true
+            exit 1
+          fi
+
+          # Verify package integrity
+          if ! tar -tzf target/ziplock-*.tar.gz > /dev/null; then
+            echo "ERROR: Arch package tar.gz is corrupted"
+            exit 1
+          fi
+
+          echo "Arch package build completed successfully"
+
+      - name: Restore Git permissions after Docker
+        run: |
+          # Restore proper ownership for Git cleanup
+          sudo chown -R $(id -u):$(id -g) .git/ || true
+          chmod -R u+w .git/ || true
 
       - name: Upload Arch package
         uses: actions/upload-artifact@v4
