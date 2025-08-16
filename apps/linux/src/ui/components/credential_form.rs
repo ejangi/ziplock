@@ -5,7 +5,7 @@
 
 use iced::{
     alignment::Alignment,
-    widget::{button, column, row, scrollable, text, text_editor, text_input, Space},
+    widget::{button, column, row, scrollable, svg, text, text_editor, text_input, Space},
     Element, Length,
 };
 use std::collections::HashMap;
@@ -48,6 +48,10 @@ pub struct CredentialFormConfig {
     pub is_loading: bool,
     /// Optional error message to display
     pub error_message: Option<String>,
+    /// Whether to use special title styling (larger font, padding)
+    pub use_title_styling: bool,
+    /// Optional credential type for showing icon with title
+    pub credential_type: Option<String>,
 }
 
 impl Default for CredentialFormConfig {
@@ -58,6 +62,8 @@ impl Default for CredentialFormConfig {
             show_delete_button: false,
             is_loading: false,
             error_message: None,
+            use_title_styling: false,
+            credential_type: None,
         }
     }
 }
@@ -252,19 +258,59 @@ impl CredentialForm {
             None => return text("No template selected").into(),
         };
 
-        let mut form_fields = vec![
-            // Title field (always first and required)
-            text("Title *")
-                .size(crate::ui::theme::utils::typography::normal_text_size())
-                .into(),
-            text_input("Enter credential title...", &self.title)
-                .on_input(CredentialFormMessage::TitleChanged)
-                .padding(utils::text_input_padding())
-                .style(crate::ui::theme::text_input_styles::standard())
-                .size(crate::ui::theme::utils::typography::text_input_size())
-                .into(),
-            Space::with_height(Length::Fixed(15.0)).into(),
-        ];
+        let mut form_fields = vec![];
+
+        // Title field (always first and required)
+        if self.config.use_title_styling {
+            // Use special title styling with icon if credential type is available
+            if let Some(credential_type) = &self.config.credential_type {
+                let icon =
+                    crate::ui::theme::utils::typography::get_credential_type_icon(credential_type);
+
+                form_fields.push(
+                    row![
+                        svg(icon)
+                            .width(Length::Fixed(24.0))
+                            .height(Length::Fixed(24.0)),
+                        text_input("Enter credential title...", &self.title)
+                            .on_input(CredentialFormMessage::TitleChanged)
+                            .padding(utils::title_input_padding())
+                            .style(crate::ui::theme::text_input_styles::title())
+                            .size(crate::ui::theme::utils::typography::title_input_size())
+                            .width(Length::Fill)
+                    ]
+                    .spacing(12)
+                    .align_items(Alignment::Center)
+                    .into(),
+                );
+            } else {
+                form_fields.push(
+                    text_input("Enter credential title...", &self.title)
+                        .on_input(CredentialFormMessage::TitleChanged)
+                        .padding(utils::title_input_padding())
+                        .style(crate::ui::theme::text_input_styles::title())
+                        .size(crate::ui::theme::utils::typography::title_input_size())
+                        .into(),
+                );
+            }
+        } else {
+            // Standard title field
+            form_fields.push(
+                text("Title *")
+                    .size(crate::ui::theme::utils::typography::normal_text_size())
+                    .into(),
+            );
+            form_fields.push(
+                text_input("Enter credential title...", &self.title)
+                    .on_input(CredentialFormMessage::TitleChanged)
+                    .padding(utils::text_input_padding())
+                    .style(crate::ui::theme::text_input_styles::standard())
+                    .size(crate::ui::theme::utils::typography::text_input_size())
+                    .into(),
+            );
+        }
+
+        form_fields.push(Space::with_height(Length::Fixed(15.0)).into());
 
         // Add template-specific fields
         for field_template in &template.fields {

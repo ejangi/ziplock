@@ -172,16 +172,19 @@ impl AddCredentialView {
                     .find(|t| t.name == type_name)
                     .cloned()
                 {
+                    let template_name = template.name.clone();
                     self.selected_type = Some(template.clone());
 
                     // Set up the form with the selected template
                     self.form.set_template(template);
 
-                    // Configure the form for adding credentials
+                    // Configure the form for adding credentials with title styling
                     let config = CredentialFormConfig {
                         save_button_text: "Save".to_string(),
                         show_cancel_button: true,
                         is_loading: false,
+                        use_title_styling: true,
+                        credential_type: Some(template_name),
                         ..CredentialFormConfig::default()
                     };
                     self.form.set_config(config);
@@ -251,6 +254,8 @@ impl AddCredentialView {
                     save_button_text: "Save".to_string(),
                     show_cancel_button: true,
                     is_loading: true,
+                    use_title_styling: true,
+                    credential_type: self.selected_type.as_ref().map(|t| t.name.clone()),
                     ..CredentialFormConfig::default()
                 };
                 self.form.set_config(config);
@@ -325,13 +330,6 @@ impl AddCredentialView {
             AddCredentialState::Complete => self.view_complete(),
             AddCredentialState::Error(_) => self.view_error(),
         }
-    }
-
-    /// Render the view header
-    fn view_header(&self) -> Element<'_, AddCredentialMessage> {
-        text("Add New Credential")
-            .size(crate::ui::theme::utils::typography::header_text_size())
-            .into()
     }
 
     /// Render the type selection state
@@ -423,7 +421,6 @@ impl AddCredentialView {
 
         container(
             column![
-                self.view_header(),
                 Space::with_height(Length::Fixed(20.0)),
                 text("What type of information are we storing?")
                     .size(crate::ui::theme::utils::typography::large_text_size())
@@ -447,7 +444,6 @@ impl AddCredentialView {
     fn view_credential_form(&self) -> Element<'_, AddCredentialMessage> {
         container(
             column![
-                self.view_header(),
                 Space::with_height(Length::Fixed(20.0)),
                 self.form.view().map(AddCredentialMessage::FormMessage),
             ]
@@ -463,12 +459,9 @@ impl AddCredentialView {
     fn view_creating(&self) -> Element<'_, AddCredentialMessage> {
         container(
             column![
-                self.view_header(),
                 Space::with_height(Length::Fixed(40.0)),
                 text("Creating credential...")
                     .size(crate::ui::theme::utils::typography::medium_text_size()),
-                Space::with_height(Length::Fixed(20.0)),
-                self.form.view().map(AddCredentialMessage::FormMessage),
             ]
             .spacing(10),
         )
@@ -482,7 +475,6 @@ impl AddCredentialView {
     fn view_complete(&self) -> Element<'_, AddCredentialMessage> {
         container(
             column![
-                self.view_header(),
                 Space::with_height(Length::Fixed(40.0)),
                 text("✅ Credential created successfully!")
                     .size(crate::ui::theme::utils::typography::large_text_size())
@@ -493,13 +485,10 @@ impl AddCredentialView {
                 text("You will be returned to the main view shortly.")
                     .size(crate::ui::theme::utils::typography::normal_text_size()),
             ]
-            .spacing(10)
-            .align_items(Alignment::Center),
+            .spacing(10),
         )
         .padding(40)
         .height(Length::Fill)
-        .center_x()
-        .center_y()
         .style(container_styles::sidebar())
         .into()
     }
@@ -510,7 +499,6 @@ impl AddCredentialView {
 
         container(
             column![
-                self.view_header(),
                 Space::with_height(Length::Fixed(20.0)),
                 text("Error creating credential:")
                     .size(crate::ui::theme::utils::typography::medium_text_size()),
@@ -520,7 +508,10 @@ impl AddCredentialView {
                         0.94, 0.28, 0.44
                     ))), // Error red
                 Space::with_height(Length::Fixed(20.0)),
-                self.form.view().map(AddCredentialMessage::FormMessage),
+                button("Try Again")
+                    .on_press(AddCredentialMessage::RefreshTypes)
+                    .padding(utils::button_padding())
+                    .style(button_styles::primary()),
             ]
             .spacing(10),
         )

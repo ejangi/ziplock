@@ -737,11 +737,17 @@ pub mod text_input_styles {
         iced::theme::TextInput::Custom(Box::new(NeutralTextInputStyle))
     }
 
+    /// Title text input style (larger font and padding)
+    pub fn title() -> iced::theme::TextInput {
+        iced::theme::TextInput::Custom(Box::new(TitleTextInputStyle))
+    }
+
     // Style implementations
     struct StandardTextInputStyle;
     struct ValidTextInputStyle;
     struct InvalidTextInputStyle;
     struct NeutralTextInputStyle;
+    struct TitleTextInputStyle;
 
     impl iced::widget::text_input::StyleSheet for StandardTextInputStyle {
         type Style = iced::Theme;
@@ -960,6 +966,62 @@ pub mod text_input_styles {
                 border: iced::Border {
                     color: LIGHT_GRAY_BORDER,
                     width: 1.0,
+                    radius: utils::border_radius().into(),
+                },
+                icon_color: MEDIUM_GRAY,
+            }
+        }
+    }
+
+    impl iced::widget::text_input::StyleSheet for TitleTextInputStyle {
+        type Style = iced::Theme;
+
+        fn active(&self, _style: &Self::Style) -> iced::widget::text_input::Appearance {
+            iced::widget::text_input::Appearance {
+                background: WHITE.into(),
+                border: iced::Border {
+                    color: LIGHT_GRAY_BORDER,
+                    width: 2.0,
+                    radius: utils::border_radius().into(),
+                },
+                icon_color: LIGHT_GRAY_TEXT,
+            }
+        }
+
+        fn focused(&self, _style: &Self::Style) -> iced::widget::text_input::Appearance {
+            iced::widget::text_input::Appearance {
+                background: WHITE.into(),
+                border: iced::Border {
+                    color: LOGO_PURPLE,
+                    width: 2.0,
+                    radius: utils::border_radius().into(),
+                },
+                icon_color: LOGO_PURPLE,
+            }
+        }
+
+        fn placeholder_color(&self, _style: &Self::Style) -> Color {
+            LIGHT_GRAY_TEXT
+        }
+
+        fn value_color(&self, _style: &Self::Style) -> Color {
+            DARK_TEXT
+        }
+
+        fn disabled_color(&self, _style: &Self::Style) -> Color {
+            MEDIUM_GRAY
+        }
+
+        fn selection_color(&self, _style: &Self::Style) -> Color {
+            LOGO_PURPLE
+        }
+
+        fn disabled(&self, _style: &Self::Style) -> iced::widget::text_input::Appearance {
+            iced::widget::text_input::Appearance {
+                background: VERY_LIGHT_GRAY.into(),
+                border: iced::Border {
+                    color: LIGHT_GRAY_BORDER,
+                    width: 2.0,
                     radius: utils::border_radius().into(),
                 },
                 icon_color: MEDIUM_GRAY,
@@ -1247,6 +1309,11 @@ pub mod utils {
         10
     }
 
+    /// Creates a consistent padding value for title text inputs (larger)
+    pub fn title_input_padding() -> u16 {
+        16
+    }
+
     /// Creates a consistent padding value for toast dismiss buttons
     pub fn toast_dismiss_padding() -> [u16; 2] {
         [2, 6]
@@ -1384,9 +1451,33 @@ pub mod utils {
             base_font_size() + 6.0
         }
 
+        /// Get the icon SVG for a credential type
+        pub fn get_credential_type_icon(credential_type: &str) -> iced::widget::svg::Handle {
+            match credential_type {
+                "login" => crate::ui::theme::lock_icon(),
+                "credit_card" => crate::ui::theme::credit_card_icon(),
+                "secure_note" => crate::ui::theme::note_icon(),
+                "identity" => crate::ui::theme::user_icon(),
+                "password" => crate::ui::theme::lock_icon(),
+                "document" => crate::ui::theme::document_icon(),
+                "ssh_key" => crate::ui::theme::settings_icon(),
+                "bank_account" => crate::ui::theme::bank_icon(),
+                "api_credentials" => crate::ui::theme::settings_icon(),
+                "crypto_wallet" => crate::ui::theme::wallet_icon(),
+                "database" => crate::ui::theme::database_icon(),
+                "software_license" => crate::ui::theme::license_icon(),
+                _ => crate::ui::theme::alert_icon(),
+            }
+        }
+
         /// Get extra large text size (largest size)
         pub fn extra_large_text_size() -> f32 {
             base_font_size() + 10.0
+        }
+
+        /// Get title input text size (larger than standard input)
+        pub fn title_input_size() -> f32 {
+            base_font_size() + 4.0
         }
     }
 }

@@ -10,8 +10,6 @@ use iced::{
     widget::{button, column, container, row, scrollable, svg, text, text_input, Space},
     Alignment, Command, Element, Length,
 };
-use tracing::debug;
-use ziplock_shared::utils::StringUtils;
 
 /// Messages for the main application view
 #[derive(Debug, Clone)]
@@ -535,23 +533,41 @@ impl MainView {
         };
 
         button(
-            row![column![
-                text(&credential.title)
-                    .size(crate::ui::theme::utils::typography::medium_text_size())
-                    .style(iced::theme::Text::Color(theme::DARK_TEXT)),
-                text(&credential.username)
-                    .size(crate::ui::theme::utils::typography::small_text_size())
-                    .style(iced::theme::Text::Color(theme::LIGHT_GRAY_TEXT)),
-                if let Some(url) = &credential.url {
-                    text(url)
-                        .size(crate::ui::theme::utils::typography::small_text_size())
-                        .style(iced::theme::Text::Color(theme::LIGHT_GRAY_TEXT))
-                } else {
-                    text("")
+            row![
+                svg(
+                    crate::ui::theme::utils::typography::get_credential_type_icon(
+                        &credential.username
+                    )
+                )
+                .width(Length::Fixed(20.0))
+                .height(Length::Fixed(20.0)),
+                {
+                    let mut content_elements = vec![text(&credential.title)
+                        .size(crate::ui::theme::utils::typography::medium_text_size())
+                        .style(iced::theme::Text::Color(theme::DARK_TEXT))
+                        .into()];
+
+                    if let Some(url) = &credential.url {
+                        content_elements.push(
+                            text(url)
+                                .size(crate::ui::theme::utils::typography::small_text_size())
+                                .style(iced::theme::Text::Color(theme::LIGHT_GRAY_TEXT))
+                                .into(),
+                        );
+                    }
+
+                    container(
+                        column(content_elements).spacing(if credential.url.is_some() {
+                            2
+                        } else {
+                            0
+                        }),
+                    )
+                    .width(Length::Fill)
+                    .center_y()
                 }
             ]
-            .width(Length::Fill)
-            .align_items(Alignment::Start)]
+            .spacing(12)
             .padding(15)
             .align_items(Alignment::Center),
         )
@@ -604,10 +620,7 @@ impl MainView {
                     .map(|record| CredentialItem {
                         id: record.id,
                         title: record.title,
-                        username: format!(
-                            "Type: {}",
-                            StringUtils::to_display_name(&record.credential_type)
-                        ),
+                        username: record.credential_type.clone(),
                         url: None,
                         last_modified: record
                             .updated_at

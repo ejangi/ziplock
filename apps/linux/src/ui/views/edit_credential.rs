@@ -172,10 +172,12 @@ impl EditCredentialView {
                         }
                         self.form.set_field_values(field_values);
 
-                        // Configure form to show delete button
+                        // Configure form to show delete button with title styling
                         let config = CredentialFormConfig {
                             show_delete_button: true,
                             save_button_text: "Save".to_string(),
+                            use_title_styling: true,
+                            credential_type: Some(credential.credential_type.clone()),
                             ..CredentialFormConfig::default()
                         };
                         self.form.set_config(config);
@@ -256,6 +258,8 @@ impl EditCredentialView {
                 self.state = EditCredentialState::Saving;
                 let config = CredentialFormConfig {
                     is_loading: true,
+                    use_title_styling: true,
+                    credential_type: self.credential.as_ref().map(|c| c.credential_type.clone()),
                     ..CredentialFormConfig::default()
                 };
                 self.form.set_config(config);
@@ -367,28 +371,14 @@ impl EditCredentialView {
             EditCredentialState::Editing => self.view_editing(),
             EditCredentialState::Saving => self.view_saving(),
             EditCredentialState::Complete => self.view_complete(),
-            EditCredentialState::Error(_) => self.view_error(),
+            EditCredentialState::Error(ref error_msg) => self.view_error(error_msg),
         }
-    }
-
-    /// Render the header for the view
-    fn view_header(&self) -> Element<'_, EditCredentialMessage> {
-        let title = if let Some(credential) = &self.credential {
-            format!("Edit: {}", credential.title)
-        } else {
-            "Edit Credential".to_string()
-        };
-
-        text(title)
-            .size(crate::ui::theme::utils::typography::header_text_size())
-            .into()
     }
 
     /// Render the loading state
     fn view_loading(&self) -> Element<'_, EditCredentialMessage> {
         container(
             column![
-                self.view_header(),
                 Space::with_height(Length::Fixed(40.0)),
                 text("Loading credential data...")
                     .size(crate::ui::theme::utils::typography::medium_text_size()),
@@ -408,7 +398,6 @@ impl EditCredentialView {
     fn view_editing(&self) -> Element<'_, EditCredentialMessage> {
         container(
             column![
-                self.view_header(),
                 Space::with_height(Length::Fixed(20.0)),
                 self.form.view().map(EditCredentialMessage::FormMessage),
             ]
@@ -424,7 +413,6 @@ impl EditCredentialView {
     fn view_saving(&self) -> Element<'_, EditCredentialMessage> {
         container(
             column![
-                self.view_header(),
                 Space::with_height(Length::Fixed(40.0)),
                 text("Saving changes...")
                     .size(crate::ui::theme::utils::typography::medium_text_size()),
@@ -442,7 +430,6 @@ impl EditCredentialView {
     fn view_complete(&self) -> Element<'_, EditCredentialMessage> {
         container(
             column![
-                self.view_header(),
                 Space::with_height(Length::Fixed(40.0)),
                 text("✅ Credential updated successfully!")
                     .size(crate::ui::theme::utils::typography::large_text_size())
@@ -465,12 +452,9 @@ impl EditCredentialView {
     }
 
     /// Render the error state
-    fn view_error(&self) -> Element<'_, EditCredentialMessage> {
-        let error_message = "Failed to edit credential";
-
+    fn view_error(&self, error_message: &str) -> Element<'_, EditCredentialMessage> {
         container(
             column![
-                self.view_header(),
                 Space::with_height(Length::Fixed(20.0)),
                 text("Error updating credential:")
                     .size(crate::ui::theme::utils::typography::medium_text_size()),
