@@ -610,8 +610,8 @@ jobs:
           cp artifacts/debian-package/*.deb release-assets/
 
           # Copy Arch package files
-          cp artifacts/arch-package/*.tar.gz release-assets/
-          cp artifacts/arch-package/PKGBUILD release-assets/
+          cp artifacts/arch-package/target/*.tar.gz release-assets/
+          cp artifacts/arch-package/packaging/arch/PKGBUILD release-assets/
 
           # Copy compiled binaries
           mkdir -p release-assets/binaries
