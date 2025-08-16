@@ -555,8 +555,10 @@ jobs:
                 echo \"DEBUG: Original PKGBUILD sha256sums line:\"
                 grep \"^sha256sums=\" PKGBUILD || echo \"No sha256sums line found\"
 
-                # Update sha256sums using simple substitution to avoid escaping issues
-                sed -i \"s/^sha256sums=.*/sha256sums=(\\\"\\$SHA256\\\")/g\" PKGBUILD
+                # Update sha256sums using printf to avoid escaping issues completely
+                grep -v \"^sha256sums=\" PKGBUILD > PKGBUILD.tmp
+                printf \"sha256sums=(\\\"%s\\\")\\n\" \"\\$SHA256\" >> PKGBUILD.tmp
+                mv PKGBUILD.tmp PKGBUILD
 
                 echo \"DEBUG: Updated PKGBUILD sha256sums line:\"
                 grep \"^sha256sums=\" PKGBUILD || echo \"No sha256sums line found after update\"
