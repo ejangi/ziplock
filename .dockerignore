@@ -1,0 +1,51 @@
+# Build artifacts
+target/
+android-builds/
+mobile-builds/
+
+# Rust incremental compilation
+**/*.rlib
+**/*.pdb
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.temp
+
+# Node modules (if any)
+node_modules/
+
+# Git
+.git/
+.gitignore
+
+# Documentation build artifacts
+docs/_build/
+docs/.doctrees/
+
+# Test artifacts
+coverage/
+*.profraw
+
+# Package artifacts
+*.deb
+*.rpm
+*.tar.gz
+*.zip
+
+# Local configuration
+.env
+.env.local

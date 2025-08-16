@@ -8,4 +8,4 @@ Run one of the following prompts in Zed's agent panel and when you're ready to b
 
 
 ## Android
-- Can you review `docs/technical.md` and `docs/technical/*.md` and ensure the the shared libraries are set up ready for use in Android. I think initially, we'll need to make sure they can compile for arm. I'm happy for you to do your planning in `docs/technical/android.md` if need be. I'm also happy that if you need to build a docker container to assist with arm compilation. We currently have these Dockerfiles in `.github/docker/` and scripts can go in `scripts/build/`
+- Can you review `docs/technical.md` and `docs/technical/*.md` and have a think about whether we need to make any changes to file locking. Does that still work on Android? I'm conscious that sometimes the user will want to open files from Google Drive or Dropbox, etc and I'm not sure how Android handles files from cloud services and whether we still get a local storage location to manage lock files.
