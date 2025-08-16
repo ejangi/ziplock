@@ -90,10 +90,10 @@ ZipLock follows a unified architecture with native applications calling a shared
 
 | Platform | Status | Technology | Features |
 |----------|--------|------------|----------|
-| **Linux** | 🚧 In Development | Rust + iced/GTK4 | Full desktop experience, Wayland support |
+| **Linux** | ✅ Stage | Rust + iced/GTK4 | Full desktop experience, Wayland support |
 | **Windows** | 📋 Planned | Rust + Tauri | Native Windows integration |
 | **iOS** | 📋 Planned | Swift + SwiftUI | Direct FFI integration with shared core |
-| **Android** | 📋 Planned | Kotlin + Jetpack Compose | Direct FFI integration with shared core |
+| **Android** | 🚧 In Development | Kotlin + Jetpack Compose | Direct FFI integration with shared core |
 | **macOS** | 📋 Planned | Swift + SwiftUI | Native macOS experience |
 
 ### Architecture Benefits
@@ -107,8 +107,8 @@ ZipLock follows a unified architecture with native applications calling a shared
 ZipLock follows a unified architecture with direct FFI integration for maximum portability and simplicity:
 
 ```
-┌─────────────────┐    Direct    ┌─────────────────┐    File I/O   ┌─────────────────┐
-│  Application    │    FFI       │   Shared Core   │ ◄────────────► │ Encrypted 7z    │
+┌─────────────────┐    Direct   ┌─────────────────┐    File I/O   ┌─────────────────┐
+│  Application    │    FFI      │   Shared Core   │ ◄───────────► │ Encrypted 7z    │
 │                 │ ◄─────────► │    Library      │               │ Archive         │
 │ • Linux (Rust)  │             │     (Rust)      │               │                 │
 │ • Windows(Rust) │             │                 │               │                 │
