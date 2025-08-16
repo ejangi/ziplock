@@ -40,15 +40,7 @@ jobs:
             ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}-
             ${{ runner.os }}-cargo-
 
-      - name: Install system dependencies
-        uses: actions/cache@v4
-        id: deps-cache
-        with:
-          path: /var/cache/apt
-          key: ${{ runner.os }}-deps-${{ hashFiles('.github/workflows/linux-build.yml') }}
-
       - name: Install dependencies
-        if: steps.deps-cache.outputs.cache-hit != 'true'
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -157,14 +149,70 @@ jobs:
           name: compiled-binaries
           path: target/x86_64-unknown-linux-gnu/release/
 
-      - name: Make binaries executable
+      - name: Create installation structure
         run: |
-          chmod +x target/x86_64-unknown-linux-gnu/release/ziplock
-          ls -la target/x86_64-unknown-linux-gnu/release/
+          echo "Creating installation structure for packaging..."
+
+          # Create the directory structure expected by package-deb.sh
+          mkdir -p target/install/usr/bin
+          mkdir -p target/install/usr/lib
+          mkdir -p target/install/etc/ziplock
+          mkdir -p target/install/usr/share/applications
+          mkdir -p target/install/usr/share/icons/hicolor/scalable/apps
+
+          # Copy binaries from download location to install structure
+          cp target/x86_64-unknown-linux-gnu/release/ziplock target/install/usr/bin/
+          cp target/x86_64-unknown-linux-gnu/release/libziplock_shared.so target/install/usr/lib/
+
+          # Make binaries executable
+          chmod +x target/install/usr/bin/ziplock
+          chmod 644 target/install/usr/lib/libziplock_shared.so
+
+          # Create default config
+          cat > target/install/etc/ziplock/config.yml << 'EOF'
+          # ZipLock Configuration (Unified FFI Architecture)
+          storage:
+            backup_count: 3
+            auto_backup: true
+            compression:
+              level: 6
+              solid: false
+              multi_threaded: true
+
+          security:
+            auto_lock_timeout: 900  # 15 minutes
+            min_master_key_length: 12
+            enforce_strong_master_key: true
+
+          ui:
+            theme: "auto"  # auto, light, dark
+            font_size: 14
+            show_password_strength: true
+
+          logging:
+            level: "info"  # debug, info, warn, error
+            file: null     # null for console only, or path to log file
+          EOF
+
+          # Copy desktop file if it exists
+          if [ -f "apps/linux/resources/ziplock.desktop" ]; then
+            cp apps/linux/resources/ziplock.desktop target/install/usr/share/applications/
+          fi
+
+          # Copy icon if it exists
+          if [ -f "apps/linux/resources/icons/ziplock.svg" ]; then
+            cp apps/linux/resources/icons/ziplock.svg target/install/usr/share/icons/hicolor/scalable/apps/
+          elif [ -f "assets/icons/ziplock-logo.svg" ]; then
+            cp assets/icons/ziplock-logo.svg target/install/usr/share/icons/hicolor/scalable/apps/ziplock.svg
+          fi
+
+          # Verify installation structure
+          echo "Installation structure created:"
+          find target/install -type f | sort
 
       - name: Create Debian package
         run: |
-          echo "Creating Debian package from pre-built binaries..."
+          echo "Creating Debian package from installation structure..."
           docker run --rm \
             -v $PWD:/workspace \
             ghcr.io/${{ github.repository }}/ubuntu-builder:latest \
@@ -212,9 +260,66 @@ jobs:
           name: compiled-binaries
           path: target/x86_64-unknown-linux-gnu/release/
 
+      - name: Create installation structure for Arch package
+        run: |
+          echo "Creating installation structure for Arch packaging..."
+
+          # Create the directory structure (same as Debian)
+          mkdir -p target/install/usr/bin
+          mkdir -p target/install/usr/lib
+          mkdir -p target/install/etc/ziplock
+          mkdir -p target/install/usr/share/applications
+          mkdir -p target/install/usr/share/icons/hicolor/scalable/apps
+
+          # Copy binaries from download location to install structure
+          cp target/x86_64-unknown-linux-gnu/release/ziplock target/install/usr/bin/
+          cp target/x86_64-unknown-linux-gnu/release/libziplock_shared.so target/install/usr/lib/
+
+          # Make binaries executable
+          chmod +x target/install/usr/bin/ziplock
+          chmod 644 target/install/usr/lib/libziplock_shared.so
+
+          # Create default config
+          cat > target/install/etc/ziplock/config.yml << 'EOF'
+          # ZipLock Configuration (Unified FFI Architecture)
+          storage:
+            backup_count: 3
+            auto_backup: true
+            compression:
+              level: 6
+              solid: false
+              multi_threaded: true
+
+          security:
+            auto_lock_timeout: 900  # 15 minutes
+            min_master_key_length: 12
+            enforce_strong_master_key: true
+
+          ui:
+            theme: "auto"  # auto, light, dark
+            font_size: 14
+            show_password_strength: true
+
+          logging:
+            level: "info"  # debug, info, warn, error
+            file: null     # null for console only, or path to log file
+          EOF
+
+          # Copy desktop file if it exists
+          if [ -f "apps/linux/resources/ziplock.desktop" ]; then
+            cp apps/linux/resources/ziplock.desktop target/install/usr/share/applications/
+          fi
+
+          # Copy icon if it exists
+          if [ -f "apps/linux/resources/icons/ziplock.svg" ]; then
+            cp apps/linux/resources/icons/ziplock.svg target/install/usr/share/icons/hicolor/scalable/apps/
+          elif [ -f "assets/icons/ziplock-logo.svg" ]; then
+            cp assets/icons/ziplock-logo.svg target/install/usr/share/icons/hicolor/scalable/apps/ziplock.svg
+          fi
+
       - name: Create Arch package structure
         run: |
-          echo "Creating Arch source package from pre-built binaries..."
+          echo "Creating Arch source package from installation structure..."
           docker run --rm \
             -v $PWD:/workspace \
             ghcr.io/${{ github.repository }}/arch-builder:latest \
