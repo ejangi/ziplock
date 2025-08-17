@@ -139,9 +139,10 @@ install_android_targets() {
 # Test compilation for a single target
 test_target_compilation() {
     local target="$1"
+    local build_mode="${2:-debug}"
     local description="${TARGET_DESCRIPTIONS[$target]}"
 
-    print_status "Testing compilation for $target ($description)"
+    print_status "Testing compilation for $target ($description) in $build_mode mode"
 
     cd "$SHARED_DIR"
 
@@ -154,10 +155,15 @@ test_target_compilation() {
     fi
 
     # Test actual build
-    if cargo build --target "$target" --features c-api; then
-        print_success "✓ Build passed: $target"
+    local build_flags="--target $target --features c-api"
+    if [ "$build_mode" = "release" ]; then
+        build_flags="$build_flags --release"
+    fi
+
+    if cargo build $build_flags; then
+        print_success "✓ Build passed: $target ($build_mode)"
     else
-        print_error "✗ Build failed: $target"
+        print_error "✗ Build failed: $target ($build_mode)"
         return 1
     fi
 
@@ -165,7 +171,7 @@ test_target_compilation() {
     local lib_path
     case "$target" in
         *-android)
-            lib_path="target/$target/debug/libziplock_shared.so"
+            lib_path="target/$target/$build_mode/libziplock_shared.so"
             ;;
         *)
             print_error "Unknown target type: $target"
@@ -186,14 +192,15 @@ test_target_compilation() {
 
 # Test all Android targets
 test_all_targets() {
-    print_status "Testing compilation for all Android targets..."
+    local build_mode="${1:-debug}"
+    print_status "Testing compilation for all Android targets in $build_mode mode..."
     echo ""
 
     local failed_targets=()
     local successful_targets=()
 
     for target in "${TARGETS[@]}"; do
-        if test_target_compilation "$target"; then
+        if test_target_compilation "$target" "$build_mode"; then
             successful_targets+=("$target")
         else
             failed_targets+=("$target")
@@ -202,7 +209,7 @@ test_all_targets() {
     done
 
     # Summary
-    echo "Compilation Test Summary:"
+    echo "Compilation Test Summary ($build_mode mode):"
     echo "========================"
 
     if [ ${#successful_targets[@]} -gt 0 ]; then
@@ -225,7 +232,7 @@ test_all_targets() {
     fi
 
     echo ""
-    print_success "All Android targets compiled successfully!"
+    print_success "All Android targets compiled successfully in $build_mode mode!"
     return 0
 }
 
@@ -267,30 +274,11 @@ test_features() {
     return 0
 }
 
-# Test release builds
+# Test release builds for all targets
 test_release_builds() {
-    print_status "Testing release builds..."
+    print_status "Testing release builds for all Android targets..."
 
-    local target="aarch64-linux-android"  # Use primary target
-
-    cd "$SHARED_DIR"
-
-    print_status "Testing release build for $target..."
-    if cargo build --release --target "$target" --features c-api; then
-        local lib_path="target/$target/release/libziplock_shared.so"
-        if [ -f "$lib_path" ]; then
-            local size=$(du -h "$lib_path" | cut -f1)
-            print_success "✓ Release build successful: $lib_path ($size)"
-        else
-            print_error "✗ Release library not found: $lib_path"
-            return 1
-        fi
-    else
-        print_error "✗ Release build failed for $target"
-        return 1
-    fi
-
-    return 0
+    test_all_targets "release"
 }
 
 # Clean build artifacts
@@ -322,9 +310,9 @@ usage() {
     echo "Usage: $0 [COMMAND]"
     echo ""
     echo "Commands:"
-    echo "  targets        Test compilation for all Android targets (default)"
+    echo "  targets        Test compilation for all Android targets in debug mode (default)"
     echo "  features       Test feature compilation"
-    echo "  release        Test release builds"
+    echo "  release        Test release builds for all Android targets"
     echo "  test           Run tests"
     echo "  install        Install Android targets"
     echo "  clean          Clean build artifacts"
@@ -332,8 +320,9 @@ usage() {
     echo "  help           Show this help message"
     echo ""
     echo "Examples:"
-    echo "  $0             # Test all Android targets"
-    echo "  $0 targets     # Test compilation for all targets"
+    echo "  $0             # Test all Android targets in debug mode"
+    echo "  $0 targets     # Test compilation for all targets in debug mode"
+    echo "  $0 release     # Test compilation for all targets in release mode"
     echo "  $0 features    # Test feature compilation"
     echo "  $0 all         # Run comprehensive tests"
 }
@@ -346,7 +335,7 @@ main() {
         "targets")
             check_prerequisites
             install_android_targets
-            test_all_targets
+            test_all_targets "debug"
             ;;
         "features")
             check_prerequisites
@@ -354,6 +343,7 @@ main() {
             ;;
         "release")
             check_prerequisites
+            install_android_targets
             test_release_builds
             ;;
         "test")
@@ -370,7 +360,7 @@ main() {
         "all")
             check_prerequisites
             install_android_targets
-            test_all_targets
+            test_all_targets "debug"
             test_features
             test_release_builds
             run_tests

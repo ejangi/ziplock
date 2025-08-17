@@ -63,26 +63,98 @@ jobs:
           mkdir -p ~/.cargo
           cat >> ~/.cargo/config.toml << 'EOF'
           [target.aarch64-linux-android]
-          ar = "aarch64-linux-android-ar"
+          ar = "llvm-ar"
           linker = "aarch64-linux-android21-clang"
+          rustflags = [
+              "-C", "link-arg=--target=aarch64-linux-android21",
+              "-C", "link-arg=-llog",
+              "-C", "link-arg=-lm",
+              "-C", "link-arg=-ldl",
+              "-C", "link-arg=-lc"
+          ]
 
           [target.armv7-linux-androideabi]
-          ar = "arm-linux-androideabi-ar"
+          ar = "llvm-ar"
           linker = "armv7a-linux-androideabi21-clang"
+          rustflags = [
+              "-C", "link-arg=--target=armv7a-linux-androideabi21",
+              "-C", "link-arg=-llog",
+              "-C", "link-arg=-lm",
+              "-C", "link-arg=-ldl",
+              "-C", "link-arg=-lc"
+          ]
 
           [target.x86_64-linux-android]
-          ar = "x86_64-linux-android-ar"
+          ar = "llvm-ar"
           linker = "x86_64-linux-android21-clang"
+          rustflags = [
+              "-C", "link-arg=--target=x86_64-linux-android21",
+              "-C", "link-arg=-llog",
+              "-C", "link-arg=-lm",
+              "-C", "link-arg=-ldl",
+              "-C", "link-arg=-lc"
+          ]
 
           [target.i686-linux-android]
-          ar = "i686-linux-android-ar"
+          ar = "llvm-ar"
           linker = "i686-linux-android21-clang"
+          rustflags = [
+              "-C", "link-arg=--target=i686-linux-android21",
+              "-C", "link-arg=-llog",
+              "-C", "link-arg=-lm",
+              "-C", "link-arg=-ldl",
+              "-C", "link-arg=-lc"
+          ]
           EOF
+
+          # Set environment variables for C/C++ compilation
+          export CC_aarch64_linux_android="aarch64-linux-android21-clang"
+          export CXX_aarch64_linux_android="aarch64-linux-android21-clang++"
+          export AR_aarch64_linux_android="llvm-ar"
+
+          export CC_armv7_linux_androideabi="armv7a-linux-androideabi21-clang"
+          export CXX_armv7_linux_androideabi="armv7a-linux-androideabi21-clang++"
+          export AR_armv7_linux_androideabi="llvm-ar"
+
+          export CC_x86_64_linux_android="x86_64-linux-android21-clang"
+          export CXX_x86_64_linux_android="x86_64-linux-android21-clang++"
+          export AR_x86_64_linux_android="llvm-ar"
+
+          export CC_i686_linux_android="i686-linux-android21-clang"
+          export CXX_i686_linux_android="i686-linux-android21-clang++"
+          export AR_i686_linux_android="llvm-ar"
+
+          # Add to GitHub environment for subsequent steps
+          echo "CC_aarch64_linux_android=aarch64-linux-android21-clang" >> $GITHUB_ENV
+          echo "CXX_aarch64_linux_android=aarch64-linux-android21-clang++" >> $GITHUB_ENV
+          echo "AR_aarch64_linux_android=llvm-ar" >> $GITHUB_ENV
+
+          echo "CC_armv7_linux_androideabi=armv7a-linux-androideabi21-clang" >> $GITHUB_ENV
+          echo "CXX_armv7_linux_androideabi=armv7a-linux-androideabi21-clang++" >> $GITHUB_ENV
+          echo "AR_armv7_linux_androideabi=llvm-ar" >> $GITHUB_ENV
+
+          echo "CC_x86_64_linux_android=x86_64-linux-android21-clang" >> $GITHUB_ENV
+          echo "CXX_x86_64_linux_android=x86_64-linux-android21-clang++" >> $GITHUB_ENV
+          echo "AR_x86_64_linux_android=llvm-ar" >> $GITHUB_ENV
+
+          echo "CC_i686_linux_android=i686-linux-android21-clang" >> $GITHUB_ENV
+          echo "CXX_i686_linux_android=i686-linux-android21-clang++" >> $GITHUB_ENV
+          echo "AR_i686_linux_android=llvm-ar" >> $GITHUB_ENV
+
+      - name: Verify NDK tools accessibility
+        run: |
+          echo "Verifying NDK tools are accessible..."
+          which aarch64-linux-android21-clang || { echo "aarch64-linux-android21-clang not found"; exit 1; }
+          which armv7a-linux-androideabi21-clang || { echo "armv7a-linux-androideabi21-clang not found"; exit 1; }
+          which x86_64-linux-android21-clang || { echo "x86_64-linux-android21-clang not found"; exit 1; }
+          which i686-linux-android21-clang || { echo "i686-linux-android21-clang not found"; exit 1; }
+          which llvm-ar || { echo "llvm-ar not found"; exit 1; }
+          echo "All NDK tools verified successfully"
 
       - name: Test Android compilation
         run: |
           chmod +x scripts/build/test-android-compilation.sh
-          ./scripts/build/test-android-compilation.sh all
+          ./scripts/build/test-android-compilation.sh release
 
   android-docker-build:
     name: Docker-based Android Build
@@ -99,49 +171,10 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build Android libraries using pre-built container
+      - name: Build Android libraries using Docker build script
         run: |
-          # Create output directory
-          mkdir -p target/android
-
-          # Use pre-built container image
-          docker run --rm \
-            -v "$PWD:/workspace" \
-            -v "$PWD/target/android:/output" \
-            -w /workspace
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/android-builder:latest \
-            bash -c "
-              set -e
-              echo 'Building ZipLock Android libraries...'
-
-              cd shared
-
-              # Build for all Android architectures
-              echo 'Building for ARM64...'
-              cargo build --release --target aarch64-linux-android --features c-api
-              mkdir -p /output/arm64-v8a
-              cp /workspace/target/aarch64-linux-android/release/libziplock_shared.so /output/arm64-v8a/
-
-              echo 'Building for ARMv7...'
-              cargo build --release --target armv7-linux-androideabi --features c-api
-              mkdir -p /output/armeabi-v7a
-              cp /workspace/target/armv7-linux-androideabi/release/libziplock_shared.so /output/armeabi-v7a/
-
-              echo 'Building for x86_64...'
-              cargo build --release --target x86_64-linux-android --features c-api
-              mkdir -p /output/x86_64
-              cp /workspace/target/x86_64-linux-android/release/libziplock_shared.so /output/x86_64/
-
-              echo 'Building for x86...'
-              cargo build --release --target i686-linux-android --features c-api
-              mkdir -p /output/x86
-              cp /workspace/target/i686-linux-android/release/libziplock_shared.so /output/x86/
-
-              # Copy header file
-              cp /workspace/shared/include/ziplock.h /output/
-
-              echo 'Android build completed successfully!'
-            "
+          chmod +x scripts/build/build-android-docker.sh
+          ./scripts/build/build-android-docker.sh build
 
       - name: Test built libraries
         run: |
