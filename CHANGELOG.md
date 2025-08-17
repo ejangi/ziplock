@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.9] - 2025-08-17
+
 ### Added
 - **Android app now in development!**
 - Added a LOCK button to the Linux app.
