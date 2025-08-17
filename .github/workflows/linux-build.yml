@@ -215,6 +215,7 @@ jobs:
           mkdir -p target/install/etc/ziplock
           mkdir -p target/install/usr/share/applications
           mkdir -p target/install/usr/share/icons/hicolor/scalable/apps
+          mkdir -p target/install/usr/share/mime/packages
 
           # Copy binaries from download location to install structure
           cp target/x86_64-unknown-linux-gnu/release/ziplock target/install/usr/bin/
@@ -260,6 +261,11 @@ jobs:
             cp apps/linux/resources/icons/ziplock.svg target/install/usr/share/icons/hicolor/scalable/apps/
           elif [ -f "assets/icons/ziplock-logo.svg" ]; then
             cp assets/icons/ziplock-logo.svg target/install/usr/share/icons/hicolor/scalable/apps/ziplock.svg
+          fi
+
+          # Copy MIME type file if it exists
+          if [ -f "apps/linux/resources/mime/packages/ziplock.xml" ]; then
+            cp apps/linux/resources/mime/packages/ziplock.xml target/install/usr/share/mime/packages/
           fi
 
           # Verify installation structure
@@ -408,6 +414,7 @@ jobs:
           mkdir -p target/install/etc/ziplock
           mkdir -p target/install/usr/share/applications
           mkdir -p target/install/usr/share/icons/hicolor/scalable/apps
+          mkdir -p target/install/usr/share/mime/packages
 
           # Copy binaries from download location to install structure
           cp target/x86_64-unknown-linux-gnu/release/ziplock target/install/usr/bin/
@@ -453,6 +460,11 @@ jobs:
             cp apps/linux/resources/icons/ziplock.svg target/install/usr/share/icons/hicolor/scalable/apps/
           elif [ -f "assets/icons/ziplock-logo.svg" ]; then
             cp assets/icons/ziplock-logo.svg target/install/usr/share/icons/hicolor/scalable/apps/ziplock.svg
+          fi
+
+          # Copy MIME type file if it exists
+          if [ -f "apps/linux/resources/mime/packages/ziplock.xml" ]; then
+            cp apps/linux/resources/mime/packages/ziplock.xml target/install/usr/share/mime/packages/
           fi
 
       - name: Create Arch package structure
