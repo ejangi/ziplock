@@ -37,6 +37,7 @@ pub enum MainViewMessage {
 
     // Session management
     SessionTimeout,
+    CloseArchive,
 
     // Error handling (now uses global toast system)
     ShowError(String),
@@ -261,6 +262,11 @@ impl MainView {
                 // Just return none as the timeout has already been processed
                 Command::none()
             }
+
+            MainViewMessage::CloseArchive => {
+                // This is handled at the application level in main.rs
+                Command::none()
+            }
         }
     }
 
@@ -326,6 +332,19 @@ impl MainView {
         .width(Length::Fill)
         .center_x();
 
+        let close_button = container(
+            button(
+                svg(theme::lock_icon())
+                    .width(Length::Fixed(20.0))
+                    .height(Length::Fixed(20.0)),
+            )
+            .on_press(MainViewMessage::CloseArchive)
+            .padding(12)
+            .style(button_styles::destructive()),
+        )
+        .width(Length::Fill)
+        .center_x();
+
         let sidebar_content = column![
             logo,
             Space::with_height(Length::Fixed(30.0)),
@@ -334,6 +353,8 @@ impl MainView {
             update_button,
             Space::with_height(Length::Fixed(10.0)),
             settings_button,
+            Space::with_height(Length::Fixed(10.0)),
+            close_button,
         ]
         .spacing(0)
         .padding(20)

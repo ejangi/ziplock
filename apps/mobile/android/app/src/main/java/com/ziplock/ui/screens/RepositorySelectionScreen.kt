@@ -38,10 +38,15 @@ import com.ziplock.ui.theme.*
 fun RepositorySelectionScreen(
     onRepositorySelected: (String, String) -> Unit,
     onCreateNew: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    initialFilePath: String? = null
 ) {
-    var selectedFilePath by remember { mutableStateOf<String?>(null) }
-    var selectedFileName by remember { mutableStateOf<String?>(null) }
+    var selectedFilePath by remember { mutableStateOf<String?>(initialFilePath) }
+    var selectedFileName by remember { mutableStateOf<String?>(
+        initialFilePath?.let { path ->
+            extractUserFriendlyFileName(path)
+        }
+    ) }
     var passphrase by remember { mutableStateOf("") }
     var isLoading by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
@@ -269,6 +274,51 @@ fun RepositorySelectionScreen(
 /**
  * Preview for the Repository Selection Screen
  */
+/**
+ * Extract a user-friendly filename from a file path or content URI
+ */
+private fun extractUserFriendlyFileName(path: String): String {
+    return when {
+        path.startsWith("content://") -> {
+            // Handle Android content URIs
+            try {
+                // First try to extract from the document ID part
+                val documentId = path.substringAfterLast("/")
+
+                // Decode URL encoding
+                val decoded = java.net.URLDecoder.decode(documentId, "UTF-8")
+
+                // Extract filename from various content URI formats
+                when {
+                    // Format: "primary:Documents/filename.7z" or "1234:filename.7z"
+                    decoded.contains(":") && decoded.contains("/") -> {
+                        decoded.substringAfterLast("/")
+                    }
+                    // Format: "primary:filename.7z"
+                    decoded.contains(":") -> {
+                        decoded.substringAfterLast(":")
+                    }
+                    // Format: just "filename.7z"
+                    decoded.contains(".") -> {
+                        decoded
+                    }
+                    // Fallback
+                    else -> "Selected Archive"
+                }
+            } catch (e: Exception) {
+                // If decoding fails, try simple extraction
+                path.substringAfterLast("/").takeIf {
+                    it.isNotEmpty() && it.contains(".")
+                } ?: "Selected Archive"
+            }
+        }
+        else -> {
+            // Handle regular file paths
+            path.substringAfterLast("/")
+        }
+    }
+}
+
 @Preview(showBackground = true)
 @Composable
 fun RepositorySelectionScreenPreview() {

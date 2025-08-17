@@ -1,12 +1,17 @@
 package com.ziplock.viewmodel
 
+import android.content.Context
+import android.content.SharedPreferences
 import androidx.lifecycle.ViewModel
+import com.ziplock.config.AndroidConfigManager
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
+import java.io.File
 
 /**
  * Repository View Model
@@ -16,11 +21,15 @@ import kotlinx.coroutines.delay
  * - Creating new archives
  * - FFI library integration for archive operations
  * - Error handling and user feedback
+ * - Persistent storage of last opened archive path
  *
  * This view model serves as the bridge between the UI and the shared FFI library,
  * handling all repository-related operations without exposing crypto implementation details.
  */
-class RepositoryViewModel : ViewModel() {
+class RepositoryViewModel(private val context: Context) : ViewModel() {
+
+    // Configuration manager for persistent settings
+    private val configManager: AndroidConfigManager = AndroidConfigManager(context)
 
     // UI State
     private val _uiState = MutableStateFlow(RepositoryUiState())
@@ -29,6 +38,25 @@ class RepositoryViewModel : ViewModel() {
     // Repository State
     private val _repositoryState = MutableStateFlow<RepositoryState>(RepositoryState.None)
     val repositoryState: StateFlow<RepositoryState> = _repositoryState.asStateFlow()
+
+    // Expose config manager's last archive path
+    val lastArchivePath: StateFlow<String?> = configManager.lastArchivePath
+
+    /**
+     * Get the last opened archive path if it still exists
+     *
+     * @return The path to the last opened archive file, or null if none exists or file is inaccessible
+     */
+    fun getLastOpenedArchivePath(): String? {
+        return configManager.getLastOpenedArchivePath()
+    }
+
+    /**
+     * Check if there's a valid last opened archive that can be auto-opened
+     */
+    fun hasValidLastArchive(): Boolean {
+        return configManager.hasValidLastArchive()
+    }
 
     /**
      * Open an existing archive
@@ -78,6 +106,9 @@ class RepositoryViewModel : ViewModel() {
                     archivePath = filePath,
                     sessionId = generateSessionId()
                 )
+
+                // Save the successfully opened archive path
+                configManager.setLastArchivePath(filePath)
 
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
@@ -141,6 +172,9 @@ class RepositoryViewModel : ViewModel() {
                     sessionId = generateSessionId()
                 )
 
+                // Save the successfully created archive path
+                configManager.setLastArchivePath(filePath)
+
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
                     successMessage = "New archive created successfully"
@@ -183,6 +217,13 @@ class RepositoryViewModel : ViewModel() {
                 )
             }
         }
+    }
+
+    /**
+     * Clear the saved last archive path
+     */
+    fun clearLastArchivePath() {
+        configManager.clearLastArchivePath()
     }
 
     /**
@@ -321,11 +362,26 @@ class RepositoryViewModel : ViewModel() {
         }
     }
 
+
+
     /**
      * Generate a unique session ID for tracking archive operations
      */
     private fun generateSessionId(): String {
         return "session_${System.currentTimeMillis()}_${(1000..9999).random()}"
+    }
+}
+
+/**
+ * ViewModelFactory for RepositoryViewModel that requires context
+ */
+class RepositoryViewModelFactory(private val context: Context) : ViewModelProvider.Factory {
+    @Suppress("UNCHECKED_CAST")
+    override fun <T : ViewModel> create(modelClass: Class<T>): T {
+        if (modelClass.isAssignableFrom(RepositoryViewModel::class.java)) {
+            return RepositoryViewModel(context) as T
+        }
+        throw IllegalArgumentException("Unknown ViewModel class")
     }
 }
 

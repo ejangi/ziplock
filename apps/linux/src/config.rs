@@ -168,7 +168,6 @@ impl ConfigManager {
     }
 
     /// Get the most recently used repository path if it's still accessible
-    #[allow(dead_code)] // Public API for future use
     pub fn get_most_recent_accessible_repository(&self) -> Option<&std::path::PathBuf> {
         // Check if current repository path is still accessible
         if let Some(current_path) = self.repository_path() {

@@ -108,6 +108,7 @@ pub enum Message {
     // General
     Quit,
     QuittingWithLogout,
+    CloseArchive,
     Error(String),
 }
 
@@ -219,6 +220,21 @@ impl Application for ZipLockApp {
                     if config_manager.should_show_wizard() {
                         debug!("No repositories found, showing setup wizard");
                         self.state = AppState::WizardRequired;
+                        self.config_manager = Some(config_manager);
+                        return Command::none();
+                    }
+
+                    // Check for most recently used repository first
+                    if let Some(most_recent_path) =
+                        config_manager.get_most_recent_accessible_repository()
+                    {
+                        info!(
+                            "Auto-opening most recently used repository: {:?}",
+                            most_recent_path
+                        );
+                        let open_view =
+                            OpenRepositoryView::with_repository(most_recent_path.clone());
+                        self.state = AppState::OpenRepositoryActive(open_view);
                         self.config_manager = Some(config_manager);
                         return Command::none();
                     }
@@ -510,6 +526,10 @@ impl Application for ZipLockApp {
                         MainViewMessage::ShowSettings => {
                             // Show settings view
                             Command::perform(async {}, |_| Message::ShowSettings)
+                        }
+                        MainViewMessage::CloseArchive => {
+                            // Close archive and return to repository selection
+                            Command::perform(async {}, |_| Message::CloseArchive)
                         }
                         MainViewMessage::CheckForUpdates => {
                             // Trigger update check
@@ -954,6 +974,50 @@ impl Application for ZipLockApp {
                         }
                     },
                 )
+            }
+
+            Message::CloseArchive => {
+                info!("Archive close requested, returning to repository selection");
+
+                // Clear session and return to repository detection/selection
+                self.session_id = None;
+                self.auto_lock_enabled = false;
+
+                // Clear clipboard content
+                let clipboard_manager = self.clipboard_manager.clone();
+                std::mem::drop(tokio::spawn(async move {
+                    clipboard_manager.clear_tracked_content().await;
+                }));
+
+                // Get the current repository path before clearing
+                let current_repo_path = self
+                    .config_manager
+                    .as_ref()
+                    .and_then(|cm| cm.repository_path())
+                    .cloned();
+
+                // Start repository detection but prioritize the current repository
+                self.state = AppState::DetectingRepositories;
+                if let Some(config_manager) = &self.config_manager {
+                    let repositories = config_manager.detect_all_accessible_repositories();
+
+                    // If we have a current repository, ensure it's at the front of the list
+                    let mut sorted_repos = repositories;
+                    if let Some(current_path) = current_repo_path {
+                        // Move current repository to front if it exists in the list
+                        if let Some(current_repo_index) = sorted_repos
+                            .iter()
+                            .position(|repo| repo.path == current_path)
+                        {
+                            let current_repo = sorted_repos.remove(current_repo_index);
+                            sorted_repos.insert(0, current_repo);
+                        }
+                    }
+
+                    Command::perform(async move { sorted_repos }, Message::RepositoriesDetected)
+                } else {
+                    Command::none()
+                }
             }
 
             Message::Quit => {

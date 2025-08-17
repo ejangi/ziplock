@@ -17,16 +17,22 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.ui.text.font.FontWeight
 import com.ziplock.ui.screens.CreateArchiveWizard
 import com.ziplock.ui.screens.RepositorySelectionScreen
 import com.ziplock.ui.theme.*
 import com.ziplock.viewmodel.RepositoryViewModel
+import com.ziplock.viewmodel.RepositoryViewModelFactory
+import androidx.lifecycle.ViewModelProvider
+import androidx.compose.runtime.collectAsState
 import com.ziplock.viewmodel.RepositoryState
 import com.ziplock.viewmodel.CreateArchiveViewModel
 
 class MainActivity : ComponentActivity() {
 
-    private val repositoryViewModel: RepositoryViewModel by viewModels()
+    private val repositoryViewModel: RepositoryViewModel by lazy {
+        ViewModelProvider(this, RepositoryViewModelFactory(this))[RepositoryViewModel::class.java]
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -54,13 +60,37 @@ class MainActivity : ComponentActivity() {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainApp(repositoryViewModel: RepositoryViewModel) {
-    var currentScreen by remember { mutableStateOf<Screen>(Screen.RepositorySelection) }
+    // Check for last opened archive and determine initial screen
+    val initialScreen = if (repositoryViewModel.hasValidLastArchive()) {
+        Screen.AutoOpenLastArchive
+    } else {
+        Screen.RepositorySelection()
+    }
+
+    var currentScreen by remember { mutableStateOf<Screen>(initialScreen) }
 
     Scaffold(
         containerColor = ZipLockColors.LightBackground
     ) { paddingValues ->
         when (currentScreen) {
-            Screen.RepositorySelection -> {
+            Screen.AutoOpenLastArchive -> {
+                // Auto-open screen for last used archive
+                AutoOpenArchiveScreen(
+                    repositoryViewModel = repositoryViewModel,
+                    onArchiveOpened = { filePath ->
+                        currentScreen = Screen.RepositoryOpened(filePath)
+                    },
+                    onSelectDifferent = {
+                        currentScreen = Screen.RepositorySelection()
+                    },
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(paddingValues)
+                )
+            }
+
+            is Screen.RepositorySelection -> {
+                val repositorySelectionScreen = currentScreen as Screen.RepositorySelection
                 RepositorySelectionScreen(
                     onRepositorySelected = { filePath, passphrase ->
                         // TODO: Open the repository and navigate to main screen
@@ -71,6 +101,7 @@ fun MainApp(repositoryViewModel: RepositoryViewModel) {
                     onCreateNew = {
                         currentScreen = Screen.CreateArchive
                     },
+                    initialFilePath = repositorySelectionScreen.lastClosedArchivePath,
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(paddingValues)
@@ -84,7 +115,7 @@ fun MainApp(repositoryViewModel: RepositoryViewModel) {
                         currentScreen = Screen.RepositoryOpened(archivePath)
                     },
                     onCancel = {
-                        currentScreen = Screen.RepositorySelection
+                        currentScreen = Screen.RepositorySelection()
                     },
                     modifier = Modifier
                         .fillMaxSize()
@@ -97,7 +128,7 @@ fun MainApp(repositoryViewModel: RepositoryViewModel) {
                 RepositoryOpenedScreen(
                     archivePath = repositoryScreen.archivePath,
                     onClose = {
-                        currentScreen = Screen.RepositorySelection
+                        currentScreen = Screen.RepositorySelection(repositoryScreen.archivePath)
                     },
                     modifier = Modifier
                         .fillMaxSize()
@@ -109,9 +140,116 @@ fun MainApp(repositoryViewModel: RepositoryViewModel) {
 }
 
 sealed class Screen {
-    object RepositorySelection : Screen()
+    object AutoOpenLastArchive : Screen()
+    data class RepositorySelection(val lastClosedArchivePath: String? = null) : Screen()
     object CreateArchive : Screen()
     data class RepositoryOpened(val archivePath: String) : Screen()
+}
+
+@Composable
+fun AutoOpenArchiveScreen(
+    repositoryViewModel: RepositoryViewModel,
+    onArchiveOpened: (String) -> Unit,
+    onSelectDifferent: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val lastArchivePath = repositoryViewModel.getLastOpenedArchivePath()
+    var passphrase by remember { mutableStateOf("") }
+
+    val uiState by repositoryViewModel.uiState.collectAsState()
+
+    LaunchedEffect(uiState.successMessage) {
+        if (uiState.successMessage != null) {
+            lastArchivePath?.let { onArchiveOpened(it) }
+        }
+    }
+
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        // Header
+        Text(
+            text = "Welcome Back",
+            style = MaterialTheme.typography.headlineMedium,
+            color = ZipLockColors.DarkText,
+            textAlign = TextAlign.Center
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Text(
+            text = "Enter your passphrase to open:",
+            style = MaterialTheme.typography.bodyMedium,
+            color = ZipLockColors.LightGrayText,
+            textAlign = TextAlign.Center
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // Show archive file name
+        lastArchivePath?.let { path ->
+            val fileName = path.substringAfterLast("/")
+            Text(
+                text = fileName,
+                style = MaterialTheme.typography.bodyLarge,
+                color = ZipLockColors.LogoPurple,
+                textAlign = TextAlign.Center,
+                fontWeight = FontWeight.Medium
+            )
+        }
+
+        Spacer(modifier = Modifier.height(32.dp))
+
+        // Passphrase input
+        ZipLockTextInput(
+            value = passphrase,
+            onValueChange = { passphrase = it },
+            placeholder = "Enter your passphrase",
+            isPassword = true,
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        // Error message
+        uiState.errorMessage?.let { error ->
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = error,
+                color = ZipLockColors.ErrorRed,
+                style = MaterialTheme.typography.bodySmall,
+                textAlign = TextAlign.Center
+            )
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        // Open button
+        ZipLockButton(
+            text = if (uiState.isLoading) "Opening..." else "Open Archive",
+            onClick = {
+                lastArchivePath?.let { path ->
+                    repositoryViewModel.openRepository(path, passphrase)
+                }
+            },
+            style = ZipLockButtonStyle.Primary,
+            enabled = passphrase.isNotBlank() && !uiState.isLoading,
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Select different archive button
+        ZipLockButton(
+            text = "Choose Different Archive",
+            onClick = onSelectDifferent,
+            style = ZipLockButtonStyle.Secondary,
+            enabled = !uiState.isLoading,
+            modifier = Modifier.fillMaxWidth()
+        )
+    }
 }
 
 @Composable
@@ -236,8 +374,9 @@ fun ZipLockTheme(content: @Composable () -> Unit) {
 @Composable
 fun MainAppPreview() {
     ZipLockTheme {
-        // Create a mock view model for preview
-        val mockViewModel = RepositoryViewModel()
+        // Create a mock view model for preview with mock context
+        val mockContext = androidx.compose.ui.platform.LocalContext.current
+        val mockViewModel = RepositoryViewModel(mockContext)
         MainApp(repositoryViewModel = mockViewModel)
     }
 }

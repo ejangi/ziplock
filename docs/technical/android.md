@@ -196,7 +196,50 @@ android/
 
 ### Current Features
 
-#### 1. Splash Screen (`SplashActivity.kt`)
+#### 1. Persistent Archive Path Memory
+
+The Android app now implements persistent memory for the last opened archive file, providing a seamless user experience by automatically remembering and offering to reopen the most recently used archive.
+
+**Key Features:**
+- **Automatic Path Storage**: When a user successfully opens an archive, the file path is automatically saved to SharedPreferences
+- **Auto-Open Screen**: On subsequent app launches, if a valid last archive exists, the app shows a dedicated "Welcome Back" screen
+- **Quick Access**: Users only need to enter their passphrase to reopen the last used archive
+- **Fallback Options**: Users can choose "Choose Different Archive" to browse for a different file
+- **Cloud Storage Support**: Works with both local files and cloud storage URIs (Google Drive, Dropbox, etc.)
+
+**Implementation Details:**
+```kotlin
+// AndroidConfigManager handles persistent storage
+class AndroidConfigManager(private val context: Context) {
+    fun setLastArchivePath(archivePath: String)
+    fun getLastOpenedArchivePath(): String?
+    fun hasValidLastArchive(): Boolean
+    fun clearLastArchivePath()
+}
+
+// RepositoryViewModel integrates with config manager
+class RepositoryViewModel(context: Context) {
+    private val configManager = AndroidConfigManager(context)
+    
+    fun getLastOpenedArchivePath(): String? = configManager.getLastOpenedArchivePath()
+    fun hasValidLastArchive(): Boolean = configManager.hasValidLastArchive()
+}
+```
+
+**User Experience Flow:**
+1. **First Launch**: User selects archive file and enters passphrase
+2. **Archive Path Saved**: Successfully opened archive path is automatically stored
+3. **Subsequent Launches**: App shows "Welcome Back" screen with last archive
+4. **Quick Open**: User only needs to enter passphrase to access their data
+5. **Alternative Selection**: Option to choose different archive remains available
+
+**Configuration Storage:**
+- Uses Android SharedPreferences for reliable persistence
+- Stores archive path, last accessed timestamp, and UI preferences
+- Validates file accessibility before showing auto-open option
+- Handles both regular file paths and Android content URIs
+
+#### 2. Splash Screen (`SplashActivity.kt`)
 ```kotlin
 class SplashActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -265,7 +308,7 @@ fun SplashScreen(onTimeout: () -> Unit) {
 }
 ```
 
-#### 2. Create Archive Wizard
+#### 3. Create Archive Wizard
 
 The Create Archive wizard provides a comprehensive multi-step interface for creating new ZipLock archives:
 
@@ -313,7 +356,7 @@ CreateArchiveWizard(
 
 For detailed implementation documentation, see `docs/technical/android-create-archive-wizard.md`.
 
-#### 3. Design System
+#### 4. Design System
 
 **Brand Colors (`colors.xml`):**
 ```xml
@@ -346,7 +389,7 @@ For detailed implementation documentation, see `docs/technical/android-create-ar
 </resources>
 ```
 
-#### 3. Security Configuration
+#### 5. Security Configuration
 
 **Backup Rules (`backup_rules.xml`):**
 ```xml
