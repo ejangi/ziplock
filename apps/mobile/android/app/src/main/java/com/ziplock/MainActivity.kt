@@ -14,10 +14,13 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.ziplock.ui.screens.CreateArchiveWizard
 import com.ziplock.ui.screens.RepositorySelectionScreen
 import com.ziplock.ui.theme.*
 import com.ziplock.viewmodel.RepositoryViewModel
 import com.ziplock.viewmodel.RepositoryState
+import com.ziplock.viewmodel.CreateArchiveViewModel
 
 class MainActivity : ComponentActivity() {
 
@@ -37,24 +40,64 @@ class MainActivity : ComponentActivity() {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainApp(repositoryViewModel: RepositoryViewModel) {
-    // Temporarily simplify to directly show RepositorySelectionScreen for testing
+    var currentScreen by remember { mutableStateOf<Screen>(Screen.RepositorySelection) }
+
     Scaffold(
         containerColor = ZipLockColors.LightBackground
     ) { paddingValues ->
-        RepositorySelectionScreen(
-            onRepositorySelected = { filePath, passphrase ->
-                // For testing, just print the values
-                println("Selected file: $filePath")
-                println("Passphrase length: ${passphrase.length}")
-            },
-            onCreateNew = {
-                println("Create new archive requested")
-            },
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-        )
+        when (currentScreen) {
+            Screen.RepositorySelection -> {
+                RepositorySelectionScreen(
+                    onRepositorySelected = { filePath, passphrase ->
+                        // TODO: Open the repository and navigate to main screen
+                        println("Selected file: $filePath")
+                        println("Passphrase length: ${passphrase.length}")
+                        currentScreen = Screen.RepositoryOpened(filePath)
+                    },
+                    onCreateNew = {
+                        currentScreen = Screen.CreateArchive
+                    },
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(paddingValues)
+                )
+            }
+
+            Screen.CreateArchive -> {
+                CreateArchiveWizard(
+                    onArchiveCreated = { archivePath ->
+                        // Archive created successfully, open it
+                        currentScreen = Screen.RepositoryOpened(archivePath)
+                    },
+                    onCancel = {
+                        currentScreen = Screen.RepositorySelection
+                    },
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(paddingValues)
+                )
+            }
+
+            is Screen.RepositoryOpened -> {
+                val repositoryScreen = currentScreen as Screen.RepositoryOpened
+                RepositoryOpenedScreen(
+                    archivePath = repositoryScreen.archivePath,
+                    onClose = {
+                        currentScreen = Screen.RepositorySelection
+                    },
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(paddingValues)
+                )
+            }
+        }
     }
+}
+
+sealed class Screen {
+    object RepositorySelection : Screen()
+    object CreateArchive : Screen()
+    data class RepositoryOpened(val archivePath: String) : Screen()
 }
 
 @Composable

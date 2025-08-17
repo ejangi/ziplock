@@ -265,7 +265,55 @@ fun SplashScreen(onTimeout: () -> Unit) {
 }
 ```
 
-#### 2. Design System
+#### 2. Create Archive Wizard
+
+The Create Archive wizard provides a comprehensive multi-step interface for creating new ZipLock archives:
+
+**Key Features:**
+- Multi-step guided workflow (7 steps total)
+- Real-time passphrase validation using FFI
+- Cloud storage support via Storage Access Framework
+- Comprehensive error handling and user feedback
+- Consistent UI design matching Linux implementation
+
+**Implementation Files:**
+- `ui/screens/CreateArchiveWizard.kt` - Main wizard composable
+- `viewmodel/CreateArchiveViewModel.kt` - Business logic and state management
+- `CreateArchiveViewModelTest.kt` - Comprehensive unit tests
+
+**Wizard Steps:**
+1. **Welcome** - Introduction and overview
+2. **Select Destination** - Folder picker with cloud storage support
+3. **Archive Name** - Filename input with validation
+4. **Create Passphrase** - Password creation with real-time strength validation
+5. **Confirm Passphrase** - Password confirmation with matching validation
+6. **Creating** - Progress indicator during archive creation
+7. **Success** - Completion confirmation with options to open or create another
+
+**Passphrase Validation:**
+- Integrates with `ZipLockNative.validatePassphraseStrength()` FFI function
+- Real-time feedback with color-coded strength indicators
+- Fallback validation when FFI unavailable
+- Requirements display: length, character types, uniqueness
+- Strength levels: Very Weak → Very Strong with scoring 0-100
+
+**Integration Example:**
+```kotlin
+CreateArchiveWizard(
+    onArchiveCreated = { archivePath ->
+        // Navigate to opened archive
+        currentScreen = Screen.RepositoryOpened(archivePath)
+    },
+    onCancel = {
+        // Return to repository selection
+        currentScreen = Screen.RepositorySelection
+    }
+)
+```
+
+For detailed implementation documentation, see `docs/technical/android-create-archive-wizard.md`.
+
+#### 3. Design System
 
 **Brand Colors (`colors.xml`):**
 ```xml

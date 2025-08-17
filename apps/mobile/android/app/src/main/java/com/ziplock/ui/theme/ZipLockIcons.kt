@@ -27,6 +27,8 @@ object ZipLockIcons {
     val Search = Icons.Default.Search
     val Menu = Icons.Default.Menu
     val ArrowBack = Icons.Default.ArrowBack
+    val ArrowLeft = Icons.Default.ArrowBack
+    val ArrowRight = Icons.Default.ArrowForward
     val MoreVert = Icons.Default.MoreVert
     val Edit = Icons.Default.Edit
     val Delete = Icons.Default.Delete
