@@ -6,10 +6,11 @@ pkgdesc="A secure, portable password manager using encrypted 7z archives"
 arch=('x86_64')
 url="https://github.com/ejangi/ziplock"
 license=('Apache')
-depends=('glibc' 'fontconfig' 'freetype2' 'libx11' 'libxft' 'xz' 'gcc-libs')
+depends=('glibc' 'fontconfig' 'freetype2' 'libx11' 'libxft' 'xz' 'gcc-libs' 'shared-mime-info')
 optdepends=('gnome-keyring: for GNOME keyring integration'
            'kwallet: for KDE wallet integration'
-           'firejail: for additional sandboxing')
+           'firejail: for additional sandboxing'
+           'desktop-file-utils: for desktop database updates')
 makedepends=('rust' 'cargo' 'pkg-config')
 provides=('ziplock')
 conflicts=('ziplock-bin' 'ziplock-git')
@@ -59,6 +60,11 @@ package() {
     # Install desktop file if it exists
     if [ -f apps/linux/resources/ziplock.desktop ]; then
         install -Dm644 apps/linux/resources/ziplock.desktop "$pkgdir/usr/share/applications/ziplock.desktop"
+    fi
+
+    # Install MIME type definition for .7z file associations
+    if [ -f apps/linux/resources/mime/packages/ziplock.xml ]; then
+        install -Dm644 apps/linux/resources/mime/packages/ziplock.xml "$pkgdir/usr/share/mime/packages/ziplock.xml"
     fi
 
     # Install icon

@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
+  <mime-type type="application/x-7z-compressed">
+    <comment>7-Zip archive</comment>
+    <comment xml:lang="en">7-Zip archive</comment>
+    <comment xml:lang="de">7-Zip-Archiv</comment>
+    <comment xml:lang="es">Archivo 7-Zip</comment>
+    <comment xml:lang="fr">Archive 7-Zip</comment>
+    <comment xml:lang="it">Archivio 7-Zip</comment>
+    <comment xml:lang="pt">Arquivo 7-Zip</comment>
+    <comment xml:lang="ru">Архив 7-Zip</comment>
+    <comment xml:lang="zh">7-Zip 压缩包</comment>
+    <comment xml:lang="ja">7-Zip アーカイブ</comment>
+
+    <icon name="application-x-7z-compressed"/>
+
+    <glob-deleteall/>
+    <glob pattern="*.7z"/>
+    <glob pattern="*.7Z"/>
+
+    <magic priority="50">
+      <match type="string" offset="0" value="7z\274\175\039\034"/>
+    </magic>
+
+    <sub-class-of type="application/archive"/>
+
+    <generic-icon name="package-x-generic"/>
+
+    <alias type="application/x-7zip"/>
+    <alias type="application/7z"/>
+  </mime-type>
+</mime-info>

@@ -17,6 +17,14 @@ post_install() {
         fi
     fi
 
+    # Update MIME database for .7z file associations
+    if [ -f /usr/share/mime/packages/ziplock.xml ]; then
+        if command -v update-mime-database >/dev/null 2>&1; then
+            update-mime-database /usr/share/mime 2>/dev/null || true
+            echo "Updated MIME database for .7z file associations"
+        fi
+    fi
+
     # Update icon cache if icon was installed
     if [ -f /usr/share/icons/hicolor/scalable/apps/ziplock.svg ]; then
         if command -v gtk-update-icon-cache >/dev/null 2>&1; then
@@ -51,6 +59,13 @@ post_upgrade() {
         fi
     fi
 
+    # Update MIME database for .7z file associations
+    if [ -f /usr/share/mime/packages/ziplock.xml ]; then
+        if command -v update-mime-database >/dev/null 2>&1; then
+            update-mime-database /usr/share/mime 2>/dev/null || true
+        fi
+    fi
+
     # Update icon cache
     if [ -f /usr/share/icons/hicolor/scalable/apps/ziplock.svg ]; then
         if command -v gtk-update-icon-cache >/dev/null 2>&1; then
@@ -75,6 +90,11 @@ post_remove() {
     # Update desktop database
     if command -v update-desktop-database >/dev/null 2>&1; then
         update-desktop-database -q /usr/share/applications 2>/dev/null || true
+    fi
+
+    # Update MIME database to remove .7z file associations
+    if command -v update-mime-database >/dev/null 2>&1; then
+        update-mime-database /usr/share/mime 2>/dev/null || true
     fi
 
     # Update icon cache

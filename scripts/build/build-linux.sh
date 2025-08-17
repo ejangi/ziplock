@@ -361,6 +361,15 @@ create_install_structure() {
         log_warning "Desktop file not found"
     fi
 
+    # Copy MIME type definition for .7z file associations
+    if [ -f "$PROJECT_ROOT/apps/linux/resources/mime/packages/ziplock.xml" ]; then
+        mkdir -p "$install_dir/usr/share/mime/packages"
+        cp "$PROJECT_ROOT/apps/linux/resources/mime/packages/ziplock.xml" "$install_dir/usr/share/mime/packages/"
+        log_info "Installed MIME type definition for .7z file associations"
+    else
+        log_warning "MIME type definition file not found"
+    fi
+
     # Copy icon
     if [ -f "$PROJECT_ROOT/apps/linux/resources/icons/ziplock.svg" ]; then
         cp "$PROJECT_ROOT/apps/linux/resources/icons/ziplock.svg" "$install_dir/usr/share/icons/hicolor/scalable/apps/"

@@ -83,6 +83,8 @@ verify_build() {
         "$install_dir/usr/bin/ziplock"
         "$install_dir/usr/lib/libziplock_shared.so"
         "$install_dir/etc/ziplock/config.yml"
+        "$install_dir/usr/share/applications/ziplock.desktop"
+        "$install_dir/usr/share/mime/packages/ziplock.xml"
     )
 
     for file in "${required_files[@]}"; do

@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - **Android app now in development!**
 - Added a LOCK button to the Linux app.
+- Associate ZipLock with the *.7z file type so it's easier to open these archives with ZipLock.
 
 ## [0.2.8] - 2025-08-16
 

@@ -78,6 +78,7 @@ verify_build() {
         "$install_dir/usr/bin/ziplock"
         "$install_dir/etc/ziplock/config.yml"
         "$install_dir/usr/share/applications/ziplock.desktop"
+        "$install_dir/usr/share/mime/packages/ziplock.xml"
     )
 
     for file in "${required_files[@]}"; do
@@ -128,8 +129,8 @@ Section: utils
 Priority: optional
 Architecture: $PACKAGE_ARCH
 Installed-Size: $installed_size
-Depends: libc6, libfontconfig1, libfreetype6, libx11-6, libxft2, liblzma5
-Recommends: gnome-keyring | kde-wallet-kf5
+Depends: libc6, libfontconfig1, libfreetype6, libx11-6, libxft2, liblzma5, shared-mime-info
+Recommends: gnome-keyring | kde-wallet-kf5, desktop-file-utils
 Suggests: firejail
 Maintainer: $MAINTAINER
 Description: $DESCRIPTION
@@ -191,6 +192,12 @@ if [ -f /usr/share/applications/ziplock.desktop ]; then
     if command -v update-desktop-database >/dev/null 2>&1; then
         update-desktop-database /usr/share/applications
     fi
+fi
+
+# Update MIME database to register .7z file associations
+if command -v update-mime-database >/dev/null 2>&1; then
+    update-mime-database /usr/share/mime 2>/dev/null || true
+    echo "Updated MIME database for .7z file associations"
 fi
 
 # Update icon cache (only if frontend is installed)
@@ -272,6 +279,11 @@ case "$1" in
         # Update desktop database (if it exists)
         if command -v update-desktop-database >/dev/null 2>&1; then
             update-desktop-database /usr/share/applications 2>/dev/null || true
+        fi
+
+        # Update MIME database to remove .7z file associations
+        if command -v update-mime-database >/dev/null 2>&1; then
+            update-mime-database /usr/share/mime 2>/dev/null || true
         fi
 
         # Update icon cache (if it exists)
