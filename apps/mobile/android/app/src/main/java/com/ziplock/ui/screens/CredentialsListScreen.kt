@@ -29,7 +29,7 @@ fun CredentialsListScreen(
     onCredentialClick: (Credential) -> Unit,
     onCloseArchive: () -> Unit,
     onAddCredential: () -> Unit,
-    onLoadMockData: (() -> Unit)? = null,
+    onRefresh: () -> Unit,
     isLoading: Boolean = false,
     errorMessage: String? = null,
     modifier: Modifier = Modifier
@@ -57,18 +57,22 @@ fun CredentialsListScreen(
         // Header with close button
         CredentialsListHeader(
             onCloseArchive = onCloseArchive,
-            onLoadMockData = onLoadMockData,
+            onRefresh = onRefresh,
+            hasCredentials = credentials.isNotEmpty(),
+            hasError = errorMessage != null,
             modifier = Modifier.fillMaxWidth()
         )
 
-        // Search bar
-        CredentialsSearchBar(
-            searchQuery = searchQuery,
-            onSearchQueryChange = onSearchQueryChange,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = ZipLockSpacing.Standard)
-        )
+        // Search bar (only show when there are credentials)
+        if (credentials.isNotEmpty()) {
+            CredentialsSearchBar(
+                searchQuery = searchQuery,
+                onSearchQueryChange = onSearchQueryChange,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = ZipLockSpacing.Standard)
+            )
+        }
 
         Spacer(modifier = Modifier.height(ZipLockSpacing.Small))
 
@@ -154,7 +158,9 @@ fun CredentialsListScreen(
 @Composable
 private fun CredentialsListHeader(
     onCloseArchive: () -> Unit,
-    onLoadMockData: (() -> Unit)? = null,
+    onRefresh: () -> Unit,
+    hasCredentials: Boolean,
+    hasError: Boolean,
     modifier: Modifier = Modifier
 ) {
     Surface(
@@ -180,10 +186,10 @@ private fun CredentialsListHeader(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Development toggle for mock data (only show if callback provided)
-                onLoadMockData?.let { loadMock ->
+                // Refresh button (only show when there are credentials or there's an error to retry)
+                if (hasCredentials || hasError) {
                     IconButton(
-                        onClick = loadMock,
+                        onClick = onRefresh,
                         modifier = Modifier
                             .size(32.dp)
                             .clip(CircleShape)
@@ -191,7 +197,7 @@ private fun CredentialsListHeader(
                     ) {
                         Icon(
                             imageVector = ZipLockIcons.Refresh,
-                            contentDescription = "Load Mock Data",
+                            contentDescription = "Refresh Credentials",
                             tint = ZipLockColors.LogoPurple,
                             modifier = Modifier.size(18.dp)
                         )

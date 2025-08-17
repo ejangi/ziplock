@@ -67,6 +67,12 @@ object ZipLockNative {
         fun ziplock_credential_list(credentials: PointerByReference, count: IntByReference): Int
         fun ziplock_credential_list_free(credentials: Pointer, count: Int)
 
+        // Template operations
+        fun ziplock_templates_get_all(templates: PointerByReference, count: IntByReference): Int
+        fun ziplock_template_get_by_name(name: String, template: Pointer): Int
+        fun ziplock_templates_free(templates: Pointer, count: Int)
+        fun ziplock_template_free(template: Pointer)
+
         // Testing
         fun ziplock_debug_logging(enabled: Int): Int
     }
@@ -94,6 +100,30 @@ object ZipLockNative {
         @JvmField var label: Pointer? = null
         @JvmField var sensitive: Int = 0
         @JvmField var required: Int = 0
+    }
+
+    @Structure.FieldOrder("name", "description", "field_count", "fields", "tag_count", "tags")
+    class CCredentialTemplate : Structure() {
+        @JvmField var name: Pointer? = null
+        @JvmField var description: Pointer? = null
+        @JvmField var field_count: Int = 0
+        @JvmField var fields: Pointer? = null
+        @JvmField var tag_count: Int = 0
+        @JvmField var tags: Pointer? = null
+    }
+
+    @Structure.FieldOrder("name", "field_type", "label", "required", "sensitive", "default_value", "validation_min_length", "validation_max_length", "validation_pattern", "validation_message")
+    class CFieldTemplate : Structure() {
+        @JvmField var name: Pointer? = null
+        @JvmField var field_type: Pointer? = null
+        @JvmField var label: Pointer? = null
+        @JvmField var required: Int = 0
+        @JvmField var sensitive: Int = 0
+        @JvmField var default_value: Pointer? = null
+        @JvmField var validation_min_length: Int = 0
+        @JvmField var validation_max_length: Int = 0
+        @JvmField var validation_pattern: Pointer? = null
+        @JvmField var validation_message: Pointer? = null
     }
 
     private val library = ZipLockLibrary.INSTANCE
@@ -948,5 +978,243 @@ object ZipLockNativeHelper {
             mappedMessage != null -> mappedMessage
             else -> "Unknown error occurred"
         }
+    }
+
+    // CommonTemplates data classes
+    data class CredentialTemplate(
+        val name: String,
+        val description: String,
+        val fields: List<FieldTemplate>,
+        val defaultTags: List<String>
+    )
+
+    data class FieldTemplate(
+        val name: String,
+        val fieldType: String,
+        val label: String,
+        val required: Boolean,
+        val sensitive: Boolean,
+        val defaultValue: String?,
+        val validation: FieldValidation?
+    )
+
+    data class FieldValidation(
+        val minLength: Int?,
+        val maxLength: Int?,
+        val pattern: String?,
+        val message: String?
+    )
+
+    /**
+     * Get all available credential templates
+     * For now, return hardcoded templates until FFI integration is stable
+     */
+    fun getAllTemplates(): List<CredentialTemplate> {
+        return getBuiltinTemplates()
+    }
+
+    /**
+     * Get a specific credential template by name
+     */
+    fun getTemplateByName(name: String): CredentialTemplate? {
+        return getBuiltinTemplates().find { it.name == name }
+    }
+
+    /**
+     * Get built-in templates (temporary implementation)
+     */
+    private fun getBuiltinTemplates(): List<CredentialTemplate> {
+        return listOf(
+            CredentialTemplate(
+                name = "login",
+                description = "Website or application login",
+                fields = listOf(
+                    FieldTemplate("username", "Username", "Username", false, false, null, null),
+                    FieldTemplate("password", "Password", "Password", false, true, null,
+                        FieldValidation(8, null, null, "Password must be at least 8 characters")),
+                    FieldTemplate("website", "Url", "Website", false, false, null, null),
+                    FieldTemplate("totp", "TotpSecret", "2FA Secret", false, true, null, null)
+                ),
+                defaultTags = listOf("login")
+            ),
+            CredentialTemplate(
+                name = "credit_card",
+                description = "Credit card information",
+                fields = listOf(
+                    FieldTemplate("cardholder", "Text", "Cardholder Name", false, false, null, null),
+                    FieldTemplate("number", "CreditCardNumber", "Card Number", false, true, null, null),
+                    FieldTemplate("expiry", "ExpiryDate", "Expiry Date", false, false, null, null),
+                    FieldTemplate("cvv", "Cvv", "CVV", false, true, null, null)
+                ),
+                defaultTags = listOf("credit_card")
+            ),
+            CredentialTemplate(
+                name = "secure_note",
+                description = "Secure note or document",
+                fields = listOf(
+                    FieldTemplate("content", "TextArea", "Content", false, true, null, null)
+                ),
+                defaultTags = listOf("note")
+            ),
+            CredentialTemplate(
+                name = "identity",
+                description = "Personal identity information",
+                fields = listOf(
+                    FieldTemplate("name", "Text", "Full Name", false, false, null, null),
+                    FieldTemplate("birthday", "Date", "Date of Birth", false, false, null, null),
+                    FieldTemplate("ssn", "Text", "SSN/ID Number", false, true, null, null)
+                ),
+                defaultTags = listOf("identity")
+            ),
+            CredentialTemplate(
+                name = "password",
+                description = "Password only",
+                fields = listOf(
+                    FieldTemplate("password", "Password", "Password", false, true, null,
+                        FieldValidation(8, null, null, "Password must be at least 8 characters"))
+                ),
+                defaultTags = listOf("password")
+            ),
+            CredentialTemplate(
+                name = "document",
+                description = "Document with file attachment",
+                fields = listOf(
+                    FieldTemplate("title", "Text", "Document Title", false, false, null, null),
+                    FieldTemplate("file", "Text", "File Path", false, false, null, null)
+                ),
+                defaultTags = listOf("document")
+            ),
+            CredentialTemplate(
+                name = "ssh_key",
+                description = "SSH key and passphrase",
+                fields = listOf(
+                    FieldTemplate("key", "TextArea", "SSH Key", false, true, null, null),
+                    FieldTemplate("passphrase", "Password", "Passphrase", false, true, null, null)
+                ),
+                defaultTags = listOf("ssh")
+            ),
+            CredentialTemplate(
+                name = "bank_account",
+                description = "Bank account information",
+                fields = listOf(
+                    FieldTemplate("account_number", "Text", "Account Number", false, true, null, null),
+                    FieldTemplate("routing_number", "Text", "Routing Number", false, false, null, null),
+                    FieldTemplate("pin", "Password", "PIN", false, true, null, null)
+                ),
+                defaultTags = listOf("bank")
+            ),
+            CredentialTemplate(
+                name = "api_credentials",
+                description = "API key and secret",
+                fields = listOf(
+                    FieldTemplate("key", "Text", "API Key", false, true, null, null),
+                    FieldTemplate("secret", "Password", "API Secret", false, true, null, null),
+                    FieldTemplate("url", "Url", "API URL", false, false, null, null)
+                ),
+                defaultTags = listOf("api")
+            ),
+            CredentialTemplate(
+                name = "crypto_wallet",
+                description = "Cryptocurrency wallet keys",
+                fields = listOf(
+                    FieldTemplate("public_key", "TextArea", "Public Key", false, false, null, null),
+                    FieldTemplate("private_key", "TextArea", "Private Key/Seed Phrase", false, true, null, null)
+                ),
+                defaultTags = listOf("crypto")
+            ),
+            CredentialTemplate(
+                name = "database",
+                description = "Database connection credentials",
+                fields = listOf(
+                    FieldTemplate("hostname", "Text", "Hostname", false, false, null, null),
+                    FieldTemplate("port", "Number", "Port", false, false, null, null),
+                    FieldTemplate("username", "Username", "Username", false, false, null, null),
+                    FieldTemplate("password", "Password", "Password", false, true, null, null)
+                ),
+                defaultTags = listOf("database")
+            ),
+            CredentialTemplate(
+                name = "software_license",
+                description = "Software license information",
+                fields = listOf(
+                    FieldTemplate("license_key", "TextArea", "License Key", false, true, null, null),
+                    FieldTemplate("product_name", "Text", "Product Name", false, false, null, null),
+                    FieldTemplate("purchase_date", "Date", "Purchase Date", false, false, null, null)
+                ),
+                defaultTags = listOf("license")
+            )
+        )
+    }
+
+    /**
+     * Get available template names for quick reference
+     */
+    fun getAvailableTemplateNames(): List<String> {
+        return listOf(
+            "login",
+            "credit_card",
+            "secure_note",
+            "identity",
+            "password",
+            "document",
+            "ssh_key",
+            "bank_account",
+            "api_credentials",
+            "crypto_wallet",
+            "database",
+            "software_license"
+        )
+    }
+
+    /**
+     * Test function to verify CommonTemplates work correctly
+     */
+    fun testCommonTemplates(): String {
+        val results = mutableListOf<String>()
+
+        try {
+            // Test getting all templates
+            val allTemplates = getAllTemplates()
+            results.add("✓ Retrieved ${allTemplates.size} templates")
+
+            // Test each template has required fields
+            for (template in allTemplates) {
+                if (template.fields.isNotEmpty()) {
+                    results.add("✓ ${template.name}: ${template.description} (${template.fields.size} fields)")
+                } else {
+                    results.add("✗ ${template.name}: No fields found")
+                }
+            }
+
+            // Test getting specific templates
+            val loginTemplate = getTemplateByName("login")
+            if (loginTemplate != null) {
+                results.add("✓ Login template: ${loginTemplate.fields.size} fields")
+            } else {
+                results.add("✗ Failed to get login template")
+            }
+
+            val creditCardTemplate = getTemplateByName("credit_card")
+            if (creditCardTemplate != null) {
+                results.add("✓ Credit card template: ${creditCardTemplate.fields.size} fields")
+            } else {
+                results.add("✗ Failed to get credit card template")
+            }
+
+            // Test invalid template
+            val invalidTemplate = getTemplateByName("invalid_template")
+            if (invalidTemplate == null) {
+                results.add("✓ Correctly returned null for invalid template")
+            } else {
+                results.add("✗ Should have returned null for invalid template")
+            }
+
+            results.add("✓ CommonTemplates test completed successfully")
+
+        } catch (e: Exception) {
+            results.add("✗ Error during CommonTemplates test: ${e.message}")
+        }
+
+        return results.joinToString("\n")
     }
 }

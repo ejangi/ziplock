@@ -301,6 +301,50 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "c-api")]
+    fn test_common_templates_ffi_integration() {
+        // Test that CommonTemplates can be accessed through FFI
+        use std::ffi::CString;
+        use std::ptr;
+
+        // Test getting all templates
+        let mut templates_ptr: *mut crate::ffi::CCredentialTemplate = ptr::null_mut();
+        let mut count: std::os::raw::c_int = 0;
+
+        let result =
+            unsafe { crate::ffi::ziplock_templates_get_all(&mut templates_ptr, &mut count) };
+        assert_eq!(result, 0); // Success
+        assert!(!templates_ptr.is_null());
+        assert_eq!(count, 12); // We have 12 built-in templates
+
+        // Clean up
+        unsafe { crate::ffi::ziplock_templates_free(templates_ptr, count) };
+
+        // Test getting specific template
+        let mut template = crate::ffi::CCredentialTemplate {
+            name: ptr::null_mut(),
+            description: ptr::null_mut(),
+            field_count: 0,
+            fields: ptr::null_mut(),
+            tag_count: 0,
+            tags: ptr::null_mut(),
+        };
+
+        let template_name = CString::new("login").unwrap();
+        let result = unsafe {
+            crate::ffi::ziplock_template_get_by_name(template_name.as_ptr(), &mut template)
+        };
+        assert_eq!(result, 0); // Success
+
+        assert!(!template.name.is_null());
+        let name = unsafe { std::ffi::CStr::from_ptr(template.name).to_str().unwrap() };
+        assert_eq!(name, "login");
+
+        // Clean up
+        unsafe { crate::ffi::ziplock_template_free(&mut template) };
+    }
+
+    #[test]
     fn test_all_specification_credential_types_implemented() {
         // According to specification section 3.3, these are all the required credential types
         let all_templates = vec![

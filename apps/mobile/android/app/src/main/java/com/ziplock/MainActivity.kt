@@ -327,9 +327,9 @@ fun RepositoryOpenedScreen(
             // TODO: Navigate to add credential screen
             println("Add credential button clicked")
         },
-        onLoadMockData = {
-            // Development feature: Load mock data for testing
-            credentialsViewModel.loadMockCredentials()
+        onRefresh = {
+            // Refresh credentials from the archive
+            credentialsViewModel.refresh()
         },
         isLoading = credentialsUiState.isLoading,
         errorMessage = credentialsUiState.errorMessage,

@@ -17,6 +17,8 @@ use std::ptr;
 use std::sync::{Arc, Mutex};
 use tokio::runtime::Runtime;
 
+extern crate libc;
+
 /// Error codes for FFI operations
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -64,6 +66,32 @@ pub struct CCredentialField {
     pub label: *mut c_char,
     pub sensitive: c_int,
     pub required: c_int,
+}
+
+/// C-compatible structure for credential templates
+#[repr(C)]
+pub struct CCredentialTemplate {
+    pub name: *mut c_char,
+    pub description: *mut c_char,
+    pub field_count: c_int,
+    pub fields: *mut CFieldTemplate,
+    pub tag_count: c_int,
+    pub tags: *mut *mut c_char,
+}
+
+/// C-compatible structure for field templates
+#[repr(C)]
+pub struct CFieldTemplate {
+    pub name: *mut c_char,
+    pub field_type: *mut c_char,
+    pub label: *mut c_char,
+    pub required: c_int,
+    pub sensitive: c_int,
+    pub default_value: *mut c_char,
+    pub validation_min_length: c_int,
+    pub validation_max_length: c_int,
+    pub validation_pattern: *mut c_char,
+    pub validation_message: *mut c_char,
 }
 
 /// C-compatible validation result structure
@@ -678,5 +706,555 @@ unsafe fn free_c_credential(c_cred: &mut CCredentialRecord) {
             }
         }
         libc::free(c_cred.tags as *mut c_void);
+    }
+}
+
+/// Get all available credential templates
+#[no_mangle]
+pub extern "C" fn ziplock_templates_get_all(
+    templates: *mut *mut CCredentialTemplate,
+    count: *mut c_int,
+) -> c_int {
+    if templates.is_null() || count.is_null() {
+        unsafe {
+            set_last_error("Invalid parameters");
+        }
+        return ZipLockError::InvalidParameter as c_int;
+    }
+
+    let template_list = vec![
+        crate::models::CommonTemplates::login(),
+        crate::models::CommonTemplates::credit_card(),
+        crate::models::CommonTemplates::secure_note(),
+        crate::models::CommonTemplates::identity(),
+        crate::models::CommonTemplates::password(),
+        crate::models::CommonTemplates::document(),
+        crate::models::CommonTemplates::ssh_key(),
+        crate::models::CommonTemplates::bank_account(),
+        crate::models::CommonTemplates::api_credentials(),
+        crate::models::CommonTemplates::crypto_wallet(),
+        crate::models::CommonTemplates::database(),
+        crate::models::CommonTemplates::software_license(),
+    ];
+
+    let template_count = template_list.len();
+
+    unsafe {
+        let c_templates = libc::malloc(template_count * std::mem::size_of::<CCredentialTemplate>())
+            as *mut CCredentialTemplate;
+
+        if c_templates.is_null() {
+            set_last_error("Out of memory");
+            return ZipLockError::OutOfMemory as c_int;
+        }
+
+        for (i, template) in template_list.iter().enumerate() {
+            let c_template = c_templates.add(i);
+            if let Err(_) = convert_template_to_c(template, c_template) {
+                // Clean up on error
+                for j in 0..i {
+                    free_c_template(&mut *c_templates.add(j));
+                }
+                libc::free(c_templates as *mut c_void);
+                return ZipLockError::InternalError as c_int;
+            }
+        }
+
+        *templates = c_templates;
+        *count = template_count as c_int;
+        ZipLockError::Success as c_int
+    }
+}
+
+/// Get a specific credential template by name
+#[no_mangle]
+pub extern "C" fn ziplock_template_get_by_name(
+    name: *const c_char,
+    template: *mut CCredentialTemplate,
+) -> c_int {
+    if name.is_null() || template.is_null() {
+        unsafe {
+            set_last_error("Invalid parameters");
+        }
+        return ZipLockError::InvalidParameter as c_int;
+    }
+
+    let template_name = unsafe {
+        match CStr::from_ptr(name).to_str() {
+            Ok(s) => s,
+            Err(_) => {
+                set_last_error("Invalid template name string");
+                return ZipLockError::InvalidParameter as c_int;
+            }
+        }
+    };
+
+    let rust_template = match template_name {
+        "login" => crate::models::CommonTemplates::login(),
+        "credit_card" => crate::models::CommonTemplates::credit_card(),
+        "secure_note" => crate::models::CommonTemplates::secure_note(),
+        "identity" => crate::models::CommonTemplates::identity(),
+        "password" => crate::models::CommonTemplates::password(),
+        "document" => crate::models::CommonTemplates::document(),
+        "ssh_key" => crate::models::CommonTemplates::ssh_key(),
+        "bank_account" => crate::models::CommonTemplates::bank_account(),
+        "api_credentials" => crate::models::CommonTemplates::api_credentials(),
+        "crypto_wallet" => crate::models::CommonTemplates::crypto_wallet(),
+        "database" => crate::models::CommonTemplates::database(),
+        "software_license" => crate::models::CommonTemplates::software_license(),
+        _ => {
+            unsafe {
+                set_last_error("Unknown template name");
+            }
+            return ZipLockError::InvalidParameter as c_int;
+        }
+    };
+
+    unsafe {
+        match convert_template_to_c(&rust_template, template) {
+            Ok(_) => ZipLockError::Success as c_int,
+            Err(_) => ZipLockError::InternalError as c_int,
+        }
+    }
+}
+
+/// Free credential template list memory
+#[no_mangle]
+pub extern "C" fn ziplock_templates_free(templates: *mut CCredentialTemplate, count: c_int) {
+    if templates.is_null() || count <= 0 {
+        return;
+    }
+
+    unsafe {
+        for i in 0..count {
+            free_c_template(&mut *templates.add(i as usize));
+        }
+        libc::free(templates as *mut c_void);
+    }
+}
+
+/// Free a single credential template
+#[no_mangle]
+pub extern "C" fn ziplock_template_free(template: *mut CCredentialTemplate) {
+    if template.is_null() {
+        return;
+    }
+
+    unsafe {
+        free_c_template(&mut *template);
+    }
+}
+
+/// Convert a Rust CredentialTemplate to C structure
+unsafe fn convert_template_to_c(
+    template: &crate::models::CredentialTemplate,
+    c_template: *mut CCredentialTemplate,
+) -> Result<(), ()> {
+    let name = match CString::new(template.name.clone()) {
+        Ok(s) => s.into_raw(),
+        Err(_) => return Err(()),
+    };
+
+    let description = match CString::new(template.description.clone()) {
+        Ok(s) => s.into_raw(),
+        Err(_) => {
+            let _ = CString::from_raw(name);
+            return Err(());
+        }
+    };
+
+    // Convert fields
+    let field_count = template.fields.len();
+    let c_fields = if field_count > 0 {
+        let fields_ptr = libc::malloc(field_count * std::mem::size_of::<CFieldTemplate>())
+            as *mut CFieldTemplate;
+        if fields_ptr.is_null() {
+            let _ = CString::from_raw(name);
+            let _ = CString::from_raw(description);
+            return Err(());
+        }
+
+        for (i, field) in template.fields.iter().enumerate() {
+            let c_field = fields_ptr.add(i);
+            if convert_field_template_to_c(field, c_field).is_err() {
+                // Clean up fields created so far
+                for j in 0..i {
+                    free_c_field_template(&mut *fields_ptr.add(j));
+                }
+                libc::free(fields_ptr as *mut c_void);
+                let _ = CString::from_raw(name);
+                let _ = CString::from_raw(description);
+                return Err(());
+            }
+        }
+        fields_ptr
+    } else {
+        ptr::null_mut()
+    };
+
+    // Convert tags
+    let tag_count = template.default_tags.len();
+    let c_tags = if tag_count > 0 {
+        let tags_ptr =
+            libc::malloc(tag_count * std::mem::size_of::<*mut c_char>()) as *mut *mut c_char;
+        if tags_ptr.is_null() {
+            if !c_fields.is_null() {
+                for i in 0..field_count {
+                    free_c_field_template(&mut *c_fields.add(i));
+                }
+                libc::free(c_fields as *mut c_void);
+            }
+            let _ = CString::from_raw(name);
+            let _ = CString::from_raw(description);
+            return Err(());
+        }
+
+        for (i, tag) in template.default_tags.iter().enumerate() {
+            match CString::new(tag.clone()) {
+                Ok(c_tag) => *tags_ptr.add(i) = c_tag.into_raw(),
+                Err(_) => {
+                    // Clean up tags created so far
+                    for j in 0..i {
+                        let _ = CString::from_raw(*tags_ptr.add(j));
+                    }
+                    libc::free(tags_ptr as *mut c_void);
+                    if !c_fields.is_null() {
+                        for k in 0..field_count {
+                            free_c_field_template(&mut *c_fields.add(k));
+                        }
+                        libc::free(c_fields as *mut c_void);
+                    }
+                    let _ = CString::from_raw(name);
+                    let _ = CString::from_raw(description);
+                    return Err(());
+                }
+            }
+        }
+        tags_ptr
+    } else {
+        ptr::null_mut()
+    };
+
+    (*c_template).name = name;
+    (*c_template).description = description;
+    (*c_template).field_count = field_count as c_int;
+    (*c_template).fields = c_fields;
+    (*c_template).tag_count = tag_count as c_int;
+    (*c_template).tags = c_tags;
+
+    Ok(())
+}
+
+/// Convert a Rust FieldTemplate to C structure
+unsafe fn convert_field_template_to_c(
+    field: &crate::models::FieldTemplate,
+    c_field: *mut CFieldTemplate,
+) -> Result<(), ()> {
+    let name = match CString::new(field.name.clone()) {
+        Ok(s) => s.into_raw(),
+        Err(_) => return Err(()),
+    };
+
+    let field_type = match CString::new(field.field_type.to_string()) {
+        Ok(s) => s.into_raw(),
+        Err(_) => {
+            let _ = CString::from_raw(name);
+            return Err(());
+        }
+    };
+
+    let label = match CString::new(field.label.clone()) {
+        Ok(s) => s.into_raw(),
+        Err(_) => {
+            let _ = CString::from_raw(name);
+            let _ = CString::from_raw(field_type);
+            return Err(());
+        }
+    };
+
+    let default_value = if let Some(ref value) = field.default_value {
+        match CString::new(value.clone()) {
+            Ok(s) => s.into_raw(),
+            Err(_) => {
+                let _ = CString::from_raw(name);
+                let _ = CString::from_raw(field_type);
+                let _ = CString::from_raw(label);
+                return Err(());
+            }
+        }
+    } else {
+        ptr::null_mut()
+    };
+
+    let (validation_pattern, validation_message, validation_min_length, validation_max_length) =
+        if let Some(ref validation) = field.validation {
+            let pattern = if let Some(ref pattern) = validation.pattern {
+                match CString::new(pattern.clone()) {
+                    Ok(s) => s.into_raw(),
+                    Err(_) => {
+                        let _ = CString::from_raw(name);
+                        let _ = CString::from_raw(field_type);
+                        let _ = CString::from_raw(label);
+                        if !default_value.is_null() {
+                            let _ = CString::from_raw(default_value);
+                        }
+                        return Err(());
+                    }
+                }
+            } else {
+                ptr::null_mut()
+            };
+
+            let message = if let Some(ref message) = validation.message {
+                match CString::new(message.clone()) {
+                    Ok(s) => s.into_raw(),
+                    Err(_) => {
+                        let _ = CString::from_raw(name);
+                        let _ = CString::from_raw(field_type);
+                        let _ = CString::from_raw(label);
+                        if !default_value.is_null() {
+                            let _ = CString::from_raw(default_value);
+                        }
+                        if !pattern.is_null() {
+                            let _ = CString::from_raw(pattern);
+                        }
+                        return Err(());
+                    }
+                }
+            } else {
+                ptr::null_mut()
+            };
+
+            (
+                pattern,
+                message,
+                validation.min_length.map(|v| v as c_int).unwrap_or(-1),
+                validation.max_length.map(|v| v as c_int).unwrap_or(-1),
+            )
+        } else {
+            (ptr::null_mut(), ptr::null_mut(), -1, -1)
+        };
+
+    (*c_field).name = name;
+    (*c_field).field_type = field_type;
+    (*c_field).label = label;
+    (*c_field).required = if field.required { 1 } else { 0 };
+    (*c_field).sensitive = if field.sensitive { 1 } else { 0 };
+    (*c_field).default_value = default_value;
+    (*c_field).validation_min_length = validation_min_length;
+    (*c_field).validation_max_length = validation_max_length;
+    (*c_field).validation_pattern = validation_pattern;
+    (*c_field).validation_message = validation_message;
+
+    Ok(())
+}
+
+/// Free a C credential template structure
+unsafe fn free_c_template(c_template: &mut CCredentialTemplate) {
+    if !c_template.name.is_null() {
+        let _ = CString::from_raw(c_template.name);
+    }
+    if !c_template.description.is_null() {
+        let _ = CString::from_raw(c_template.description);
+    }
+
+    // Free fields
+    if !c_template.fields.is_null() {
+        for i in 0..c_template.field_count {
+            free_c_field_template(&mut *c_template.fields.add(i as usize));
+        }
+        libc::free(c_template.fields as *mut c_void);
+    }
+
+    // Free tags
+    if !c_template.tags.is_null() {
+        for i in 0..c_template.tag_count {
+            let tag_ptr = c_template.tags.add(i as usize);
+            if !(*tag_ptr).is_null() {
+                let _ = CString::from_raw(*tag_ptr);
+            }
+        }
+        libc::free(c_template.tags as *mut c_void);
+    }
+}
+
+/// Free a C field template structure
+unsafe fn free_c_field_template(c_field: &mut CFieldTemplate) {
+    if !c_field.name.is_null() {
+        let _ = CString::from_raw(c_field.name);
+    }
+    if !c_field.field_type.is_null() {
+        let _ = CString::from_raw(c_field.field_type);
+    }
+    if !c_field.label.is_null() {
+        let _ = CString::from_raw(c_field.label);
+    }
+    if !c_field.default_value.is_null() {
+        let _ = CString::from_raw(c_field.default_value);
+    }
+    if !c_field.validation_pattern.is_null() {
+        let _ = CString::from_raw(c_field.validation_pattern);
+    }
+    if !c_field.validation_message.is_null() {
+        let _ = CString::from_raw(c_field.validation_message);
+    }
+}
+
+#[cfg(test)]
+mod template_tests {
+    use super::*;
+    use std::ptr;
+
+    #[test]
+    fn test_get_all_templates() {
+        unsafe {
+            let mut templates: *mut CCredentialTemplate = ptr::null_mut();
+            let mut count: c_int = 0;
+
+            let result = ziplock_templates_get_all(&mut templates, &mut count);
+            assert_eq!(result, ZipLockError::Success as c_int);
+            assert!(!templates.is_null());
+            assert_eq!(count, 12); // We have 12 built-in templates
+
+            // Verify we can read the first template
+            let first_template = &*templates;
+            assert!(!first_template.name.is_null());
+
+            let name = CStr::from_ptr(first_template.name).to_str().unwrap();
+            assert!(!name.is_empty());
+
+            // Clean up
+            ziplock_templates_free(templates, count);
+        }
+    }
+
+    #[test]
+    fn test_get_template_by_name() {
+        unsafe {
+            let mut template = CCredentialTemplate {
+                name: ptr::null_mut(),
+                description: ptr::null_mut(),
+                field_count: 0,
+                fields: ptr::null_mut(),
+                tag_count: 0,
+                tags: ptr::null_mut(),
+            };
+
+            let template_name = CString::new("login").unwrap();
+            let result = ziplock_template_get_by_name(template_name.as_ptr(), &mut template);
+            assert_eq!(result, ZipLockError::Success as c_int);
+
+            assert!(!template.name.is_null());
+            let name = CStr::from_ptr(template.name).to_str().unwrap();
+            assert_eq!(name, "login");
+
+            assert!(!template.description.is_null());
+            let description = CStr::from_ptr(template.description).to_str().unwrap();
+            assert_eq!(description, "Website or application login");
+
+            assert!(template.field_count > 0);
+            assert!(!template.fields.is_null());
+
+            // Clean up
+            ziplock_template_free(&mut template);
+        }
+    }
+
+    #[test]
+    fn test_get_template_by_invalid_name() {
+        unsafe {
+            let mut template = CCredentialTemplate {
+                name: ptr::null_mut(),
+                description: ptr::null_mut(),
+                field_count: 0,
+                fields: ptr::null_mut(),
+                tag_count: 0,
+                tags: ptr::null_mut(),
+            };
+
+            let template_name = CString::new("invalid_template").unwrap();
+            let result = ziplock_template_get_by_name(template_name.as_ptr(), &mut template);
+            assert_eq!(result, ZipLockError::InvalidParameter as c_int);
+        }
+    }
+
+    #[test]
+    fn test_template_fields_structure() {
+        unsafe {
+            let mut template = CCredentialTemplate {
+                name: ptr::null_mut(),
+                description: ptr::null_mut(),
+                field_count: 0,
+                fields: ptr::null_mut(),
+                tag_count: 0,
+                tags: ptr::null_mut(),
+            };
+
+            let template_name = CString::new("credit_card").unwrap();
+            let result = ziplock_template_get_by_name(template_name.as_ptr(), &mut template);
+            assert_eq!(result, ZipLockError::Success as c_int);
+
+            assert!(template.field_count >= 4); // Credit card should have at least 4 fields
+            assert!(!template.fields.is_null());
+
+            // Check first field
+            let first_field = &*template.fields;
+            assert!(!first_field.name.is_null());
+            assert!(!first_field.field_type.is_null());
+            assert!(!first_field.label.is_null());
+
+            let field_name = CStr::from_ptr(first_field.name).to_str().unwrap();
+            assert!(!field_name.is_empty());
+
+            // Clean up
+            ziplock_template_free(&mut template);
+        }
+    }
+
+    #[test]
+    fn test_all_template_names() {
+        let template_names = vec![
+            "login",
+            "credit_card",
+            "secure_note",
+            "identity",
+            "password",
+            "document",
+            "ssh_key",
+            "bank_account",
+            "api_credentials",
+            "crypto_wallet",
+            "database",
+            "software_license",
+        ];
+
+        for template_name in template_names {
+            unsafe {
+                let mut template = CCredentialTemplate {
+                    name: ptr::null_mut(),
+                    description: ptr::null_mut(),
+                    field_count: 0,
+                    fields: ptr::null_mut(),
+                    tag_count: 0,
+                    tags: ptr::null_mut(),
+                };
+
+                let name_cstring = CString::new(template_name).unwrap();
+                let result = ziplock_template_get_by_name(name_cstring.as_ptr(), &mut template);
+                assert_eq!(
+                    result,
+                    ZipLockError::Success as c_int,
+                    "Failed to get template: {}",
+                    template_name
+                );
+
+                assert!(!template.name.is_null());
+                let name = CStr::from_ptr(template.name).to_str().unwrap();
+                assert_eq!(name, template_name);
+
+                // Clean up
+                ziplock_template_free(&mut template);
+            }
+        }
     }
 }

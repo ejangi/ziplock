@@ -949,6 +949,212 @@ extension ZipLockCredential {
         return credential
     }
 }
+
+// MARK: - CommonTemplates FFI Integration
+
+/// C structures for FFI interop
+struct CCredentialTemplate {
+    var name: UnsafeMutablePointer<CChar>?
+    var description: UnsafeMutablePointer<CChar>?
+    var field_count: Int32
+    var fields: UnsafeMutablePointer<CFieldTemplate>?
+    var tag_count: Int32
+    var tags: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+}
+
+struct CFieldTemplate {
+    var name: UnsafeMutablePointer<CChar>?
+    var field_type: UnsafeMutablePointer<CChar>?
+    var label: UnsafeMutablePointer<CChar>?
+    var required: Int32
+    var sensitive: Int32
+    var default_value: UnsafeMutablePointer<CChar>?
+    var validation_min_length: Int32
+    var validation_max_length: Int32
+    var validation_pattern: UnsafeMutablePointer<CChar>?
+    var validation_message: UnsafeMutablePointer<CChar>?
+}
+
+/// Credential template structure from FFI
+struct CredentialTemplate {
+    let name: String
+    let description: String
+    let fields: [FieldTemplate]
+    let defaultTags: [String]
+}
+
+/// Field template structure from FFI
+struct FieldTemplate {
+    let name: String
+    let fieldType: String
+    let label: String
+    let required: Bool
+    let sensitive: Bool
+    let defaultValue: String?
+    let validation: FieldValidation?
+}
+
+/// Field validation structure from FFI
+struct FieldValidation {
+    let minLength: Int?
+    let maxLength: Int?
+    let pattern: String?
+    let message: String?
+}
+
+/// FFI functions for template access
+extension ZipLockCore {
+    // External FFI declarations
+    private static let ziplock_templates_get_all: @convention(c) (UnsafeMutablePointer<UnsafeMutablePointer<CCredentialTemplate>?>?, UnsafeMutablePointer<Int32>?) -> Int32 = dlsym(dlopen(nil, RTLD_LAZY), "ziplock_templates_get_all").assumingMemoryBound(to: (@convention(c) (UnsafeMutablePointer<UnsafeMutablePointer<CCredentialTemplate>?>?, UnsafeMutablePointer<Int32>?) -> Int32).self).pointee
+    
+    private static let ziplock_template_get_by_name: @convention(c) (UnsafePointer<CChar>?, UnsafeMutablePointer<CCredentialTemplate>?) -> Int32 = dlsym(dlopen(nil, RTLD_LAZY), "ziplock_template_get_by_name").assumingMemoryBound(to: (@convention(c) (UnsafePointer<CChar>?, UnsafeMutablePointer<CCredentialTemplate>?) -> Int32).self).pointee
+    
+    private static let ziplock_templates_free: @convention(c) (UnsafeMutablePointer<CCredentialTemplate>?, Int32) -> Void = dlsym(dlopen(nil, RTLD_LAZY), "ziplock_templates_free").assumingMemoryBound(to: (@convention(c) (UnsafeMutablePointer<CCredentialTemplate>?, Int32) -> Void).self).pointee
+    
+    private static let ziplock_template_free: @convention(c) (UnsafeMutablePointer<CCredentialTemplate>?) -> Void = dlsym(dlopen(nil, RTLD_LAZY), "ziplock_template_free").assumingMemoryBound(to: (@convention(c) (UnsafeMutablePointer<CCredentialTemplate>?) -> Void).self).pointee
+
+    /// Get all available credential templates
+    static func getAllTemplates() -> [CredentialTemplate] {
+        var templatesPtr: UnsafeMutablePointer<CCredentialTemplate>?
+        var count: Int32 = 0
+        
+        let result = ziplock_templates_get_all(&templatesPtr, &count)
+        guard result == 0, let templates = templatesPtr, count > 0 else {
+            return []
+        }
+        
+        defer { ziplock_templates_free(templates, count) }
+        
+        var templateList: [CredentialTemplate] = []
+        for i in 0..<Int(count) {
+            let cTemplate = templates.advanced(by: i).pointee
+            if let template = convertCTemplateToSwift(cTemplate) {
+                templateList.append(template)
+            }
+        }
+        
+        return templateList
+    }
+    
+    /// Get a specific credential template by name
+    static func getTemplate(name: String) -> CredentialTemplate? {
+        var cTemplate = CCredentialTemplate()
+        let result = name.withCString { namePtr in
+            ziplock_template_get_by_name(namePtr, &cTemplate)
+        }
+        
+        guard result == 0 else { return nil }
+        defer { ziplock_template_free(&cTemplate) }
+        
+        return convertCTemplateToSwift(cTemplate)
+    }
+    
+    /// Available template names for quick reference
+    static let availableTemplateNames = [
+        "login", "credit_card", "secure_note", "identity",
+        "password", "document", "ssh_key", "bank_account",
+        "api_credentials", "crypto_wallet", "database", "software_license"
+    ]
+    
+    // Helper function to convert C template to Swift
+    private static func convertCTemplateToSwift(_ cTemplate: CCredentialTemplate) -> CredentialTemplate? {
+        guard let namePtr = cTemplate.name,
+              let descPtr = cTemplate.description else { return nil }
+        
+        let name = String(cString: namePtr)
+        let description = String(cString: descPtr)
+        
+        // Convert fields
+        var fields: [FieldTemplate] = []
+        if let fieldsPtr = cTemplate.fields, cTemplate.field_count > 0 {
+            for i in 0..<Int(cTemplate.field_count) {
+                let cField = fieldsPtr.advanced(by: i).pointee
+                if let field = convertCFieldTemplateToSwift(cField) {
+                    fields.append(field)
+                }
+            }
+        }
+        
+        // Convert tags
+        var tags: [String] = []
+        if let tagsPtr = cTemplate.tags, cTemplate.tag_count > 0 {
+            for i in 0..<Int(cTemplate.tag_count) {
+                if let tagPtr = tagsPtr.advanced(by: i).pointee {
+                    tags.append(String(cString: tagPtr))
+                }
+            }
+        }
+        
+        return CredentialTemplate(name: name, description: description, fields: fields, defaultTags: tags)
+    }
+    
+    // Helper function to convert C field template to Swift
+    private static func convertCFieldTemplateToSwift(_ cField: CFieldTemplate) -> FieldTemplate? {
+        guard let namePtr = cField.name,
+              let typePtr = cField.field_type,
+              let labelPtr = cField.label else { return nil }
+        
+        let name = String(cString: namePtr)
+        let fieldType = String(cString: typePtr)
+        let label = String(cString: labelPtr)
+        let required = cField.required != 0
+        let sensitive = cField.sensitive != 0
+        let defaultValue = cField.default_value != nil ? String(cString: cField.default_value) : nil
+        
+        var validation: FieldValidation?
+        if cField.validation_min_length >= 0 || cField.validation_max_length >= 0 ||
+           cField.validation_pattern != nil || cField.validation_message != nil {
+            validation = FieldValidation(
+                minLength: cField.validation_min_length >= 0 ? Int(cField.validation_min_length) : nil,
+                maxLength: cField.validation_max_length >= 0 ? Int(cField.validation_max_length) : nil,
+                pattern: cField.validation_pattern != nil ? String(cString: cField.validation_pattern) : nil,
+                message: cField.validation_message != nil ? String(cString: cField.validation_message) : nil
+            )
+        }
+        
+        return FieldTemplate(
+            name: name,
+            fieldType: fieldType,
+            label: label,
+            required: required,
+            sensitive: sensitive,
+            defaultValue: defaultValue,
+            validation: validation
+        )
+    }
+}
+
+// MARK: - Template Usage Examples
+
+extension ZipLockCredential {
+    /// Create a credential from a template with validation
+    static func createFromTemplate(_ templateName: String, title: String) throws -> ZipLockCredential {
+        // Get template definition for validation
+        guard let template = ZipLockCore.getTemplate(name: templateName) else {
+            throw ZipLockError.internalError("Unknown template: \(templateName)")
+        }
+        
+        // Create credential
+        let credential = try ZipLockCredential(fromTemplate: templateName, title: title)
+        
+        // Add default tags
+        for tag in template.defaultTags {
+            try credential.addTag(tag)
+        }
+        
+        return credential
+    }
+    
+    /// Get template definition for a credential type
+    static func getTemplateInfo(for templateName: String) -> CredentialTemplate? {
+        return ZipLockCore.getTemplate(name: templateName)
+    }
+    
+    /// Get all available templates
+    static func getAllAvailableTemplates() -> [CredentialTemplate] {
+        return ZipLockCore.getAllTemplates()
+    }
+}
 ```
 
 ## Android Integration
@@ -1956,6 +2162,160 @@ ZipLockCore.enableDebugLogging(true)
 ```kotlin
 // Android
 ZipLockNative.ziplock_debug_logging(1)
+```
+
+// MARK: - Android CommonTemplates Integration
+
+### Template Data Classes
+
+```kotlin
+data class CredentialTemplate(
+    val name: String,
+    val description: String,
+    val fields: List<FieldTemplate>,
+    val defaultTags: List<String>
+)
+
+data class FieldTemplate(
+    val name: String,
+    val fieldType: String,
+    val label: String,
+    val required: Boolean,
+    val sensitive: Boolean,
+    val defaultValue: String?,
+    val validation: FieldValidation?
+)
+
+data class FieldValidation(
+    val minLength: Int?,
+    val maxLength: Int?,
+    val pattern: String?,
+    val message: String?
+)
+```
+
+### Template Functions
+
+The Android FFI already includes the CommonTemplates functions in `ZipLockNative.kt`:
+
+```kotlin
+// Get all available templates
+val templates = ZipLockNative.getAllTemplates()
+for (template in templates) {
+    Log.d("Template", "${template.name}: ${template.description}")
+    for (field in template.fields) {
+        Log.d("Field", "  ${field.label} (${field.fieldType})")
+    }
+}
+
+// Get specific template
+val loginTemplate = ZipLockNative.getTemplateByName("login")
+if (loginTemplate != null) {
+    Log.d("Template", "Login template has ${loginTemplate.fields.size} fields")
+}
+
+// Get available template names
+val availableNames = ZipLockNative.getAvailableTemplateNames()
+Log.d("Templates", "Available: ${availableNames.joinToString(", ")}")
+```
+
+### Template Usage Examples
+
+```kotlin
+// Create credential from template with validation
+fun createLoginCredential(title: String, username: String, password: String, website: String): ZipLockCredential {
+    // Get template for validation
+    val template = ZipLockNative.getTemplateByName("login")
+        ?: throw IllegalArgumentException("Login template not found")
+    
+    // Create credential from template
+    val credential = ZipLockCredential.fromTemplate("login", title)
+    
+    // Add fields based on template
+    credential.addField("username", ZipLockFieldType.USERNAME, username)
+    credential.addField("password", ZipLockFieldType.PASSWORD, password)
+    credential.addField("website", ZipLockFieldType.URL, website)
+    
+    // Add default tags from template
+    for (tag in template.defaultTags) {
+        credential.addTag(tag)
+    }
+    
+    return credential
+}
+
+// Create credit card credential
+fun createCreditCardCredential(
+    title: String,
+    cardNumber: String,
+    expiryDate: String,
+    cvv: String,
+    cardholderName: String
+): ZipLockCredential {
+    val credential = ZipLockCredential.fromTemplate("credit_card", title)
+    credential.addField("cardholder", ZipLockFieldType.TEXT, cardholderName)
+    credential.addField("number", ZipLockFieldType.CREDIT_CARD_NUMBER, cardNumber)
+    credential.addField("expiry", ZipLockFieldType.EXPIRY_DATE, expiryDate)
+    credential.addField("cvv", ZipLockFieldType.CVV, cvv)
+    return credential
+}
+
+// Validate field against template requirements
+fun validateFieldAgainstTemplate(templateName: String, fieldName: String, value: String): Boolean {
+    val template = ZipLockNative.getTemplateByName(templateName) ?: return false
+    val fieldTemplate = template.fields.find { it.name == fieldName } ?: return false
+    
+    // Check required field
+    if (fieldTemplate.required && value.isBlank()) {
+        return false
+    }
+    
+    // Check validation rules
+    fieldTemplate.validation?.let { validation ->
+        validation.minLength?.let { minLength ->
+            if (value.length < minLength) return false
+        }
+        validation.maxLength?.let { maxLength ->
+            if (value.length > maxLength) return false
+        }
+        validation.pattern?.let { pattern ->
+            if (!value.matches(Regex(pattern))) return false
+        }
+    }
+    
+    return true
+}
+```
+
+### Template Management Utility
+
+```kotlin
+object TemplateManager {
+    private var cachedTemplates: List<CredentialTemplate>? = null
+    
+    fun getAllTemplates(): List<CredentialTemplate> {
+        if (cachedTemplates == null) {
+            cachedTemplates = ZipLockNative.getAllTemplates()
+        }
+        return cachedTemplates ?: emptyList()
+    }
+    
+    fun getTemplate(name: String): CredentialTemplate? {
+        return getAllTemplates().find { it.name == name }
+    }
+    
+    fun getTemplateNames(): List<String> {
+        return getAllTemplates().map { it.name }
+    }
+    
+    fun getTemplatesForUI(): List<Pair<String, String>> {
+        return getAllTemplates().map { it.name to it.description }
+    }
+    
+    fun invalidateCache() {
+        cachedTemplates = null
+    }
+}
 ```
 
 ## Performance Considerations
