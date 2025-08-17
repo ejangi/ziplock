@@ -562,6 +562,7 @@ jobs:
             target/ziplock-*.tar.gz
             packaging/arch/PKGBUILD
             packaging/arch/.SRCINFO
+            packaging/arch/ziplock.install
           retention-days: 30
 
   benchmark:
@@ -625,8 +626,8 @@ jobs:
 
           # Copy Arch package files
           echo "Copying Arch package files..."
-          cp artifacts/arch-package/target/*.tar.gz release-assets/
           cp artifacts/arch-package/packaging/arch/PKGBUILD release-assets/
+          cp artifacts/arch-package/packaging/arch/ziplock.install release-assets/
           echo "✅ Arch package files copied"
 
           # Copy compiled binaries
