@@ -3,140 +3,184 @@ package com.ziplock
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.background
+import androidx.activity.viewModels
 import androidx.compose.foundation.layout.*
-import androidx.compose.material.*
-import androidx.compose.runtime.Composable
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.ziplock.ui.screens.RepositorySelectionScreen
+import com.ziplock.ui.theme.*
+import com.ziplock.viewmodel.RepositoryViewModel
+import com.ziplock.viewmodel.RepositoryState
 
 class MainActivity : ComponentActivity() {
+
+    private val repositoryViewModel: RepositoryViewModel by viewModels()
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
         setContent {
-            MaterialTheme {
-                MainScreen()
+            ZipLockTheme {
+                MainApp(repositoryViewModel = repositoryViewModel)
             }
         }
     }
 }
 
-
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MainScreen() {
+fun MainApp(repositoryViewModel: RepositoryViewModel) {
+    // Temporarily simplify to directly show RepositorySelectionScreen for testing
     Scaffold(
-        topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        text = stringResource(R.string.app_name),
-                        color = Color.White
-                    )
-                },
-                backgroundColor = Color(0xFF8338EC) // logo_purple
-            )
-        }
-    ) { innerPadding ->
-        Box(
+        containerColor = ZipLockColors.LightBackground
+    ) { paddingValues ->
+        RepositorySelectionScreen(
+            onRepositorySelected = { filePath, passphrase ->
+                // For testing, just print the values
+                println("Selected file: $filePath")
+                println("Passphrase length: ${passphrase.length}")
+            },
+            onCreateNew = {
+                println("Create new archive requested")
+            },
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.White)
-                .padding(innerPadding),
-            contentAlignment = Alignment.Center
+                .padding(paddingValues)
+        )
+    }
+}
+
+@Composable
+fun RepositoryOpenedScreen(
+    archivePath: String,
+    onClose: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    // Placeholder for the main password manager interface
+    // This will be implemented in future iterations
+
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(ZipLockSpacing.MainContentPadding),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = "Repository Opened",
+            style = ZipLockTypography.ExtraLarge,
+            color = ZipLockColors.LogoPurple
+        )
+
+        Spacer(modifier = Modifier.height(ZipLockSpacing.Standard))
+
+        Text(
+            text = "Archive: ${archivePath.substringAfterLast('/')}",
+            style = ZipLockTypography.Medium,
+            color = ZipLockColors.DarkText
+        )
+
+        Spacer(modifier = Modifier.height(ZipLockSpacing.ExtraLarge))
+
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = ZipLockColors.White),
+            elevation = CardDefaults.cardElevation(defaultElevation = ZipLockDimensions.CardElevation)
         ) {
             Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center,
-                modifier = Modifier.padding(24.dp)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(ZipLockSpacing.ExtraLarge),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
-                    text = "Welcome to ZipLock",
-                    fontSize = 28.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color(0xFF8338EC), // logo_purple
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(bottom = 16.dp)
+                    text = "🔓",
+                    style = ZipLockTypography.ExtraLarge.copy(fontSize = 48.sp)
                 )
+
+                Spacer(modifier = Modifier.height(ZipLockSpacing.Standard))
 
                 Text(
-                    text = "Your secure password manager",
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Normal,
-                    color = Color(0xFF212529), // text_primary_light
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(bottom = 32.dp)
+                    text = "Archive Unlocked Successfully",
+                    style = ZipLockTypography.Header,
+                    color = ZipLockColors.DarkText
                 )
 
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    backgroundColor = Color(0xFFF8F9FA) // background_light
-                ) {
-                    Column(
-                        modifier = Modifier.padding(24.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Text(
-                            text = "🔒",
-                            fontSize = 48.sp,
-                            modifier = Modifier.padding(bottom = 16.dp)
-                        )
+                Spacer(modifier = Modifier.height(ZipLockSpacing.Small))
 
-                        Text(
-                            text = "Ready to protect your passwords",
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = Color(0xFF212529),
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.padding(bottom = 16.dp)
-                        )
+                Text(
+                    text = "The main password manager interface will be implemented here. You can now access your encrypted credentials.",
+                    style = ZipLockTypography.Normal,
+                    color = ZipLockColors.LightGrayText,
+                    textAlign = TextAlign.Center
+                )
 
-                        Text(
-                            text = "The main application interface will be implemented here. This is a placeholder showing the app has successfully launched after the splash screen.",
-                            fontSize = 14.sp,
-                            color = Color(0xFF6C757D), // text_secondary_light
-                            textAlign = TextAlign.Center,
-                            lineHeight = 20.sp
-                        )
-                    }
-                }
+                Spacer(modifier = Modifier.height(ZipLockSpacing.ExtraLarge))
 
-                Spacer(modifier = Modifier.height(32.dp))
-
-                Button(
-                    onClick = { /* TODO: Implement main functionality */ },
-                    colors = ButtonDefaults.buttonColors(
-                        backgroundColor = Color(0xFF8338EC) // logo_purple
-                    ),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 32.dp)
-                ) {
-                    Text(
-                        text = "Get Started",
-                        color = Color.White,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
+                ZipLockButton(
+                    text = "Close Archive",
+                    onClick = onClose,
+                    style = ZipLockButtonStyle.Secondary,
+                    icon = ZipLockIcons.Lock,
+                    modifier = Modifier.fillMaxWidth()
+                )
             }
         }
     }
 }
 
-
+@Composable
+fun ZipLockTheme(content: @Composable () -> Unit) {
+    MaterialTheme(
+        colorScheme = lightColorScheme(
+            primary = ZipLockColors.LogoPurple,
+            onPrimary = ZipLockColors.White,
+            secondary = ZipLockColors.LogoPurpleLight,
+            onSecondary = ZipLockColors.White,
+            tertiary = ZipLockColors.SuccessGreen,
+            onTertiary = ZipLockColors.White,
+            error = ZipLockColors.ErrorRed,
+            onError = ZipLockColors.White,
+            background = ZipLockColors.LightBackground,
+            onBackground = ZipLockColors.DarkText,
+            surface = ZipLockColors.White,
+            onSurface = ZipLockColors.DarkText,
+            surfaceVariant = ZipLockColors.VeryLightGray,
+            onSurfaceVariant = ZipLockColors.LightGrayText
+        ),
+        typography = Typography(
+            displayLarge = ZipLockTypography.ExtraLarge,
+            displayMedium = ZipLockTypography.Large,
+            displaySmall = ZipLockTypography.Header,
+            headlineLarge = ZipLockTypography.Large,
+            headlineMedium = ZipLockTypography.Header,
+            headlineSmall = ZipLockTypography.Medium,
+            titleLarge = ZipLockTypography.Header,
+            titleMedium = ZipLockTypography.Medium,
+            titleSmall = ZipLockTypography.Normal,
+            bodyLarge = ZipLockTypography.Normal,
+            bodyMedium = ZipLockTypography.Normal,
+            bodySmall = ZipLockTypography.Small,
+            labelLarge = ZipLockTypography.Medium,
+            labelMedium = ZipLockTypography.Normal,
+            labelSmall = ZipLockTypography.Small
+        ),
+        content = content
+    )
+}
 
 @Preview(showBackground = true)
 @Composable
-fun MainScreenPreview() {
-    MaterialTheme {
-        MainScreen()
+fun MainAppPreview() {
+    ZipLockTheme {
+        // Create a mock view model for preview
+        val mockViewModel = RepositoryViewModel()
+        MainApp(repositoryViewModel = mockViewModel)
     }
 }

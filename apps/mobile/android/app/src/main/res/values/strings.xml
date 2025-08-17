@@ -1,7 +1,128 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- App Identity -->
     <string name="app_name">ZipLock</string>
     <string name="splash_title">ZipLock</string>
     <string name="splash_subtitle">Secure Password Manager</string>
     <string name="loading">Loading...</string>
+
+    <!-- Repository Selection Screen -->
+    <string name="open_archive_title">Open Archive</string>
+    <string name="open_archive_subtitle">Select your password archive and enter your passphrase</string>
+    <string name="archive_file_label">Archive File</string>
+    <string name="passphrase_label">Passphrase</string>
+    <string name="select_archive_placeholder">Select archive file (.7z)</string>
+    <string name="passphrase_placeholder">Enter your passphrase</string>
+    <string name="open_archive_button">Open Archive</string>
+    <string name="create_new_archive_button">Create New Archive</string>
+    <string name="opening_archive_message">Opening archive...</string>
+    <string name="help_text">Need help? ZipLock uses 7z archives to securely store your passwords with AES encryption.</string>
+
+    <!-- Repository Opened Screen -->
+    <string name="repository_opened_title">Repository Opened</string>
+    <string name="archive_unlocked_message">Archive Unlocked Successfully</string>
+    <string name="archive_unlocked_description">The main password manager interface will be implemented here. You can now access your encrypted credentials.</string>
+    <string name="close_archive_button">Close Archive</string>
+
+    <!-- File Picker -->
+    <string name="browse_files">Browse files</string>
+    <string name="select_file">Select file</string>
+
+    <!-- Password Visibility -->
+    <string name="show_password">Show password</string>
+    <string name="hide_password">Hide password</string>
+
+    <!-- Validation Messages -->
+    <string name="passphrase_too_short">Passphrase too short</string>
+    <string name="passphrase_required">Passphrase is required</string>
+    <string name="archive_file_required">Archive file is required</string>
+
+    <!-- Error Messages -->
+    <string name="error_incorrect_passphrase">Incorrect passphrase. Please check your password and try again.</string>
+    <string name="error_file_not_found">The archive file could not be found. Please check the file path.</string>
+    <string name="error_permission_denied">Permission denied. Please check file permissions or try a different location.</string>
+    <string name="error_corrupted_archive">The archive file appears to be corrupted or invalid.</string>
+    <string name="error_network">Network error. Please check your connection and try again.</string>
+    <string name="error_generic">Failed to open archive. Please try again.</string>
+    <string name="error_invalid_input">Invalid input provided.</string>
+
+    <!-- Success Messages -->
+    <string name="success_archive_opened">Archive opened successfully</string>
+    <string name="success_archive_created">New archive created successfully</string>
+    <string name="success_archive_saved">Archive saved successfully</string>
+
+    <!-- Loading Messages -->
+    <string name="loading_opening_archive">Opening archive...</string>
+    <string name="loading_creating_archive">Creating new archive...</string>
+    <string name="loading_saving_archive">Saving archive...</string>
+    <string name="loading_verifying_passphrase">Verifying passphrase...</string>
+
+    <!-- Alert Actions -->
+    <string name="dismiss">Dismiss</string>
+    <string name="retry">Retry</string>
+    <string name="cancel">Cancel</string>
+    <string name="ok">OK</string>
+
+    <!-- Passphrase Strength -->
+    <string name="passphrase_strength_very_weak">Very Weak</string>
+    <string name="passphrase_strength_weak">Weak</string>
+    <string name="passphrase_strength_fair">Fair</string>
+    <string name="passphrase_strength_good">Good</string>
+    <string name="passphrase_strength_strong">Strong</string>
+    <string name="passphrase_strength_very_strong">Very Strong</string>
+
+    <!-- Passphrase Requirements -->
+    <string name="requirement_min_length">At least 8 characters</string>
+    <string name="requirement_uppercase">At least one uppercase letter</string>
+    <string name="requirement_lowercase">At least one lowercase letter</string>
+    <string name="requirement_number">At least one number</string>
+    <string name="requirement_special_char">At least one special character</string>
+
+    <!-- Satisfied Requirements -->
+    <string name="satisfied_min_length">Minimum length (8 characters)</string>
+    <string name="satisfied_uppercase">Contains uppercase letter</string>
+    <string name="satisfied_lowercase">Contains lowercase letter</string>
+    <string name="satisfied_number">Contains number</string>
+    <string name="satisfied_special_char">Contains special character</string>
+
+    <!-- Cloud Storage -->
+    <string name="cloud_storage_detected">Cloud storage file detected. Working with local copy for safety.</string>
+    <string name="cloud_sync_conflict">Archive was modified by external sync service. Please reload.</string>
+    <string name="cloud_sync_success">Successfully synced changes back to cloud storage.</string>
+
+    <!-- Archive Types -->
+    <string name="archive_type_7z">7-Zip Archive</string>
+    <string name="archive_type_unknown">Unknown Archive</string>
+
+    <!-- Credential Types -->
+    <string name="credential_type_login">Website Login</string>
+    <string name="credential_type_credit_card">Credit Card</string>
+    <string name="credential_type_note">Secure Note</string>
+    <string name="credential_type_identity">Personal Identity</string>
+    <string name="credential_type_document">Document</string>
+    <string name="credential_type_bank">Bank Account</string>
+    <string name="credential_type_wallet">Crypto Wallet</string>
+    <string name="credential_type_database">Database</string>
+    <string name="credential_type_license">Software License</string>
+
+    <!-- Content Descriptions for Accessibility -->
+    <string name="content_desc_logo">ZipLock Logo</string>
+    <string name="content_desc_eye_icon">Toggle password visibility</string>
+    <string name="content_desc_folder_icon">Browse for archive file</string>
+    <string name="content_desc_lock_icon">Security indicator</string>
+    <string name="content_desc_error_icon">Error indicator</string>
+    <string name="content_desc_success_icon">Success indicator</string>
+    <string name="content_desc_warning_icon">Warning indicator</string>
+    <string name="content_desc_info_icon">Information indicator</string>
+    <string name="content_desc_close_button">Close</string>
+
+    <!-- Tooltips and Hints -->
+    <string name="hint_select_7z_file">Select a .7z archive file containing your passwords</string>
+    <string name="hint_passphrase_security">Use a strong passphrase to protect your data</string>
+    <string name="hint_cloud_storage">For cloud files, changes will be synced back automatically</string>
+
+    <!-- Developer/Debug Messages -->
+    <string name="debug_ffi_not_loaded">Native library not loaded</string>
+    <string name="debug_session_id">Session ID: %1$s</string>
+    <string name="debug_archive_path">Archive Path: %1$s</string>
 </resources>

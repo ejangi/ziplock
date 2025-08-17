@@ -1,0 +1,378 @@
+package com.ziplock.viewmodel
+
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
+
+/**
+ * Repository View Model
+ *
+ * Manages the state and business logic for repository operations including:
+ * - Opening existing archives with passphrase validation
+ * - Creating new archives
+ * - FFI library integration for archive operations
+ * - Error handling and user feedback
+ *
+ * This view model serves as the bridge between the UI and the shared FFI library,
+ * handling all repository-related operations without exposing crypto implementation details.
+ */
+class RepositoryViewModel : ViewModel() {
+
+    // UI State
+    private val _uiState = MutableStateFlow(RepositoryUiState())
+    val uiState: StateFlow<RepositoryUiState> = _uiState.asStateFlow()
+
+    // Repository State
+    private val _repositoryState = MutableStateFlow<RepositoryState>(RepositoryState.None)
+    val repositoryState: StateFlow<RepositoryState> = _repositoryState.asStateFlow()
+
+    /**
+     * Open an existing archive
+     *
+     * @param filePath Path to the .7z archive file
+     * @param passphrase User-provided passphrase for decryption
+     */
+    fun openRepository(filePath: String, passphrase: String) {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(
+                isLoading = true,
+                errorMessage = null
+            )
+
+            try {
+                // Validate inputs
+                if (filePath.isBlank()) {
+                    throw IllegalArgumentException("Archive file path is required")
+                }
+
+                if (passphrase.isBlank()) {
+                    throw IllegalArgumentException("Passphrase is required")
+                }
+
+                // TODO: Integrate with shared FFI library
+                // This is where we'll call the shared library to open the archive
+                // The FFI library handles all cryptographic operations
+
+                // Simulate FFI call for now
+                delay(1500) // Simulate processing time
+
+                // Example of what the FFI integration would look like:
+                /*
+                val result = ZipLockNative.openArchive(filePath, passphrase)
+                if (result.isSuccess()) {
+                    _repositoryState.value = RepositoryState.Opened(
+                        archivePath = filePath,
+                        sessionId = result.sessionId
+                    )
+                } else {
+                    throw Exception(result.errorMessage)
+                }
+                */
+
+                // For now, simulate successful opening
+                _repositoryState.value = RepositoryState.Opened(
+                    archivePath = filePath,
+                    sessionId = generateSessionId()
+                )
+
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    successMessage = "Archive opened successfully"
+                )
+
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    errorMessage = mapErrorMessage(e)
+                )
+            }
+        }
+    }
+
+    /**
+     * Create a new archive
+     *
+     * @param filePath Path where the new .7z archive should be created
+     * @param passphrase User-provided passphrase for encryption
+     */
+    fun createRepository(filePath: String, passphrase: String) {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(
+                isLoading = true,
+                errorMessage = null
+            )
+
+            try {
+                // Validate inputs
+                if (filePath.isBlank()) {
+                    throw IllegalArgumentException("Archive file path is required")
+                }
+
+                if (passphrase.length < 8) {
+                    throw IllegalArgumentException("Passphrase must be at least 8 characters long")
+                }
+
+                // TODO: Integrate with shared FFI library
+                // This is where we'll call the shared library to create a new archive
+
+                // Simulate FFI call for now
+                delay(2000) // Simulate processing time
+
+                // Example of what the FFI integration would look like:
+                /*
+                val result = ZipLockNative.createArchive(filePath, passphrase)
+                if (result.isSuccess()) {
+                    _repositoryState.value = RepositoryState.Created(
+                        archivePath = filePath,
+                        sessionId = result.sessionId
+                    )
+                } else {
+                    throw Exception(result.errorMessage)
+                }
+                */
+
+                // For now, simulate successful creation
+                _repositoryState.value = RepositoryState.Created(
+                    archivePath = filePath,
+                    sessionId = generateSessionId()
+                )
+
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    successMessage = "New archive created successfully"
+                )
+
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    errorMessage = mapErrorMessage(e)
+                )
+            }
+        }
+    }
+
+    /**
+     * Close the currently open repository
+     */
+    fun closeRepository() {
+        viewModelScope.launch {
+            try {
+                // TODO: Integrate with shared FFI library to properly close the archive
+                /*
+                when (val state = _repositoryState.value) {
+                    is RepositoryState.Opened -> {
+                        ZipLockNative.closeArchive(state.sessionId)
+                    }
+                    is RepositoryState.Created -> {
+                        ZipLockNative.closeArchive(state.sessionId)
+                    }
+                    else -> { /* No action needed */ }
+                }
+                */
+
+                _repositoryState.value = RepositoryState.None
+                _uiState.value = RepositoryUiState() // Reset to initial state
+
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    errorMessage = "Failed to close repository: ${e.message}"
+                )
+            }
+        }
+    }
+
+    /**
+     * Clear error messages
+     */
+    fun clearError() {
+        _uiState.value = _uiState.value.copy(errorMessage = null)
+    }
+
+    /**
+     * Clear success messages
+     */
+    fun clearSuccess() {
+        _uiState.value = _uiState.value.copy(successMessage = null)
+    }
+
+    /**
+     * Validate passphrase strength
+     *
+     * @param passphrase The passphrase to validate
+     * @return PassphraseValidation result with strength and requirements
+     */
+    fun validatePassphrase(passphrase: String): PassphraseValidation {
+        val requirements = mutableListOf<String>()
+        val satisfied = mutableListOf<String>()
+
+        // Length requirement
+        if (passphrase.length < 8) {
+            requirements.add("At least 8 characters")
+        } else {
+            satisfied.add("Minimum length (8 characters)")
+        }
+
+        // Uppercase requirement
+        if (!passphrase.any { it.isUpperCase() }) {
+            requirements.add("At least one uppercase letter")
+        } else {
+            satisfied.add("Contains uppercase letter")
+        }
+
+        // Lowercase requirement
+        if (!passphrase.any { it.isLowerCase() }) {
+            requirements.add("At least one lowercase letter")
+        } else {
+            satisfied.add("Contains lowercase letter")
+        }
+
+        // Number requirement
+        if (!passphrase.any { it.isDigit() }) {
+            requirements.add("At least one number")
+        } else {
+            satisfied.add("Contains number")
+        }
+
+        // Special character requirement
+        if (!passphrase.any { !it.isLetterOrDigit() }) {
+            requirements.add("At least one special character")
+        } else {
+            satisfied.add("Contains special character")
+        }
+
+        // Calculate strength score
+        val score = when {
+            requirements.size > 3 -> PassphraseStrength.VeryWeak
+            requirements.size > 2 -> PassphraseStrength.Weak
+            requirements.size > 1 -> PassphraseStrength.Fair
+            requirements.size == 1 -> PassphraseStrength.Good
+            requirements.isEmpty() && passphrase.length < 12 -> PassphraseStrength.Strong
+            else -> PassphraseStrength.VeryStrong
+        }
+
+        return PassphraseValidation(
+            strength = score,
+            requirements = requirements,
+            satisfied = satisfied,
+            isValid = requirements.isEmpty() && passphrase.length >= 8
+        )
+    }
+
+    /**
+     * Check if a file path represents a cloud storage location
+     * Implements the cloud storage detection from the cloud-storage-implementation.md
+     */
+    fun isCloudStorageFile(filePath: String): Boolean {
+        val cloudPatterns = listOf(
+            // Android cloud storage patterns
+            "/Android/data/com.google.android.apps.docs/",
+            "/Android/data/com.dropbox.android/",
+            "/Android/data/com.microsoft.skydrive/",
+            "/Android/data/com.box.android/",
+            "/Android/data/com.nextcloud.client/",
+
+            // Storage Access Framework patterns
+            "content://com.android.providers.media.documents/",
+            "content://com.android.externalstorage.documents/",
+
+            // Generic cloud indicators
+            "/cloud/", "/sync/", "/googledrive/", "/dropbox/", "/onedrive/"
+        )
+
+        return cloudPatterns.any { pattern ->
+            filePath.contains(pattern, ignoreCase = true)
+        }
+    }
+
+    /**
+     * Map technical errors to user-friendly messages
+     */
+    private fun mapErrorMessage(error: Exception): String {
+        return when {
+            error.message?.contains("authentication", ignoreCase = true) == true ||
+            error.message?.contains("passphrase", ignoreCase = true) == true ||
+            error.message?.contains("password", ignoreCase = true) == true ->
+                "Incorrect passphrase. Please check your password and try again."
+
+            error.message?.contains("not found", ignoreCase = true) == true ||
+            error.message?.contains("no such file", ignoreCase = true) == true ->
+                "The archive file could not be found. Please check the file path."
+
+            error.message?.contains("permission", ignoreCase = true) == true ||
+            error.message?.contains("access denied", ignoreCase = true) == true ->
+                "Permission denied. Please check file permissions or try a different location."
+
+            error.message?.contains("corrupted", ignoreCase = true) == true ||
+            error.message?.contains("invalid", ignoreCase = true) == true ->
+                "The archive file appears to be corrupted or invalid."
+
+            error.message?.contains("network", ignoreCase = true) == true ||
+            error.message?.contains("connection", ignoreCase = true) == true ->
+                "Network error. Please check your connection and try again."
+
+            error is IllegalArgumentException ->
+                error.message ?: "Invalid input provided."
+
+            else -> "Failed to open archive. Please try again."
+        }
+    }
+
+    /**
+     * Generate a unique session ID for tracking archive operations
+     */
+    private fun generateSessionId(): String {
+        return "session_${System.currentTimeMillis()}_${(1000..9999).random()}"
+    }
+}
+
+/**
+ * UI State for the repository operations
+ */
+data class RepositoryUiState(
+    val isLoading: Boolean = false,
+    val errorMessage: String? = null,
+    val successMessage: String? = null
+)
+
+/**
+ * Repository state tracking
+ */
+sealed class RepositoryState {
+    object None : RepositoryState()
+
+    data class Opened(
+        val archivePath: String,
+        val sessionId: String
+    ) : RepositoryState()
+
+    data class Created(
+        val archivePath: String,
+        val sessionId: String
+    ) : RepositoryState()
+}
+
+/**
+ * Passphrase validation result
+ */
+data class PassphraseValidation(
+    val strength: PassphraseStrength,
+    val requirements: List<String>,
+    val satisfied: List<String>,
+    val isValid: Boolean
+)
+
+/**
+ * Passphrase strength levels matching the design.md specification
+ */
+enum class PassphraseStrength(val score: Int, val label: String) {
+    VeryWeak(10, "Very Weak"),
+    Weak(30, "Weak"),
+    Fair(50, "Fair"),
+    Good(70, "Good"),
+    Strong(85, "Strong"),
+    VeryStrong(95, "Very Strong")
+}
