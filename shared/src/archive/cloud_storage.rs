@@ -297,10 +297,8 @@ fn calculate_file_hash(path: &Path) -> Result<String, CloudStorageError> {
                 buffer.hash(&mut hasher);
             }
 
-            if file.seek(SeekFrom::End(-1024)).is_ok() {
-                if file.read(&mut buffer).is_ok() {
-                    buffer.hash(&mut hasher);
-                }
+            if file.seek(SeekFrom::End(-1024)).is_ok() && file.read(&mut buffer).is_ok() {
+                buffer.hash(&mut hasher);
             }
         }
     }
