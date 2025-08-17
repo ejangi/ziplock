@@ -147,6 +147,102 @@ char* ziplock_get_version(void);
  */
 char* ziplock_get_last_error(void);
 
+/**
+ * Shutdown the ZipLock library
+ * Should be called when library is no longer needed
+ * 
+ * @return 0 on success, negative error code on failure
+ */
+int32_t ziplock_shutdown(void);
+
+// ============================================================================
+// Session Management
+// ============================================================================
+
+/**
+ * Create a new session
+ * 
+ * @return Session ID string (must be freed with ziplock_string_free) or NULL on error
+ */
+char* ziplock_session_create(void);
+
+// ============================================================================
+// Archive Management
+// ============================================================================
+
+/**
+ * Create a new archive
+ * 
+ * @param path Archive file path
+ * @param master_password Master password for encryption
+ * @return 0 on success, negative error code on failure
+ */
+int32_t ziplock_archive_create(const char* path, const char* master_password);
+
+/**
+ * Open an existing archive
+ * 
+ * @param path Archive file path
+ * @param master_password Master password for decryption
+ * @return 0 on success, negative error code on failure
+ */
+int32_t ziplock_archive_open(const char* path, const char* master_password);
+
+/**
+ * Close the currently open archive
+ * 
+ * @return 0 on success, negative error code on failure
+ */
+int32_t ziplock_archive_close(void);
+
+/**
+ * Save the currently open archive
+ * 
+ * @return 0 on success, negative error code on failure
+ */
+int32_t ziplock_archive_save(void);
+
+/**
+ * Check if an archive is currently open
+ * 
+ * @return 1 if archive is open, 0 if not
+ */
+int32_t ziplock_is_archive_open(void);
+
+// ============================================================================
+// Credential List Management
+// ============================================================================
+
+// Forward declaration for credential record
+typedef struct {
+    char* id;
+    char* title;
+    char* credential_type;
+    char* username;
+    char* password;
+    char* url;
+    char* notes;
+    int64_t created_at;
+    int64_t updated_at;
+} CCredentialRecord;
+
+/**
+ * Get list of credentials from the archive
+ * 
+ * @param credentials Pointer to receive credential array
+ * @param count Pointer to receive credential count
+ * @return 0 on success, negative error code on failure
+ */
+int32_t ziplock_credential_list(CCredentialRecord** credentials, size_t* count);
+
+/**
+ * Free credential list returned by ziplock_credential_list
+ * 
+ * @param credentials Credential array to free
+ * @param count Number of credentials in array
+ */
+void ziplock_credential_list_free(CCredentialRecord* credentials, size_t count);
+
 // ============================================================================
 // Memory Management
 // ============================================================================
