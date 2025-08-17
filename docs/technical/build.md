@@ -868,6 +868,7 @@ Pre-built container images are maintained automatically:
 
 - **ubuntu-builder**: Ubuntu 22.04 with Rust toolchain and all dependencies
 - **arch-builder**: Arch Linux with build tools and packaging utilities
+- **android-builder**: Ubuntu 22.04 with Android NDK and cross-compilation tools
 - **Weekly Updates**: Images rebuild automatically for security updates
 - **GitHub Container Registry**: Images hosted at `ghcr.io/ejangi/ziplock`
 

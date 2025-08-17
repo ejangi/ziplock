@@ -446,6 +446,8 @@ EOF
 - Rust toolchain with all Android targets pre-installed
 - Consistent build environment across platforms
 - Automated cross-compilation setup
+- Pre-built image available from GitHub Container Registry (`ghcr.io/ejangi/ziplock/android-builder:latest`)
+- Automatic fallback to local build if registry image is unavailable
 
 ### Build Process
 

@@ -22,19 +22,38 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$(dirname "$SCRIPT_DIR")")"
 DOCKER_FILE="$PROJECT_ROOT/.github/docker/android-builder.Dockerfile"
 IMAGE_NAME="ziplock-android-builder"
+REGISTRY_IMAGE="ghcr.io/ejangi/ziplock/android-builder:latest"
 OUTPUT_DIR="$PROJECT_ROOT/android-builds"
+USE_REGISTRY="${USE_REGISTRY:-true}"
 
-# Function to build Docker image
-build_image() {
-    print_status "Building Android builder Docker image..."
+# Function to get or build Docker image
+get_image() {
+    if [ "$USE_REGISTRY" = "true" ]; then
+        print_status "Using pre-built Android builder image from registry..."
 
-    if [ ! -f "$DOCKER_FILE" ]; then
-        print_error "Docker file not found: $DOCKER_FILE"
-        exit 1
+        # Try to pull the latest image
+        if docker pull "$REGISTRY_IMAGE" 2>/dev/null; then
+            # Tag it locally for convenience
+            docker tag "$REGISTRY_IMAGE" "$IMAGE_NAME"
+            print_success "Using registry image: $REGISTRY_IMAGE"
+            return 0
+        else
+            print_warning "Failed to pull registry image, falling back to local build"
+            USE_REGISTRY="false"
+        fi
     fi
 
-    docker build -f "$DOCKER_FILE" -t "$IMAGE_NAME" "$PROJECT_ROOT"
-    print_success "Docker image built successfully"
+    if [ "$USE_REGISTRY" = "false" ]; then
+        print_status "Building Android builder Docker image locally..."
+
+        if [ ! -f "$DOCKER_FILE" ]; then
+            print_error "Docker file not found: $DOCKER_FILE"
+            exit 1
+        fi
+
+        docker build -f "$DOCKER_FILE" -t "$IMAGE_NAME" "$PROJECT_ROOT"
+        print_success "Docker image built successfully"
+    fi
 }
 
 # Function to run Android build in container
@@ -152,9 +171,14 @@ usage() {
     echo "  x86_64            Build for x86_64 only"
     echo "  x86               Build for x86 only"
     echo ""
+    echo "Environment Variables:"
+    echo "  USE_REGISTRY      Use pre-built registry image (default: true)"
+    echo "                    Set to 'false' to force local build"
+    echo ""
     echo "Examples:"
-    echo "  $0 build                 # Build for all architectures"
+    echo "  $0 build                 # Build for all architectures using registry image"
     echo "  $0 build arm64           # Build for ARM64 only"
+    echo "  USE_REGISTRY=false $0 build  # Force local image build"
     echo "  $0 test                  # Test built libraries"
 }
 
@@ -165,7 +189,7 @@ main() {
 
     case "$command" in
         "build")
-            build_image
+            get_image
             run_build "$target"
             test_libraries
             ;;

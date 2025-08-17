@@ -2,24 +2,26 @@ name: Android Build and Test
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [main, develop]
     paths:
-      - 'shared/**'
-      - 'scripts/build/**'
-      - '.github/docker/android-builder.Dockerfile'
-      - '.github/workflows/android.yml'
+      - "shared/**"
+      - "scripts/build/**"
+      - ".github/docker/android-builder.Dockerfile"
+      - ".github/workflows/android.yml"
   pull_request:
-    branches: [ main ]
+    branches: [main]
     paths:
-      - 'shared/**'
-      - 'scripts/build/**'
-      - '.github/docker/android-builder.Dockerfile'
-      - '.github/workflows/android.yml'
+      - "shared/**"
+      - "scripts/build/**"
+      - ".github/docker/android-builder.Dockerfile"
+      - ".github/workflows/android.yml"
   workflow_dispatch:
 
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
 
 jobs:
   android-compilation-test:
@@ -27,124 +29,159 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Set up Rust
-      uses: dtolnay/rust-toolchain@stable
-      with:
-        targets: aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android,i686-linux-android
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android,i686-linux-android
 
-    - name: Cache Rust dependencies
-      uses: actions/cache@v3
-      with:
-        path: |
-          ~/.cargo/bin/
-          ~/.cargo/registry/index/
-          ~/.cargo/registry/cache/
-          ~/.cargo/git/db/
-          target/
-        key: ${{ runner.os }}-android-cargo-${{ hashFiles('**/Cargo.lock') }}
-        restore-keys: |
-          ${{ runner.os }}-android-cargo-
+      - name: Cache Rust dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-android-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-android-cargo-
 
-    - name: Install Android NDK
-      run: |
-        wget -q https://dl.google.com/android/repository/android-ndk-r25c-linux.zip
-        unzip -q android-ndk-r25c-linux.zip
-        sudo mv android-ndk-r25c /opt/android-ndk
-        echo "ANDROID_NDK_HOME=/opt/android-ndk" >> $GITHUB_ENV
-        echo "/opt/android-ndk/toolchains/llvm/prebuilt/linux-x86_64/bin" >> $GITHUB_PATH
+      - name: Install Android NDK
+        run: |
+          wget -q https://dl.google.com/android/repository/android-ndk-r25c-linux.zip
+          unzip -q android-ndk-r25c-linux.zip
+          sudo mv android-ndk-r25c /opt/android-ndk
+          echo "ANDROID_NDK_HOME=/opt/android-ndk" >> $GITHUB_ENV
+          echo "/opt/android-ndk/toolchains/llvm/prebuilt/linux-x86_64/bin" >> $GITHUB_PATH
 
-    - name: Configure Cargo for Android
-      run: |
-        mkdir -p ~/.cargo
-        cat >> ~/.cargo/config.toml << 'EOF'
-        [target.aarch64-linux-android]
-        ar = "aarch64-linux-android-ar"
-        linker = "aarch64-linux-android21-clang"
+      - name: Configure Cargo for Android
+        run: |
+          mkdir -p ~/.cargo
+          cat >> ~/.cargo/config.toml << 'EOF'
+          [target.aarch64-linux-android]
+          ar = "aarch64-linux-android-ar"
+          linker = "aarch64-linux-android21-clang"
 
-        [target.armv7-linux-androideabi]
-        ar = "arm-linux-androideabi-ar"
-        linker = "armv7a-linux-androideabi21-clang"
+          [target.armv7-linux-androideabi]
+          ar = "arm-linux-androideabi-ar"
+          linker = "armv7a-linux-androideabi21-clang"
 
-        [target.x86_64-linux-android]
-        ar = "x86_64-linux-android-ar"
-        linker = "x86_64-linux-android21-clang"
+          [target.x86_64-linux-android]
+          ar = "x86_64-linux-android-ar"
+          linker = "x86_64-linux-android21-clang"
 
-        [target.i686-linux-android]
-        ar = "i686-linux-android-ar"
-        linker = "i686-linux-android21-clang"
-        EOF
+          [target.i686-linux-android]
+          ar = "i686-linux-android-ar"
+          linker = "i686-linux-android21-clang"
+          EOF
 
-    - name: Test Android compilation
-      run: |
-        chmod +x scripts/build/test-android-compilation.sh
-        ./scripts/build/test-android-compilation.sh all
+      - name: Test Android compilation
+        run: |
+          chmod +x scripts/build/test-android-compilation.sh
+          ./scripts/build/test-android-compilation.sh all
 
   android-docker-build:
     name: Docker-based Android Build
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Cache Docker layers
-      uses: actions/cache@v3
-      with:
-        path: /tmp/.buildx-cache
-        key: ${{ runner.os }}-docker-android-${{ github.sha }}
-        restore-keys: |
-          ${{ runner.os }}-docker-android-
+      - name: Build Android libraries using pre-built container
+        run: |
+          # Create output directory
+          mkdir -p android-builds
 
-    - name: Build Android libraries in Docker
-      run: |
-        chmod +x scripts/build/build-android-docker.sh
-        ./scripts/build/build-android-docker.sh build
+          # Use pre-built container image
+          docker run --rm \
+            -v "$PWD:/workspace" \
+            -v "$PWD/android-builds:/output" \
+            -w /workspace \
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/android-builder:latest \
+            bash -c "
+              set -e
+              echo 'Building ZipLock Android libraries...'
 
-    - name: Test built libraries
-      run: |
-        chmod +x scripts/build/test-android-integration.sh
-        ./scripts/build/test-android-integration.sh
+              cd shared
 
-    - name: Verify library symbols
-      run: |
-        chmod +x scripts/build/verify-android-symbols.sh
-        ./scripts/build/verify-android-symbols.sh verify
+              # Build for all Android architectures
+              echo 'Building for ARM64...'
+              cargo build --release --target aarch64-linux-android --features c-api
+              mkdir -p /output/arm64-v8a
+              cp /workspace/target/aarch64-linux-android/release/libziplock_shared.so /output/arm64-v8a/
 
-    - name: Upload Android libraries
-      uses: actions/upload-artifact@v4
-      with:
-        name: android-libraries-${{ github.sha }}
-        path: android-builds/
-        retention-days: 30
+              echo 'Building for ARMv7...'
+              cargo build --release --target armv7-linux-androideabi --features c-api
+              mkdir -p /output/armeabi-v7a
+              cp /workspace/target/armv7-linux-androideabi/release/libziplock_shared.so /output/armeabi-v7a/
 
-    - name: Create build summary
-      run: |
-        echo "## Android Build Summary" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-        echo "| Architecture | Status | Size |" >> $GITHUB_STEP_SUMMARY
-        echo "|--------------|--------|------|" >> $GITHUB_STEP_SUMMARY
+              echo 'Building for x86_64...'
+              cargo build --release --target x86_64-linux-android --features c-api
+              mkdir -p /output/x86_64
+              cp /workspace/target/x86_64-linux-android/release/libziplock_shared.so /output/x86_64/
 
-        for arch in arm64-v8a armeabi-v7a x86_64 x86; do
-          lib_path="android-builds/$arch/libziplock_shared.so"
-          if [ -f "$lib_path" ]; then
-            size=$(du -h "$lib_path" | cut -f1)
-            echo "| $arch | ✅ Built | $size |" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "| $arch | ❌ Missing | - |" >> $GITHUB_STEP_SUMMARY
-          fi
-        done
+              echo 'Building for x86...'
+              cargo build --release --target i686-linux-android --features c-api
+              mkdir -p /output/x86
+              cp /workspace/target/i686-linux-android/release/libziplock_shared.so /output/x86/
 
-        echo "" >> $GITHUB_STEP_SUMMARY
-        echo "### Build Details" >> $GITHUB_STEP_SUMMARY
-        echo "- **Commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
-        echo "- **Branch:** ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
-        echo "- **Timestamp:** $(date -u)" >> $GITHUB_STEP_SUMMARY
+              # Copy header file
+              cp /workspace/shared/include/ziplock.h /output/
+
+              echo 'Android build completed successfully!'
+            "
+
+      - name: Test built libraries
+        run: |
+          chmod +x scripts/build/test-android-integration.sh
+          ./scripts/build/test-android-integration.sh
+
+      - name: Verify library symbols
+        run: |
+          chmod +x scripts/build/verify-android-symbols.sh
+          ./scripts/build/verify-android-symbols.sh verify
+
+      - name: Upload Android libraries
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-libraries-${{ github.sha }}
+          path: android-builds/
+          retention-days: 30
+
+      - name: Create build summary
+        run: |
+          echo "## Android Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Architecture | Status | Size |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------------|--------|------|" >> $GITHUB_STEP_SUMMARY
+
+          for arch in arm64-v8a armeabi-v7a x86_64 x86; do
+            lib_path="android-builds/$arch/libziplock_shared.so"
+            if [ -f "$lib_path" ]; then
+              size=$(du -h "$lib_path" | cut -f1)
+              echo "| $arch | ✅ Built | $size |" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "| $arch | ❌ Missing | - |" >> $GITHUB_STEP_SUMMARY
+            fi
+          done
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Build Details" >> $GITHUB_STEP_SUMMARY
+          echo "- **Commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Branch:** ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Timestamp:** $(date -u)" >> $GITHUB_STEP_SUMMARY
 
   android-performance-test:
     name: Android Performance Test
@@ -152,44 +189,44 @@ jobs:
     needs: android-docker-build
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Download Android libraries
-      uses: actions/download-artifact@v4
-      with:
-        name: android-libraries-${{ github.sha }}
-        path: android-builds/
+      - name: Download Android libraries
+        uses: actions/download-artifact@v4
+        with:
+          name: android-libraries-${{ github.sha }}
+          path: android-builds/
 
-    - name: Run performance tests
-      run: |
-        chmod +x scripts/build/test-android-integration.sh
-        ./scripts/build/test-android-integration.sh performance
+      - name: Run performance tests
+        run: |
+          chmod +x scripts/build/test-android-integration.sh
+          ./scripts/build/test-android-integration.sh performance
 
-    - name: Check library sizes
-      run: |
-        echo "## Library Size Analysis" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-        echo "| Architecture | Size (bytes) | Size (MB) | Status |" >> $GITHUB_STEP_SUMMARY
-        echo "|--------------|--------------|-----------|--------|" >> $GITHUB_STEP_SUMMARY
+      - name: Check library sizes
+        run: |
+          echo "## Library Size Analysis" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Architecture | Size (bytes) | Size (MB) | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------------|--------------|-----------|--------|" >> $GITHUB_STEP_SUMMARY
 
-        for arch in arm64-v8a armeabi-v7a x86_64 x86; do
-          lib_path="android-builds/$arch/libziplock_shared.so"
-          if [ -f "$lib_path" ]; then
-            size_bytes=$(stat -c%s "$lib_path")
-            size_mb=$(echo "scale=2; $size_bytes / 1024 / 1024" | bc -l)
+          for arch in arm64-v8a armeabi-v7a x86_64 x86; do
+            lib_path="android-builds/$arch/libziplock_shared.so"
+            if [ -f "$lib_path" ]; then
+              size_bytes=$(stat -c%s "$lib_path")
+              size_mb=$(echo "scale=2; $size_bytes / 1024 / 1024" | bc -l)
 
-            if [ $size_bytes -gt $((20 * 1024 * 1024)) ]; then
-              status="⚠️ Large"
-            elif [ $size_bytes -lt 1024 ]; then
-              status="❌ Too small"
-            else
-              status="✅ Good"
+              if [ $size_bytes -gt $((20 * 1024 * 1024)) ]; then
+                status="⚠️ Large"
+              elif [ $size_bytes -lt 1024 ]; then
+                status="❌ Too small"
+              else
+                status="✅ Good"
+              fi
+
+              echo "| $arch | $size_bytes | ${size_mb} MB | $status |" >> $GITHUB_STEP_SUMMARY
             fi
-
-            echo "| $arch | $size_bytes | ${size_mb} MB | $status |" >> $GITHUB_STEP_SUMMARY
-          fi
-        done
+          done
 
   android-security-check:
     name: Android Security Check
@@ -197,138 +234,139 @@ jobs:
     needs: android-docker-build
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Download Android libraries
-      uses: actions/download-artifact@v4
-      with:
-        name: android-libraries-${{ github.sha }}
-        path: android-builds/
+      - name: Download Android libraries
+        uses: actions/download-artifact@v4
+        with:
+          name: android-libraries-${{ github.sha }}
+          path: android-builds/
 
-    - name: Install security analysis tools
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y binutils file
+      - name: Install security analysis tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y binutils file
 
-    - name: Run security checks
-      run: |
-        chmod +x scripts/build/test-android-integration.sh
-        ./scripts/build/test-android-integration.sh security
+      - name: Run security checks
+        run: |
+          chmod +x scripts/build/test-android-integration.sh
+          ./scripts/build/test-android-integration.sh security
 
-    - name: Check for security features
-      run: |
-        echo "## Security Analysis" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
+      - name: Check for security features
+        run: |
+          echo "## Security Analysis" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
 
-        for arch in arm64-v8a armeabi-v7a x86_64 x86; do
-          lib_path="android-builds/$arch/libziplock_shared.so"
-          if [ -f "$lib_path" ]; then
-            echo "### $arch" >> $GITHUB_STEP_SUMMARY
+          for arch in arm64-v8a armeabi-v7a x86_64 x86; do
+            lib_path="android-builds/$arch/libziplock_shared.so"
+            if [ -f "$lib_path" ]; then
+              echo "### $arch" >> $GITHUB_STEP_SUMMARY
 
-            # Check for stack protection
-            if readelf -s "$lib_path" | grep -q "__stack_chk"; then
-              echo "- ✅ Stack protection enabled" >> $GITHUB_STEP_SUMMARY
-            else
-              echo "- ❌ Stack protection not detected" >> $GITHUB_STEP_SUMMARY
+              # Check for stack protection
+              if readelf -s "$lib_path" | grep -q "__stack_chk"; then
+                echo "- ✅ Stack protection enabled" >> $GITHUB_STEP_SUMMARY
+              else
+                echo "- ❌ Stack protection not detected" >> $GITHUB_STEP_SUMMARY
+              fi
+
+              # Check for position independent code
+              if readelf -h "$lib_path" | grep -q "DYN"; then
+                echo "- ✅ Position independent executable" >> $GITHUB_STEP_SUMMARY
+              else
+                echo "- ❌ Not position independent" >> $GITHUB_STEP_SUMMARY
+              fi
+
+              # Check for stripped symbols
+              symbol_count=$(readelf -s "$lib_path" | wc -l)
+              if [ $symbol_count -lt 50 ]; then
+                echo "- ✅ Symbols stripped ($symbol_count symbols)" >> $GITHUB_STEP_SUMMARY
+              else
+                echo "- ⚠️ Many symbols present ($symbol_count symbols)" >> $GITHUB_STEP_SUMMARY
+              fi
+
+              echo "" >> $GITHUB_STEP_SUMMARY
             fi
-
-            # Check for position independent code
-            if readelf -h "$lib_path" | grep -q "DYN"; then
-              echo "- ✅ Position independent executable" >> $GITHUB_STEP_SUMMARY
-            else
-              echo "- ❌ Not position independent" >> $GITHUB_STEP_SUMMARY
-            fi
-
-            # Check for stripped symbols
-            symbol_count=$(readelf -s "$lib_path" | wc -l)
-            if [ $symbol_count -lt 50 ]; then
-              echo "- ✅ Symbols stripped ($symbol_count symbols)" >> $GITHUB_STEP_SUMMARY
-            else
-              echo "- ⚠️ Many symbols present ($symbol_count symbols)" >> $GITHUB_STEP_SUMMARY
-            fi
-
-            echo "" >> $GITHUB_STEP_SUMMARY
-          fi
-        done
+          done
 
   release-android:
     name: Release Android Libraries
     runs-on: ubuntu-latest
-    needs: [android-docker-build, android-performance-test, android-security-check]
+    needs:
+      [android-docker-build, android-performance-test, android-security-check]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Download Android libraries
-      uses: actions/download-artifact@v4
-      with:
-        name: android-libraries-${{ github.sha }}
-        path: android-builds/
+      - name: Download Android libraries
+        uses: actions/download-artifact@v4
+        with:
+          name: android-libraries-${{ github.sha }}
+          path: android-builds/
 
-    - name: Create release package
-      run: |
-        # Create release directory structure
-        mkdir -p release/android/{arm64-v8a,armeabi-v7a,x86_64,x86}
+      - name: Create release package
+        run: |
+          # Create release directory structure
+          mkdir -p release/android/{arm64-v8a,armeabi-v7a,x86_64,x86}
 
-        # Copy libraries
-        for arch in arm64-v8a armeabi-v7a x86_64 x86; do
-          if [ -f "android-builds/$arch/libziplock_shared.so" ]; then
-            cp "android-builds/$arch/libziplock_shared.so" "release/android/$arch/"
-          fi
-        done
+          # Copy libraries
+          for arch in arm64-v8a armeabi-v7a x86_64 x86; do
+            if [ -f "android-builds/$arch/libziplock_shared.so" ]; then
+              cp "android-builds/$arch/libziplock_shared.so" "release/android/$arch/"
+            fi
+          done
 
-        # Copy header file
-        cp android-builds/ziplock.h release/android/
+          # Copy header file
+          cp android-builds/ziplock.h release/android/
 
-        # Create README
-        cat > release/android/README.md << 'EOF'
-        # ZipLock Android Libraries
+          # Create README
+          cat > release/android/README.md << 'EOF'
+          # ZipLock Android Libraries
 
-        This package contains the ZipLock shared libraries for Android development.
+          This package contains the ZipLock shared libraries for Android development.
 
-        ## Contents
+          ## Contents
 
-        - `arm64-v8a/libziplock_shared.so` - ARM64 library (primary target)
-        - `armeabi-v7a/libziplock_shared.so` - ARMv7 library (legacy support)
-        - `x86_64/libziplock_shared.so` - x86_64 library (emulator)
-        - `x86/libziplock_shared.so` - x86 library (emulator)
-        - `ziplock.h` - C header file for FFI integration
+          - `arm64-v8a/libziplock_shared.so` - ARM64 library (primary target)
+          - `armeabi-v7a/libziplock_shared.so` - ARMv7 library (legacy support)
+          - `x86_64/libziplock_shared.so` - x86_64 library (emulator)
+          - `x86/libziplock_shared.so` - x86 library (emulator)
+          - `ziplock.h` - C header file for FFI integration
 
-        ## Integration
+          ## Integration
 
-        1. Copy the libraries to your Android project's `src/main/jniLibs/` directory
-        2. Copy the header file to your native code directory
-        3. Use JNI to load the library: `System.loadLibrary("ziplock_shared")`
+          1. Copy the libraries to your Android project's `src/main/jniLibs/` directory
+          2. Copy the header file to your native code directory
+          3. Use JNI to load the library: `System.loadLibrary("ziplock_shared")`
 
-        ## Documentation
+          ## Documentation
 
-        See the complete integration guide at:
-        https://github.com/ejangi/ziplock/blob/main/docs/technical/android.md
-        EOF
+          See the complete integration guide at:
+          https://github.com/ejangi/ziplock/blob/main/docs/technical/android.md
+          EOF
 
-        # Create version info
-        echo "Build: ${{ github.sha }}" > release/android/VERSION
-        echo "Date: $(date -u)" >> release/android/VERSION
-        echo "Branch: ${{ github.ref_name }}" >> release/android/VERSION
+          # Create version info
+          echo "Build: ${{ github.sha }}" > release/android/VERSION
+          echo "Date: $(date -u)" >> release/android/VERSION
+          echo "Branch: ${{ github.ref_name }}" >> release/android/VERSION
 
-        # Create archive
-        cd release
-        tar -czf ziplock-android-${{ github.sha }}.tar.gz android/
+          # Create archive
+          cd release
+          tar -czf ziplock-android-${{ github.sha }}.tar.gz android/
 
-    - name: Upload release package
-      uses: actions/upload-artifact@v4
-      with:
-        name: ziplock-android-release-${{ github.sha }}
-        path: release/ziplock-android-${{ github.sha }}.tar.gz
-        retention-days: 90
+      - name: Upload release package
+        uses: actions/upload-artifact@v4
+        with:
+          name: ziplock-android-release-${{ github.sha }}
+          path: release/ziplock-android-${{ github.sha }}.tar.gz
+          retention-days: 90
 
-    - name: Create release summary
-      run: |
-        echo "## Release Package Created" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-        echo "📦 **Package:** ziplock-android-${{ github.sha }}.tar.gz" >> $GITHUB_STEP_SUMMARY
-        echo "🔗 **Download:** Available in workflow artifacts" >> $GITHUB_STEP_SUMMARY
-        echo "📝 **Documentation:** [Android Integration Guide](https://github.com/ejangi/ziplock/blob/main/docs/technical/android.md)" >> $GITHUB_STEP_SUMMARY
+      - name: Create release summary
+        run: |
+          echo "## Release Package Created" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "📦 **Package:** ziplock-android-${{ github.sha }}.tar.gz" >> $GITHUB_STEP_SUMMARY
+          echo "🔗 **Download:** Available in workflow artifacts" >> $GITHUB_STEP_SUMMARY
+          echo "📝 **Documentation:** [Android Integration Guide](https://github.com/ejangi/ziplock/blob/main/docs/technical/android.md)" >> $GITHUB_STEP_SUMMARY
