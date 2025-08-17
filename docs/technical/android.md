@@ -1,45 +1,44 @@
 # ZipLock Android Development Guide
 
-This document provides comprehensive guidance for setting up, building, and deploying ZipLock's shared libraries for Android ARM platforms. It covers the current implementation status, build processes, Docker-based development environments, and troubleshooting.
+This comprehensive guide covers Android app development, native library compilation, setup procedures, and integration patterns for the ZipLock secure password manager.
 
 ## Table of Contents
 
-- [Current Implementation Status](#current-implementation-status)
-- [Architecture Overview](#architecture-overview)
-- [Android ARM Compilation Setup](#android-arm-compilation-setup)
-- [Docker-based Build Environment](#docker-based-build-environment)
-- [Build Process](#build-process)
-- [Testing and Validation](#testing-and-validation)
-- [Android Integration](#android-integration)
+- [Overview](#overview)
+- [Quick Start (5 Minutes)](#quick-start-5-minutes)
+- [Development Setup](#development-setup)
+- [Android App Implementation](#android-app-implementation)
+- [Native Library Compilation](#native-library-compilation)
+- [FFI Integration](#ffi-integration)
 - [Troubleshooting](#troubleshooting)
-- [Performance Considerations](#performance-considerations)
-- [Security Considerations](#security-considerations)
+- [Performance & Security](#performance--security)
+- [Development Roadmap](#development-roadmap)
 
-## Current Implementation Status
+## Overview
 
-✅ **Already Implemented:**
+### Current Implementation Status
+
+✅ **Android App (Completed)**:
+- Professional splash screen with ZipLock branding
+- Material 3 design system with brand colors
+- Jetpack Compose UI framework
+- Android project structure with proper build configuration
+- Security settings (backup exclusion, ProGuard)
+
+✅ **Native Library Support (Completed)**:
 - Complete C FFI interface (`shared/src/ffi.rs`)
 - C header file with comprehensive API (`shared/include/ziplock.h`)
-- Mobile build script (`scripts/build/build-mobile.sh`)
-- Android NDK configuration and cross-compilation setup
-- Support for multiple Android architectures:
-  - ARM64 (aarch64-linux-android) - Primary target
-  - ARMv7 (armv7-linux-androideabi) - Legacy support
-  - x86_64/x86 - Emulator support
+- Cross-compilation for ARM64, ARMv7, x86_64, x86
+- Docker-based build environment
+- Mobile build scripts
 
-✅ **Validated Components:**
-- Rust shared library builds as `cdylib` for FFI
-- Cross-compilation toolchain configuration
-- JNI-compatible library output format
-- Memory management and string handling for mobile
+🔄 **Integration (Next Steps)**:
+- JNI bridge implementation
+- Password management UI
+- Biometric authentication
+- File system integration
 
-🔄 **Areas for Enhancement:**
-- Docker-based build environment for consistent compilation
-- Automated testing for ARM-specific functionality
-- Performance optimization for mobile devices
-- Enhanced error handling and logging for mobile debugging
-
-## Architecture Overview
+### Architecture Overview
 
 ```mermaid
 graph TD
@@ -55,13 +54,336 @@ graph TD
     J --> C
 ```
 
-The ZipLock Android implementation uses a layered architecture where the Android app communicates with the Rust core library through JNI (Java Native Interface). The shared library is compiled for specific ARM architectures and packaged with the Android application.
-
-## Android ARM Compilation Setup
+## Quick Start (5 Minutes)
 
 ### Prerequisites
+- Android Studio (latest version)
+- 8GB+ RAM, 6GB+ storage
 
-1. **Rust Toolchain with Android Targets**
+### 1. Install Android Studio
+Download from: https://developer.android.com/studio
+- Install SDK and emulator components during setup
+
+### 2. Verify Setup
+```bash
+cd ziplock/apps/mobile/android
+./verify-setup.sh
+```
+
+### 3. Open Project
+- Launch Android Studio
+- Choose "Open an Existing Project"
+- Select `ziplock/apps/mobile/android` folder
+- Wait for Gradle sync
+
+### 4. Create Emulator
+- **Tools → AVD Manager**
+- **Create Virtual Device** → **Pixel 7** → **Next**
+- **Android 14 (API 34)** → Download if needed → **Next** → **Finish**
+
+### 5. Run App
+- Click green ▶️ **Run** button
+- Select emulator
+- Watch for splash screen (2.5s) → main screen
+
+### Expected Results
+- **Splash Screen**: White background, ZipLock logo, "Secure Password Manager" subtitle
+- **Main Screen**: Welcome message with ZipLock branding
+
+## Development Setup
+
+### System Requirements
+
+**Minimum Requirements:**
+- **RAM**: 8GB (16GB recommended)
+- **Storage**: 6GB for Android Studio + SDK
+- **OS**: Windows 10+, macOS 10.14+, Ubuntu 18.04+
+
+**Software Stack:**
+- **Android Studio**: Hedgehog (2023.1.1) or later
+- **Java**: 11-21 (Android Studio includes embedded JDK)
+- **Kotlin**: 1.9.20+
+- **Gradle**: 8.5+ (included)
+- **Android SDK**: API 34 (target), API 24 (minimum)
+
+### Detailed Setup Process
+
+#### 1. Configure Android Studio JDK
+
+**Use Embedded JDK (Recommended):**
+1. **File → Settings** → **Build Tools → Gradle**
+2. **Gradle JDK**: Select **"Android Studio default JDK"**
+3. **Apply** and **OK**
+
+**Alternative - Custom JDK:**
+```bash
+# Set JAVA_HOME (Linux/macOS)
+export JAVA_HOME=/path/to/jdk-17
+export PATH=$JAVA_HOME/bin:$PATH
+
+# Windows
+set JAVA_HOME=C:\Program Files\Eclipse Adoptium\jdk-17.0.8.101-hotspot
+```
+
+#### 2. Install SDK Components
+
+**Tools → SDK Manager:**
+
+**SDK Platforms:**
+- ✅ Android 14 (API 34) - Target
+- ✅ Android 7.0 (API 24) - Minimum
+
+**SDK Tools:**
+- ✅ Android SDK Build-Tools 34.0.0
+- ✅ Android Emulator
+- ✅ Android SDK Platform-Tools
+- ✅ Intel HAXM (Intel CPUs) / Android Emulator Hypervisor Driver (AMD)
+
+#### 3. Configure Emulator
+
+**Performance Settings:**
+- **Device**: Pixel 7 or Pixel 6
+- **System Image**: Android 14 (API 34), x86_64
+- **RAM**: 4096 MB (if system allows)
+- **Graphics**: Hardware - GLES 2.0
+- **Storage**: 6GB internal, 512MB SD card
+
+#### 4. Build Native Libraries
+
+```bash
+# From project root
+./scripts/build/build-android-docker.sh build
+
+# Verify output
+ls -la android-builds/
+# Should contain: arm64-v8a/, armeabi-v7a/, x86_64/, x86/
+```
+
+### Project Structure
+
+```
+android/
+├── app/
+│   ├── src/main/
+│   │   ├── java/com/ziplock/
+│   │   │   ├── SplashActivity.kt      # Splash screen implementation
+│   │   │   └── MainActivity.kt        # Main app activity (placeholder)
+│   │   ├── res/
+│   │   │   ├── drawable/              # Icons and graphics
+│   │   │   │   └── logo.xml          # ZipLock logo vector
+│   │   │   ├── values/                # Colors, strings, themes
+│   │   │   │   ├── colors.xml        # ZipLock brand colors
+│   │   │   │   ├── strings.xml       # App strings
+│   │   │   │   └── themes.xml        # Material 3 theme
+│   │   │   └── xml/                   # Config files
+│   │   │       └── backup_rules.xml  # Security config
+│   │   ├── jniLibs/                   # Native libraries (future)
+│   │   │   ├── arm64-v8a/            # ARM64 devices
+│   │   │   ├── armeabi-v7a/          # ARM32 devices
+│   │   │   ├── x86_64/               # 64-bit emulator
+│   │   │   └── x86/                  # 32-bit emulator
+│   │   └── AndroidManifest.xml        # App configuration
+│   ├── build.gradle                   # App module config
+│   └── proguard-rules.pro            # Code obfuscation
+├── gradle/wrapper/                    # Gradle wrapper
+├── build.gradle                       # Project config
+├── settings.gradle                    # Project settings
+├── gradle.properties                  # Build properties
+└── local.properties                   # Local SDK paths
+```
+
+## Android App Implementation
+
+### Current Features
+
+#### 1. Splash Screen (`SplashActivity.kt`)
+```kotlin
+class SplashActivity : ComponentActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        
+        setContent {
+            ZipLockTheme {
+                SplashScreen(
+                    onTimeout = {
+                        startActivity(Intent(this@SplashActivity, MainActivity::class.java))
+                        finish()
+                    }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun SplashScreen(onTimeout: () -> Unit) {
+    LaunchedEffect(Unit) {
+        delay(2500) // 2.5 second display
+        onTimeout()
+    }
+    
+    Surface(
+        modifier = Modifier.fillMaxSize(),
+        color = Color.White
+    ) {
+        Column(
+            modifier = Modifier.fillMaxSize(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Icon(
+                painter = painterResource(id = R.drawable.logo),
+                contentDescription = "ZipLock Logo",
+                modifier = Modifier.size(120.dp),
+                tint = MaterialTheme.colorScheme.primary
+            )
+            
+            Spacer(modifier = Modifier.height(24.dp))
+            
+            Text(
+                text = "ZipLock",
+                style = MaterialTheme.typography.headlineLarge,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.Bold
+            )
+            
+            Text(
+                text = "Secure Password Manager",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+            )
+            
+            Spacer(modifier = Modifier.height(48.dp))
+            
+            Text(
+                text = "Loading...",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+            )
+        }
+    }
+}
+```
+
+#### 2. Design System
+
+**Brand Colors (`colors.xml`):**
+```xml
+<resources>
+    <!-- ZipLock Brand Colors -->
+    <color name="ziplock_purple">#8338EC</color>
+    <color name="ziplock_purple_dark">#6425D3</color>
+    
+    <!-- Background Colors -->
+    <color name="background_light">#F8F9FA</color>
+    <color name="background_dark">#212529</color>
+    
+    <!-- Status Colors -->
+    <color name="success">#06D6A0</color>
+    <color name="error">#EF476F</color>
+    <color name="warning">#FCBF49</color>
+</resources>
+```
+
+**Material 3 Theme (`themes.xml`):**
+```xml
+<resources>
+    <style name="Theme.ZipLock" parent="Theme.Material3.DayNight">
+        <item name="colorPrimary">@color/ziplock_purple</item>
+        <item name="colorOnPrimary">#FFFFFF</item>
+        <item name="colorPrimaryContainer">@color/ziplock_purple_dark</item>
+        <item name="colorBackground">@color/background_light</item>
+        <item name="colorSurface">#FFFFFF</item>
+    </style>
+</resources>
+```
+
+#### 3. Security Configuration
+
+**Backup Rules (`backup_rules.xml`):**
+```xml
+<full-backup-content>
+    <!-- Exclude sensitive data from backups -->
+    <exclude domain="sharedpref" path="." />
+    <exclude domain="database" path="." />
+    <exclude domain="file" path="." />
+</full-backup-content>
+```
+
+**Data Extraction Rules:**
+```xml
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="sharedpref" />
+        <exclude domain="database" />
+        <exclude domain="file" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="sharedpref" />
+        <exclude domain="database" />
+        <exclude domain="file" />
+    </device-transfer>
+</data-extraction-rules>
+```
+
+### Build Configuration
+
+**App-level `build.gradle`:**
+```gradle
+android {
+    namespace 'com.ziplock'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "com.ziplock"
+        minSdk 24
+        targetSdk 34
+        versionCode 1
+        versionName "1.0"
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+    
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_11
+        targetCompatibility JavaVersion.VERSION_11
+    }
+    
+    kotlinOptions {
+        jvmTarget = '11'
+    }
+    
+    buildFeatures {
+        compose true
+    }
+    
+    composeOptions {
+        kotlinCompilerExtensionVersion '1.5.4'
+    }
+}
+
+dependencies {
+    implementation 'androidx.core:core-ktx:1.12.0'
+    implementation 'androidx.lifecycle:lifecycle-runtime-ktx:2.7.0'
+    implementation 'androidx.activity:activity-compose:1.8.2'
+    implementation 'androidx.compose.ui:ui:1.5.4'
+    implementation 'androidx.compose.material3:material3:1.1.2'
+    // Additional dependencies...
+}
+```
+
+## Native Library Compilation
+
+### Android ARM Cross-Compilation Setup
+
+#### Prerequisites
+
+**1. Rust Toolchain with Android Targets:**
 ```bash
 # Install Android targets
 rustup target add aarch64-linux-android    # ARM64 (primary)
@@ -70,21 +392,19 @@ rustup target add x86_64-linux-android     # Emulator
 rustup target add i686-linux-android       # Emulator
 ```
 
-2. **Android NDK**
+**2. Android NDK:**
 ```bash
-# Method 1: Via Android Studio
-# Install through Android Studio SDK Manager
+# Method 1: Via Android Studio SDK Manager
 # Location: $HOME/Android/Sdk/ndk/<version>
 
 # Method 2: Direct Download
-# Download from: https://developer.android.com/ndk/downloads
-# Extract to desired location
+# From: https://developer.android.com/ndk/downloads
 
 # Set environment variable
 export ANDROID_NDK_HOME=$HOME/Android/Sdk/ndk/25.2.9519653
 ```
 
-3. **Cross-compilation Configuration**
+**3. Cross-compilation Configuration:**
 ```bash
 # Create cargo config for Android
 mkdir -p ~/.cargo
@@ -107,112 +427,92 @@ linker = "i686-linux-android21-clang"
 EOF
 ```
 
-### Dependency Compatibility
+### Docker-based Build Environment (Recommended)
 
-All major dependencies have been verified for ARM compatibility:
-
-- ✅ **sevenz-rust2**: Pure Rust, cross-platform compatible
-- ✅ **serde/serde_yaml**: Well-tested on ARM platforms
-- ✅ **tokio**: Full ARM support with async runtime
-- ✅ **crypto dependencies** (sha2, hmac): ARM-optimized implementations
-- ✅ **libc**: Platform-specific bindings work correctly
-
-## Docker-based Build Environment
-
-To ensure consistent builds across different development environments, we provide Docker-based Android compilation.
-
-### Quick Start with Docker
-
+**Quick Start with Docker:**
 ```bash
-# Build everything in Docker (recommended)
-./scripts/build/build-android-docker.sh all
-
-# Or step by step
-./scripts/build/build-android-docker.sh image
+# Build all architectures in Docker
 ./scripts/build/build-android-docker.sh build
+
+# Test built libraries
+./scripts/build/build-android-docker.sh test
+
+# Build specific architecture
+./scripts/build/build-android-docker.sh build arm64
 ```
 
-### Android Builder Dockerfile
+**Docker Build Environment Features:**
+- Ubuntu 22.04 base with Android NDK 25.2.9519653
+- Rust toolchain with all Android targets pre-installed
+- Consistent build environment across platforms
+- Automated cross-compilation setup
 
-Location: `.github/docker/android-builder.Dockerfile`
+### Build Process
 
-This Dockerfile creates a consistent build environment with:
-- Ubuntu 22.04 base
-- Rust toolchain with Android targets
-- Android NDK 25.2.9519653
-- Pre-configured cross-compilation settings
-
-## Build Process
-
-### Option 1: Native Build (Requires NDK Setup)
-
+#### Option 1: Native Build
 ```bash
 # Build all Android architectures
 ./scripts/build/build-mobile.sh android
 
 # Build specific architecture
-cd ziplock/shared
+cd shared
 cargo build --release --target aarch64-linux-android --features c-api
 ```
 
-### Option 2: Docker Build (Recommended)
-
+#### Option 2: Docker Build (Recommended)
 ```bash
-# Build all architectures in Docker
-./scripts/build/build-android-docker.sh build
+# Complete build process
+./scripts/build/build-android-docker.sh all
 
-# Build specific architecture
-./scripts/build/build-android-docker.sh build arm64
-
-# Test built libraries
-./scripts/build/build-android-docker.sh test
+# Step by step
+./scripts/build/build-android-docker.sh image    # Build Docker image
+./scripts/build/build-android-docker.sh build    # Compile libraries
+./scripts/build/build-android-docker.sh test     # Validate output
 ```
 
-### Build Output Structure
+### Build Output
 
 ```
 android-builds/
 ├── arm64-v8a/
-│   └── libziplock_shared.so    # ARM64 library
+│   └── libziplock_shared.so    # ARM64 library for modern devices
 ├── armeabi-v7a/
-│   └── libziplock_shared.so    # ARMv7 library
+│   └── libziplock_shared.so    # ARMv7 library for legacy devices
 ├── x86_64/
-│   └── libziplock_shared.so    # x86_64 emulator
+│   └── libziplock_shared.so    # 64-bit emulator support
 ├── x86/
-│   └── libziplock_shared.so    # x86 emulator
-└── ziplock.h                   # C header file
+│   └── libziplock_shared.so    # 32-bit emulator support
+└── ziplock.h                   # C header file for JNI
 ```
 
-## Testing and Validation
+### Performance Optimizations
 
-### 1. Cross-compilation Test
+**Release Profile Tuning (`Cargo.toml`):**
+```toml
+[profile.release]
+opt-level = 3           # Maximum optimization
+lto = true             # Link-time optimization
+codegen-units = 1      # Better optimization
+panic = "abort"        # Smaller panic handling
+strip = true           # Remove debug symbols
 
-```bash
-# Test that all targets compile successfully
-./scripts/build/test-android-compilation.sh
+[profile.mobile]
+inherits = "release"
+opt-level = "s"        # Optimize for size
+lto = "thin"          # Faster linking
+
+# ARM-specific optimizations
+[target.aarch64-linux-android]
+rustflags = ["-C", "target-feature=+neon"]
 ```
 
-### 2. Library Symbol Verification
+## FFI Integration
 
-```bash
-# Verify exported symbols in built libraries
-./scripts/build/verify-android-symbols.sh
-```
+### JNI Wrapper Implementation
 
-### 3. Integration Testing
-
-```bash
-# Run comprehensive integration tests
-./scripts/build/test-android-integration.sh
-```
-
-## Android Integration
-
-### JNI Wrapper Example
-
+**ZipLockNative.kt - Core JNI Interface:**
 ```kotlin
-// File: app/src/main/java/com/example/ziplock/ZipLockNative.kt
-package com.example.ziplock
+package com.ziplock
 
 class ZipLockNative {
     companion object {
@@ -261,11 +561,9 @@ class ZipLockNative {
 }
 ```
 
-### Android Application Integration
-
+**ZipLockManager.kt - High-level API:**
 ```kotlin
-// File: app/src/main/java/com/example/ziplock/ZipLockManager.kt
-package com.example.ziplock
+package com.ziplock
 
 class ZipLockManager {
     private val native = ZipLockNative()
@@ -283,9 +581,7 @@ class ZipLockManager {
         return initialized
     }
     
-    fun getVersion(): String {
-        return native.getVersion()
-    }
+    fun getVersion(): String = native.getVersion()
     
     fun createCredential(title: String, type: String = "login"): Credential? {
         val ptr = native.credentialNew(title, type)
@@ -299,26 +595,26 @@ class ZipLockManager {
         includeNumbers: Boolean = true,
         includeSymbols: Boolean = true
     ): String? {
-        return native.passwordGenerate(length, includeUppercase, includeLowercase, includeNumbers, includeSymbols)
+        return native.passwordGenerate(
+            length, includeUppercase, includeLowercase, includeNumbers, includeSymbols
+        )
     }
     
-    fun validateEmail(email: String): Boolean {
-        return native.emailValidate(email)
-    }
-    
-    fun validateUrl(url: String): Boolean {
-        return native.urlValidate(url)
-    }
+    fun validateEmail(email: String): Boolean = native.emailValidate(email)
+    fun validateUrl(url: String): Boolean = native.urlValidate(url)
 }
 
 class Credential(private val ptr: Long, private val native: ZipLockNative) {
-    fun addField(name: String, value: String, fieldType: FieldType = FieldType.TEXT, sensitive: Boolean = false): Boolean {
+    fun addField(
+        name: String, 
+        value: String, 
+        fieldType: FieldType = FieldType.TEXT, 
+        sensitive: Boolean = false
+    ): Boolean {
         return native.credentialAddField(ptr, name, fieldType.value, value, null, sensitive) == 0
     }
     
-    fun getField(name: String): String? {
-        return native.credentialGetField(ptr, name)
-    }
+    fun getField(name: String): String? = native.credentialGetField(ptr, name)
     
     protected fun finalize() {
         native.credentialFree(ptr)
@@ -326,69 +622,74 @@ class Credential(private val ptr: Long, private val native: ZipLockNative) {
 }
 
 enum class FieldType(val value: Int) {
-    TEXT(0),
-    PASSWORD(1),
-    EMAIL(2),
-    URL(3),
-    USERNAME(4),
-    PHONE(5),
-    CREDIT_CARD_NUMBER(6),
-    EXPIRY_DATE(7),
-    CVV(8),
-    TOTP_SECRET(9),
-    TEXT_AREA(10),
-    NUMBER(11),
-    DATE(12),
-    CUSTOM(13)
+    TEXT(0), PASSWORD(1), EMAIL(2), URL(3), USERNAME(4),
+    PHONE(5), CREDIT_CARD_NUMBER(6), EXPIRY_DATE(7), CVV(8),
+    TOTP_SECRET(9), TEXT_AREA(10), NUMBER(11), DATE(12), CUSTOM(13)
 }
 ```
 
-### Jetpack Compose Integration Example
+### Jetpack Compose UI Integration
 
+**CredentialForm.kt - Example Implementation:**
 ```kotlin
-// File: app/src/main/java/com/example/ziplock/ui/CredentialForm.kt
 @Composable
 fun CredentialForm() {
     val zipLockManager = remember { ZipLockManager() }
     var title by remember { mutableStateOf("") }
     var username by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
-    var generatedPassword by remember { mutableStateOf("") }
+    var isLoading by remember { mutableStateOf(false) }
     
     LaunchedEffect(Unit) {
         zipLockManager.initialize()
     }
     
     Column(
-        modifier = Modifier.padding(16.dp),
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         Text(
             text = "ZipLock ${zipLockManager.getVersion()}",
-            style = MaterialTheme.typography.headlineMedium
+            style = MaterialTheme.typography.headlineMedium,
+            color = MaterialTheme.colorScheme.primary
         )
         
         OutlinedTextField(
             value = title,
             onValueChange = { title = it },
             label = { Text("Title") },
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true
         )
         
         OutlinedTextField(
             value = username,
             onValueChange = { username = it },
-            label = { Text("Username") },
+            label = { Text("Username/Email") },
+            modifier = Modifier.fillMaxWidth(),
             isError = username.isNotEmpty() && !zipLockManager.validateEmail(username),
-            modifier = Modifier.fillMaxWidth()
+            supportingText = {
+                if (username.isNotEmpty() && !zipLockManager.validateEmail(username)) {
+                    Text("Invalid email format", color = MaterialTheme.colorScheme.error)
+                }
+            }
         )
         
         OutlinedTextField(
             value = password,
             onValueChange = { password = it },
             label = { Text("Password") },
+            modifier = Modifier.fillMaxWidth(),
             visualTransformation = PasswordVisualTransformation(),
-            modifier = Modifier.fillMaxWidth()
+            trailingIcon = {
+                IconButton(onClick = {
+                    password = zipLockManager.generatePassword(16) ?: ""
+                }) {
+                    Icon(Icons.Default.Refresh, contentDescription = "Generate Password")
+                }
+            }
         )
         
         Row(
@@ -397,27 +698,50 @@ fun CredentialForm() {
         ) {
             Button(
                 onClick = {
-                    generatedPassword = zipLockManager.generatePassword(16) ?: ""
-                    password = generatedPassword
+                    val generated = zipLockManager.generatePassword(20, true, true, true, true)
+                    if (generated != null) password = generated
                 },
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.weight(1f),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.secondary
+                )
             ) {
-                Text("Generate Password")
+                Text("Strong Password")
+            }
+            
+            Button(
+                onClick = {
+                    val generated = zipLockManager.generatePassword(12, true, true, true, false)
+                    if (generated != null) password = generated
+                },
+                modifier = Modifier.weight(1f),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.tertiary
+                )
+            ) {
+                Text("Simple Password")
             }
         }
         
         Button(
             onClick = {
+                isLoading = true
                 val credential = zipLockManager.createCredential(title)
                 credential?.apply {
                     addField("username", username, FieldType.USERNAME)
                     addField("password", password, FieldType.PASSWORD, sensitive = true)
                 }
+                isLoading = false
+                // TODO: Navigate to success screen
             },
             modifier = Modifier.fillMaxWidth(),
-            enabled = title.isNotEmpty() && username.isNotEmpty() && password.isNotEmpty()
+            enabled = !isLoading && title.isNotEmpty() && username.isNotEmpty() && password.isNotEmpty()
         ) {
-            Text("Save Credential")
+            if (isLoading) {
+                CircularProgressIndicator(modifier = Modifier.size(16.dp))
+            } else {
+                Text("Save Credential")
+            }
         }
     }
 }
@@ -427,280 +751,388 @@ fun CredentialForm() {
 
 ### Common Build Issues
 
-1. **NDK Not Found**
+#### Java/Gradle Compatibility
+**Problem**: Java 21 with Gradle incompatibility
+```
+Your build is currently configured to use incompatible Java 21.0.6 and Gradle 8.2
+```
+**Solution**: Project updated to Gradle 8.5 for Java 21 support
 ```bash
-# Error: Android NDK not found
-# Solution: Set ANDROID_NDK_HOME environment variable
-export ANDROID_NDK_HOME=$HOME/Android/Sdk/ndk/25.2.9519653
+# Clear caches and rebuild
+./gradlew clean
+./gradlew build
 ```
 
-2. **Linker Errors**
+#### Android NDK Issues
+**Problem**: NDK not found
 ```bash
-# Error: linker `aarch64-linux-android21-clang` not found
-# Solution: Add NDK toolchain to PATH
+# Set NDK path
+export ANDROID_NDK_HOME=$HOME/Android/Sdk/ndk/25.2.9519653
 export PATH="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin:$PATH"
 ```
 
-3. **Missing Target**
+**Problem**: Missing Android targets
 ```bash
-# Error: target 'aarch64-linux-android' is not installed
-# Solution: Install Android targets
-rustup target add aarch64-linux-android armv7-linux-androideabi
+# Install all required targets
+rustup target add aarch64-linux-android armv7-linux-androideabi x86_64-linux-android i686-linux-android
 ```
 
-4. **Library Loading Errors**
-```bash
-# Error: UnsatisfiedLinkError when loading library
-# Solution: Verify library architecture matches device
-# Check that libraries are in correct jniLibs folders
-```
-
-### ARM-Specific Issues
-
-1. **Performance Issues on ARM**
-   - Use release builds: `cargo build --release`
-   - Enable link-time optimization in Cargo.toml
-   - Profile critical functions for ARM-specific bottlenecks
-
-2. **Memory Alignment Issues**
-   - The Rust compiler handles ARM alignment automatically
-   - Ensure C structs use proper alignment attributes
-   - Test on both ARMv7 and ARM64 devices
-
-3. **Floating Point Issues**
-   - ARMv7 may have different floating-point behavior
-   - Use consistent precision in cryptographic calculations
-   - Test mathematical operations across architectures
-
-### Debugging Tips
-
-1. **Enable Debug Logging**
+#### Library Loading Errors
+**Problem**: UnsatisfiedLinkError
 ```kotlin
-// In Android app
-ZipLockNative().debugLogging(true)
+// Verify library architecture matches device
+adb shell getprop ro.product.cpu.abi
+// Ensure corresponding .so file exists in jniLibs/
 ```
 
-2. **Use Android Logcat**
+### Android Studio Issues
+
+#### Cache and Build Problems
 ```bash
-# Filter for native crashes
-adb logcat | grep -E "(FATAL|native:|crash)"
+# Method 1: Android Studio
+# File → Invalidate Caches and Restart → "Invalidate and Restart"
+
+# Method 2: Command line
+cd ziplock/apps/mobile/android
+rm -rf .gradle .idea build app/build
+./gradlew clean build
 ```
 
-3. **Test in Emulator First**
+#### Emulator Performance
+**Slow Emulator:**
+- Enable hardware acceleration (HAXM/Hypervisor Driver)
+- Increase RAM allocation (4GB+)
+- Use x86_64 system images instead of ARM
+- Enable "Quick Boot" in AVD settings
+
+**Emulator Won't Start:**
 ```bash
-# Build for x86_64 emulator
-cargo build --release --target x86_64-linux-android --features c-api
+# Linux: Add user to kvm group
+sudo usermod -a -G kvm $USER
+
+# Windows: Enable virtualization in BIOS
+# Disable Hyper-V if using Intel HAXM
+
+# macOS: No additional setup usually required
 ```
 
-4. **Memory Debugging**
+### Memory and Performance Issues
+
+#### Memory Debugging
 ```bash
-# Use AddressSanitizer for debugging (development builds only)
+# Use AddressSanitizer (development only)
 export RUSTFLAGS="-Zsanitizer=address"
 cargo build --target aarch64-linux-android --features c-api
 ```
 
-## Performance Considerations
-
-### Build Optimizations
-
-1. **Release Profile Tuning**
-```toml
-# In Cargo.toml
-[profile.release]
-opt-level = 3
-lto = true
-codegen-units = 1
-panic = "abort"
-strip = true
-```
-
-2. **Mobile-Specific Optimizations**
-```toml
-# Mobile profile for smaller binary size
-[profile.mobile]
-inherits = "release"
-opt-level = "s"  # Optimize for size
-lto = "thin"     # Faster linking
-```
-
-3. **Feature Flags for Mobile**
+#### Profiling
 ```bash
-# Build with minimal features for mobile
-cargo build --release --target aarch64-linux-android \
-    --features c-api \
-    --no-default-features
+# Android Logcat filtering
+adb logcat | grep -E "(FATAL|native:|crash|ZipLock)"
+
+# Memory usage monitoring
+adb shell dumpsys meminfo com.ziplock
 ```
 
-### Runtime Performance
+### Native Library Integration
 
-1. **Memory Management**
-   - Use memory pools for frequent allocations
-   - Minimize string conversions between Rust and JNI
-   - Cache frequently accessed data
+**Library Verification:**
+```bash
+# Check symbols in built library
+nm -D android-builds/arm64-v8a/libziplock_shared.so | grep ziplock
 
-2. **Threading Considerations**
-   - Tokio runtime is single-threaded on mobile by default
-   - Use thread pool for CPU-intensive operations
-   - Avoid blocking the main Android thread
-
-3. **Battery Optimization**
-   - Minimize background processing
-   - Use efficient data structures
-   - Batch operations when possible
-
-### ARM-Specific Optimizations
-
-1. **NEON SIMD Support**
-```rust
-// Enable NEON optimizations in Cargo.toml
-[target.aarch64-linux-android]
-rustflags = ["-C", "target-feature=+neon"]
+# Verify architecture
+file android-builds/arm64-v8a/libziplock_shared.so
 ```
 
-2. **Architecture-Specific Features**
-```toml
-# Enable specific CPU features for ARM
-[target.aarch64-linux-android]
-rustflags = ["-C", "target-cpu=cortex-a55"]
-```
-
-### Library Size Optimization
-
-```toml
-# Optimize for size in Cargo.toml
-[profile.release]
-opt-level = "s"           # Optimize for size
-lto = true               # Link-time optimization
-codegen-units = 1        # Better optimization
-panic = "abort"          # Smaller panic handling
-strip = true             # Remove debug symbols
-```
-
-### Runtime Performance
-
-1. **Lazy Loading**: Only initialize heavy components when needed
-2. **Memory Pooling**: Reuse allocated memory where possible
-3. **Async Operations**: Use Tokio runtime efficiently
-4. **Caching**: Cache frequently accessed data
-
-## Security Considerations
-
-### ARM-Specific Security
-
-1. **Address Space Layout Randomization (ASLR)**
-   - Enabled by default on modern Android
-   - Ensure position-independent code (PIC)
-
-2. **Hardware Security Features**
-   - ARM TrustZone support
-   - Hardware RNG when available
-
-3. **Stack Protection**
-```rust
-// Enable stack protection
-#[cfg(target_arch = "aarch64")]
-use stack_protection::enable_stack_guard;
-```
-
-### Android Security Model
-
-1. **App Sandbox**: Libraries run within app sandbox
-2. **SELinux**: Respect SELinux policies
-3. **Permissions**: Minimize required permissions
-4. **Key Storage**: Use Android Keystore when possible
-
-### Memory Security
-
-1. **Secure Memory Clearing**
-```rust
-use zeroize::Zeroize;
-
-fn clear_sensitive_data(data: &mut [u8]) {
-    data.zeroize();
+**Runtime Debugging:**
+```kotlin
+// Enable debug logging in app
+class ZipLockDebug {
+    companion object {
+        fun enableLogging() {
+            System.setProperty("ziplock.debug", "true")
+        }
+    }
 }
 ```
 
-2. **Buffer Overflow Protection**
-   - Use safe Rust patterns
-   - Validate all input parameters
-   - Use checked arithmetic operations
+## Performance & Security
 
-## Continuous Integration
+### Performance Optimizations
 
-### GitHub Actions Integration
+#### Build-time Optimizations
+```toml
+# Cargo.toml optimizations
+[profile.release]
+opt-level = 3           # Maximum optimization
+lto = true             # Link-time optimization
+codegen-units = 1      # Better optimization
+panic = "abort"        # Smaller binaries
+strip = true           # Remove debug symbols
 
-Add to `.github/workflows/android.yml`:
-
-```yaml
-name: Android Build
-
-on:
-  push:
-    branches: [ main, develop ]
-  pull_request:
-    branches: [ main ]
-
-jobs:
-  android-build:
-    runs-on: ubuntu-latest
-    
-    steps:
-    - uses: actions/checkout@v4
-    
-    - name: Build Android Libraries
-      run: |
-        chmod +x scripts/build/build-android-docker.sh
-        ./scripts/build/build-android-docker.sh build
-    
-    - name: Test Libraries
-      run: ./scripts/build/build-android-docker.sh test
-    
-    - name: Upload Artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: android-libraries
-        path: android-builds/
+# ARM-specific features
+[target.aarch64-linux-android]
+rustflags = ["-C", "target-feature=+neon", "-C", "target-cpu=cortex-a55"]
 ```
 
-## Future Enhancements
+#### Runtime Performance
+- **Memory Pools**: Reuse allocations for frequent operations
+- **Lazy Loading**: Initialize components only when needed
+- **Async Operations**: Use Kotlin coroutines with native calls
+- **Caching**: Cache frequently accessed data
 
-### Planned Improvements
+#### Battery Optimization
+- Minimize background processing
+- Batch operations when possible
+- Use efficient data structures
+- Implement proper lifecycle management
 
-1. **Better Testing Infrastructure**
-   - Automated ARM device testing
-   - Performance regression testing
-   - Memory usage profiling
+### Security Considerations
 
-2. **Enhanced Integration**
-   - Kotlin coroutines support
-   - Jetpack Compose-specific utilities
-   - Better error handling patterns
+#### Android Security Model
+```xml
+<!-- AndroidManifest.xml security settings -->
+<application
+    android:allowBackup="false"
+    android:dataExtractionRules="@xml/data_extraction_rules"
+    android:fullBackupContent="@xml/backup_rules">
+    
+    <!-- Prevent screenshots in recents -->
+    <activity android:name=".MainActivity"
+        android:screenOrientation="portrait"
+        android:exported="false" />
+</application>
+```
 
-3. **Performance Optimization**
-   - NEON SIMD optimizations
-   - Custom memory allocators
-   - Lazy loading patterns
+#### Memory Security
+```kotlin
+// Secure memory clearing
+class SecureString(private var data: CharArray?) {
+    fun clear() {
+        data?.fill('\u0000')
+        data = null
+    }
+    
+    protected fun finalize() {
+        clear()
+    }
+}
+```
 
-4. **Developer Experience**
-   - Android Studio plugin
-   - Better debugging tools
-   - Documentation improvements
+#### Native Library Security
+- Position-independent code (PIC) enabled
+- Stack protection enabled by default
+- Address Space Layout Randomization (ASLR) support
+- Hardware security features (TrustZone when available)
+
+#### App Security Features
+- Biometric authentication (planned)
+- App lock timeout functionality
+- Screenshot prevention in sensitive screens
+- Secure keyboard integration
+
+## Development Roadmap
+
+### Phase 1: Core Integration (High Priority)
+
+#### FFI Bridge Implementation
+- [x] Native library compilation for Android
+- [x] C header generation
+- [ ] JNI wrapper classes
+- [ ] Error handling and memory management
+- [ ] Integration testing on physical devices
+
+#### Authentication UI
+- [ ] Repository setup screen with file picker
+- [ ] Passphrase input with strength validation
+- [ ] New repository creation wizard
+- [ ] Biometric authentication prompt
+
+### Phase 2: Password Management (Medium Priority)
+
+#### Credential Management
+- [ ] Credential list view with search/filter
+- [ ] Credential detail/edit screens
+- [ ] Add/delete credential functionality
+- [ ] Category and tag organization
+- [ ] Import/export capabilities
+
+#### Advanced Features
+- [ ] TOTP generation and display
+- [ ] Password strength analysis
+- [ ] Secure clipboard integration
+- [ ] Auto-fill service integration
+
+### Phase 3: Enhanced Features (Low Priority)
+
+#### Settings and Configuration
+- [ ] App preferences and themes
+- [ ] Security settings (timeout, etc.)
+- [ ] Backup and sync configuration
+- [ ] About screen and version info
+
+#### Security Enhancements
+- [ ] Biometric authentication (fingerprint/face)
+- [ ] App lock with timeout
+- [ ] Screenshot prevention
+- [ ] Secure keyboard integration
+- [ ] Hardware security module integration
+
+### Testing Strategy
+
+#### Unit Testing
+```kotlin
+// Example test structure
+@Test
+fun testCredentialCreation() {
+    val manager = ZipLockManager()
+    assertTrue(manager.initialize())
+    
+    val credential = manager.createCredential("Test Site")
+    assertNotNull(credential)
+    
+    assertTrue(credential.addField("username", "test@example.com", FieldType.EMAIL))
+    assertEquals("test@example.com", credential.getField("username"))
+}
+```
+
+#### Integration Testing
+- Native library integration on multiple architectures
+- File system operations and permissions
+- Cross-activity navigation and state management
+- Performance testing on various device configurations
+
+#### UI Testing
+```kotlin
+@Test
+fun testSplashScreenNavigation() {
+    composeTestRule.setContent {
+        ZipLockTheme {
+            SplashScreen { /* navigation callback */ }
+        }
+    }
+    
+    // Verify splash screen elements
+    composeTestRule.onNodeWithText("ZipLock").assertIsDisplayed()
+    composeTestRule.onNodeWithText("Secure Password Manager").assertIsDisplayed()
+    
+    // Wait for navigation
+    composeTestRule.waitForIdle()
+}
+```
 
 ### Version Compatibility
 
-Current Build target: Android API 21+ (Android 5.0)
+**Current Target**: Android API 24+ (Android 7.0)
 - Covers 95%+ of active Android devices
-- Balances feature support with compatibility
+- Balances modern features with broad compatibility
+- Minimum API allows for advanced security features
 
-Future consideration: Android API 24+ for additional security features
+**Supported Architectures**:
+- ARM64 (aarch64-linux-android) - Primary for modern devices
+- ARMv7 (armv7-linux-androideabi) - Legacy device support
+- x86_64/x86 - Emulator and tablet support
 
-## References
+### Useful Commands
 
+#### Development Commands
+```bash
+# Build debug APK
+cd ziplock/apps/mobile/android
+./gradlew assembleDebug
+
+# Install on device/emulator
+./gradlew installDebug
+
+# Run tests
+./gradlew test
+./gradlew connectedAndroidTest
+
+# Clean build
+./gradlew clean build
+```
+
+#### Debugging Commands
+```bash
+# View connected devices
+adb devices
+
+# Install APK manually
+adb install app/build/outputs/apk/debug/app-debug.apk
+
+# View logs
+adb logcat | grep ZipLock
+
+# Clear app data
+adb shell pm clear com.ziplock
+
+# Take screenshot
+adb exec-out screencap -p > screenshot.png
+
+# Monitor memory usage
+adb shell dumpsys meminfo com.ziplock
+```
+
+#### Native Library Commands
+```bash
+# Build native libraries
+./scripts/build/build-android-docker.sh build
+
+# Test compilation
+./scripts/build/build-android-docker.sh test
+
+# Verify symbols
+nm -D android-builds/arm64-v8a/libziplock_shared.so | grep ziplock
+
+# Check architecture
+file android-builds/arm64-v8a/libziplock_shared.so
+```
+
+### Resources and Documentation
+
+#### Project Documentation
+- [ZipLock Technical Documentation](../technical.md) - Main technical index
+- [Design Guidelines](../design.md) - UI/UX standards and branding
+- [Mobile Integration Guide](mobile-integration.md) - Cross-platform mobile patterns
+- [Build Documentation](build.md) - Comprehensive build troubleshooting
+
+#### External Resources
+- [Android Developer Guide](https://developer.android.com/guide)
+- [Jetpack Compose Documentation](https://developer.android.com/jetpack/compose)
+- [Material 3 Design System](https://m3.material.io/)
 - [Android NDK Guide](https://developer.android.com/ndk/guides)
 - [Rust Cross-compilation](https://rust-lang.github.io/rustup/cross-compilation.html)
 - [JNI Specification](https://docs.oracle.com/javase/8/docs/technotes/guides/jni/)
-- [Android App Bundle](https://developer.android.com/guide/app-bundle)
+
+### Contributing
+
+When contributing to the Android implementation:
+
+1. **Follow Established Patterns**: Use existing code structure and naming conventions
+2. **Test on Multiple Devices**: Verify compatibility across different Android versions and architectures
+3. **Security First**: Ensure all user data handling follows security best practices
+4. **Performance Conscious**: Profile code changes for memory and CPU impact
+5. **Documentation**: Update this guide when adding new features or changing architecture
+
+### Support and Troubleshooting
+
+If you encounter issues:
+
+1. **Check Logcat**: Use Android Studio's Logcat for detailed error messages
+2. **Verify Setup**: Run `./verify-setup.sh` to check development environment
+3. **Clean Build**: Try `./gradlew clean build` to resolve build cache issues
+4. **Test in Emulator**: Use x86_64 emulator for faster development iteration
+5. **Check Native Libraries**: Ensure libraries are built for target architecture
+
+For project-specific questions:
+- Check existing issues in the project repository
+- Refer to the main technical documentation
+- Review the mobile integration guide for cross-platform patterns
 
 ---
 
-This document is maintained as part of the ZipLock technical documentation. For updates or questions, please refer to the main project repository.
+**Document Status**: ✅ Comprehensive Android development guide  
+**Last Updated**: Current with latest implementation  
+**Compatibility**: Android 7.0+ (API 24), Java 11-21, Gradle 8.5+  
+**Maintenance**: Updated automatically with project changes

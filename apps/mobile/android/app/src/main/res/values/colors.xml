@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- ZipLock Brand Colors -->
+    <color name="logo_purple">#8338EC</color>
+    <color name="logo_purple_dark">#6B2BC4</color>
+    <color name="logo_purple_light">#9F5FFF</color>
+
+    <!-- Background Colors -->
+    <color name="background_light">#F8F9FA</color>
+    <color name="background_secondary_light">#E9ECEF</color>
+    <color name="background_dark">#212529</color>
+    <color name="background_secondary_dark">#343A40</color>
+
+    <!-- Text Colors -->
+    <color name="text_primary_light">#212529</color>
+    <color name="text_secondary_light">#6C757D</color>
+    <color name="text_primary_dark">#F8F9FA</color>
+    <color name="text_secondary_dark">#ADB5BD</color>
+
+    <!-- Validation Colors -->
+    <color name="success_green">#06D6A0</color>
+    <color name="error_red">#EF476F</color>
+    <color name="warning_yellow">#FCBF49</color>
+
+    <!-- System Colors -->
+    <color name="white">#FFFFFF</color>
+    <color name="black">#000000</color>
+    <color name="transparent">#00000000</color>
+
+    <!-- Splash Screen Colors -->
+    <color name="splash_background">@color/white</color>
+    <color name="splash_logo_color">@color/logo_purple</color>
+    <color name="splash_text_color">@color/text_primary_light</color>
+</resources>

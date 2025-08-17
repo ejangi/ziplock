@@ -46,6 +46,7 @@ Do not place technical documentation in the root `docs/` directory or other loca
 
 ### All Platforms (Unified Architecture)
 - [Mobile Integration Guide](technical/mobile-integration.md) - Complete FFI integration examples for all platforms
+- [Android Development Guide](technical/android.md) - Comprehensive Android development, setup, and integration guide
 - Linux implementation (Rust + iced/GTK4) with direct FFI calls
 - Windows implementation (Rust + Tauri) with direct FFI calls
 - iOS implementation (Swift + SwiftUI) with C interop

@@ -8,4 +8,3 @@ Run one of the following prompts in Zed's agent panel and when you're ready to b
 
 
 ## Android
-- Can you review `docs/technical.md`, `docs/design.md` and `docs/technical/android.md` and can we start by producing a logo spash page for the android app? It should be a simple white background with the logo (`assets/icons/ziplogo-logo.svg`)? I thought this might be a good first step towards building out the android app.
