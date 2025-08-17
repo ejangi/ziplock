@@ -80,6 +80,7 @@ struct FFIState {
     api: Option<Arc<ZipLockApi>>,
     runtime: Option<Runtime>,
     sessions: HashMap<String, ApiSession>,
+    last_error: Option<String>,
 }
 
 static mut FFI_STATE: Option<Mutex<FFIState>> = None;
@@ -112,6 +113,7 @@ pub extern "C" fn ziplock_init() -> c_int {
             api: Some(api),
             runtime: Some(runtime),
             sessions: HashMap::new(),
+            last_error: None,
         };
 
         FFI_STATE = Some(Mutex::new(state));
@@ -132,6 +134,7 @@ pub extern "C" fn ziplock_shutdown() -> c_int {
             state.api = None;
             state.runtime = None;
             state.sessions.clear();
+            state.last_error = None;
         }
     }
     ZipLockError::Success as c_int
@@ -183,45 +186,76 @@ pub extern "C" fn ziplock_archive_create(
     master_password: *const c_char,
 ) -> c_int {
     if path.is_null() || master_password.is_null() {
+        unsafe {
+            set_last_error("Invalid parameter: path or password is null");
+        }
         return ZipLockError::InvalidParameter as c_int;
     }
 
     unsafe {
         let state_mutex = match FFI_STATE.as_ref() {
             Some(state) => state,
-            None => return ZipLockError::NotInitialized as c_int,
+            None => {
+                set_last_error("Library not initialized");
+                return ZipLockError::NotInitialized as c_int;
+            }
         };
 
-        let state = match state_mutex.lock() {
+        let mut state = match state_mutex.lock() {
             Ok(state) => state,
-            Err(_) => return ZipLockError::InternalError as c_int,
+            Err(_) => {
+                set_last_error("Failed to acquire state lock");
+                return ZipLockError::InternalError as c_int;
+            }
         };
 
         let api = match state.api.as_ref() {
-            Some(api) => api,
-            None => return ZipLockError::NotInitialized as c_int,
-        };
-
-        let runtime = match state.runtime.as_ref() {
-            Some(rt) => rt,
-            None => return ZipLockError::InternalError as c_int,
+            Some(api) => api.clone(),
+            None => {
+                state.last_error = Some("API not initialized".to_string());
+                return ZipLockError::NotInitialized as c_int;
+            }
         };
 
         let path_str = match CStr::from_ptr(path).to_str() {
             Ok(s) => s,
-            Err(_) => return ZipLockError::InvalidParameter as c_int,
+            Err(_) => {
+                state.last_error = Some("Invalid UTF-8 in path parameter".to_string());
+                return ZipLockError::InvalidParameter as c_int;
+            }
         };
 
         let password_str = match CStr::from_ptr(master_password).to_str() {
             Ok(s) => s,
-            Err(_) => return ZipLockError::InvalidParameter as c_int,
+            Err(_) => {
+                state.last_error = Some("Invalid UTF-8 in password parameter".to_string());
+                return ZipLockError::InvalidParameter as c_int;
+            }
         };
 
         let path_buf = PathBuf::from(path_str);
 
-        match runtime.block_on(api.create_archive(path_buf, password_str.to_string())) {
-            Ok(_) => ZipLockError::Success as c_int,
-            Err(_) => ZipLockError::InternalError as c_int,
+        // Get a reference to the runtime without borrowing state
+        if state.runtime.is_none() {
+            state.last_error = Some("Runtime not available".to_string());
+            return ZipLockError::InternalError as c_int;
+        }
+
+        // Create a simple blocking call with basic error handling
+        let result = {
+            let runtime = state.runtime.as_ref().unwrap();
+            runtime.block_on(api.create_archive(path_buf, password_str.to_string()))
+        };
+
+        match result {
+            Ok(_) => {
+                state.last_error = None;
+                ZipLockError::Success as c_int
+            }
+            Err(e) => {
+                state.last_error = Some(format!("Failed to create archive: {}", e));
+                ZipLockError::InternalError as c_int
+            }
         }
     }
 }
@@ -437,6 +471,53 @@ pub extern "C" fn ziplock_get_version() -> *mut c_char {
     match CString::new(crate::VERSION) {
         Ok(cstring) => cstring.into_raw(),
         Err(_) => ptr::null_mut(),
+    }
+}
+
+/// Get the last error message
+#[no_mangle]
+pub extern "C" fn ziplock_get_last_error() -> *mut c_char {
+    unsafe {
+        let state_mutex = match FFI_STATE.as_ref() {
+            Some(state) => state,
+            None => {
+                // Return "Not initialized" error if FFI state doesn't exist
+                return match CString::new("Library not initialized") {
+                    Ok(cstring) => cstring.into_raw(),
+                    Err(_) => ptr::null_mut(),
+                };
+            }
+        };
+
+        let state = match state_mutex.lock() {
+            Ok(state) => state,
+            Err(_) => {
+                return match CString::new("Failed to access error state") {
+                    Ok(cstring) => cstring.into_raw(),
+                    Err(_) => ptr::null_mut(),
+                };
+            }
+        };
+
+        match &state.last_error {
+            Some(error) => match CString::new(error.as_str()) {
+                Ok(cstring) => cstring.into_raw(),
+                Err(_) => ptr::null_mut(),
+            },
+            None => match CString::new("No error") {
+                Ok(cstring) => cstring.into_raw(),
+                Err(_) => ptr::null_mut(),
+            },
+        }
+    }
+}
+
+/// Set the last error message (internal helper function)
+unsafe fn set_last_error(error_message: &str) {
+    if let Some(state_mutex) = FFI_STATE.as_ref() {
+        if let Ok(mut state) = state_mutex.lock() {
+            state.last_error = Some(error_message.to_string());
+        }
     }
 }
 
