@@ -19,7 +19,7 @@ class CreateArchiveViewModelTest {
         val viewModel = CreateArchiveViewModel()
         val initialState = viewModel.uiState.value
 
-        assertEquals(CreateArchiveStep.Welcome, initialState.currentStep)
+        assertEquals(CreateArchiveStep.SelectDestination, initialState.currentStep)
         assertEquals("ZipLock", initialState.archiveName)
         assertNull(initialState.destinationPath)
         assertTrue(initialState.passphrase.isEmpty())
@@ -178,7 +178,7 @@ class CreateArchiveViewModelTest {
         viewModel.reset()
 
         val state = viewModel.uiState.value
-        assertEquals(CreateArchiveStep.Welcome, state.currentStep)
+        assertEquals(CreateArchiveStep.SelectDestination, state.currentStep)
         assertEquals("ZipLock", state.archiveName)
         assertNull(state.destinationPath)
         assertTrue(state.passphrase.isEmpty())
@@ -189,22 +189,17 @@ class CreateArchiveViewModelTest {
     fun `proceedToNext should validate and advance steps correctly`() {
         val viewModel = CreateArchiveViewModel()
 
-        // Welcome -> SelectDestination
-        assertEquals(CreateArchiveStep.Welcome, viewModel.uiState.value.currentStep)
-        viewModel.proceedToNext()
-        assertEquals(CreateArchiveStep.SelectDestination, viewModel.uiState.value.currentStep)
-
         // SelectDestination -> should fail without destination
+        assertEquals(CreateArchiveStep.SelectDestination, viewModel.uiState.value.currentStep)
         viewModel.proceedToNext()
         assertEquals(CreateArchiveStep.SelectDestination, viewModel.uiState.value.currentStep)
-        assertNotNull(viewModel.uiState.value.errorMessage)
 
-        // Set destination and try again
-        viewModel.setDestination("test/path", "Test")
+        // SelectDestination -> ArchiveName (after setting destination)
+        viewModel.updateDestinationPath("/test/path", "test folder")
         viewModel.proceedToNext()
         assertEquals(CreateArchiveStep.ArchiveName, viewModel.uiState.value.currentStep)
 
-        // ArchiveName -> should work with default name
+        // ArchiveName -> CreatePassphrase (should work with default name)
         viewModel.proceedToNext()
         assertEquals(CreateArchiveStep.CreatePassphrase, viewModel.uiState.value.currentStep)
     }
@@ -227,10 +222,10 @@ class CreateArchiveViewModelTest {
         assertEquals(CreateArchiveStep.SelectDestination, viewModel.uiState.value.currentStep)
 
         viewModel.goBack()
-        assertEquals(CreateArchiveStep.Welcome, viewModel.uiState.value.currentStep)
+        assertEquals(CreateArchiveStep.SelectDestination, viewModel.uiState.value.currentStep)
 
-        // Should not go back from Welcome
+        // Should not go back from SelectDestination (first step)
         viewModel.goBack()
-        assertEquals(CreateArchiveStep.Welcome, viewModel.uiState.value.currentStep)
+        assertEquals(CreateArchiveStep.SelectDestination, viewModel.uiState.value.currentStep)
     }
 }

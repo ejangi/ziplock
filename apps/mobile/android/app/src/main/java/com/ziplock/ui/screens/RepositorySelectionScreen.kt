@@ -90,7 +90,7 @@ fun RepositorySelectionScreen(
 
         // Logo and Title
         Image(
-            painter = painterResource(id = R.drawable.ziplock_logo),
+            painter = painterResource(id = R.drawable.ziplock_icon_512),
             contentDescription = "ZipLock Logo",
             modifier = Modifier
                 .size(ZipLockDimensions.LogoSize)
@@ -235,17 +235,21 @@ fun RepositorySelectionScreen(
                             .padding(bottom = ZipLockSpacing.Medium)
                     )
 
-                    // Create New Archive button
-                    ZipLockButton(
-                        text = "Create New Archive",
-                        onClick = onCreateNew,
-                        icon = ZipLockIcons.Plus,
-                        style = ZipLockButtonStyle.Secondary,
-                        modifier = Modifier.fillMaxWidth()
-                    )
+
                 }
             }
         }
+
+        Spacer(modifier = Modifier.height(ZipLockSpacing.ExtraLarge))
+
+        // Create New Archive button
+        ZipLockButton(
+            text = "Create New Archive",
+            onClick = onCreateNew,
+            icon = ZipLockIcons.Plus,
+            style = ZipLockButtonStyle.Secondary,
+            modifier = Modifier.fillMaxWidth()
+        )
 
         Spacer(modifier = Modifier.height(ZipLockSpacing.ExtraLarge))
 

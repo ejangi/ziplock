@@ -22,7 +22,7 @@
     <!-- Splash Screen Theme -->
     <style name="Theme.ZipLock.Splash" parent="Theme.SplashScreen">
         <item name="windowSplashScreenBackground">@color/splash_background</item>
-        <item name="windowSplashScreenAnimatedIcon">@drawable/ziplock_logo</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ziplock_icon_512</item>
         <item name="windowSplashScreenAnimationDuration">1000</item>
         <item name="postSplashScreenTheme">@style/Theme.ZipLock</item>
         <item name="android:statusBarColor">@color/splash_background</item>

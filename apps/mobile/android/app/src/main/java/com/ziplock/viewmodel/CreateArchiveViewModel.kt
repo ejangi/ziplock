@@ -210,7 +210,6 @@ class CreateArchiveViewModel : ViewModel() {
      */
     fun canProceed(): Boolean {
         return when (_uiState.value.currentStep) {
-            CreateArchiveStep.Welcome -> true
             CreateArchiveStep.SelectDestination -> _uiState.value.destinationPath != null
             CreateArchiveStep.ArchiveName -> _uiState.value.archiveName.isNotBlank()
             CreateArchiveStep.CreatePassphrase -> _passphraseStrength.value?.isValid == true
@@ -230,9 +229,6 @@ class CreateArchiveViewModel : ViewModel() {
         val currentState = _uiState.value
 
         when (currentState.currentStep) {
-            CreateArchiveStep.Welcome -> {
-                updateStep(CreateArchiveStep.SelectDestination)
-            }
             CreateArchiveStep.SelectDestination -> {
                 if (currentState.destinationPath != null) {
                     updateStep(CreateArchiveStep.ArchiveName)
@@ -272,7 +268,7 @@ class CreateArchiveViewModel : ViewModel() {
         val currentState = _uiState.value
 
         val previousStep = when (currentState.currentStep) {
-            CreateArchiveStep.SelectDestination -> CreateArchiveStep.Welcome
+            CreateArchiveStep.SelectDestination -> return // No previous step
             CreateArchiveStep.ArchiveName -> CreateArchiveStep.SelectDestination
             CreateArchiveStep.CreatePassphrase -> CreateArchiveStep.ArchiveName
             CreateArchiveStep.ConfirmPassphrase -> CreateArchiveStep.CreatePassphrase
@@ -451,7 +447,7 @@ class CreateArchiveViewModel : ViewModel() {
  * UI state for the Create Archive wizard
  */
 data class CreateArchiveUiState(
-    val currentStep: CreateArchiveStep = CreateArchiveStep.Welcome,
+    val currentStep: CreateArchiveStep = CreateArchiveStep.SelectDestination,
     val destinationPath: String? = null,
     val destinationName: String? = null,
     val archiveName: String = "ZipLock",
@@ -469,7 +465,6 @@ data class CreateArchiveUiState(
  * Steps in the Create Archive wizard
  */
 enum class CreateArchiveStep {
-    Welcome,
     SelectDestination,
     ArchiveName,
     CreatePassphrase,

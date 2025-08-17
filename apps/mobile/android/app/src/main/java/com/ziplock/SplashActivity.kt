@@ -64,7 +64,7 @@ fun SplashScreen(onSplashComplete: () -> Unit) {
         ) {
             // ZipLock Logo
             Image(
-                painter = painterResource(id = R.drawable.ziplock_logo),
+                painter = painterResource(id = R.drawable.ziplock_icon_512),
                 contentDescription = stringResource(R.string.app_name),
                 modifier = Modifier
                     .size(120.dp)

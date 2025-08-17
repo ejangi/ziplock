@@ -105,22 +105,10 @@ fun CreateArchiveWizard(
                     .fillMaxWidth()
                     .padding(ZipLockSpacing.ExtraLarge)
             ) {
-                // Error alert if present
-                uiState.errorMessage?.let { error ->
-                    ZipLockAlert(
-                        level = AlertLevel.Error,
-                        message = error,
-                        onDismiss = { viewModel.clearError() },
-                        modifier = Modifier.padding(bottom = ZipLockSpacing.Standard)
-                    )
-                }
+
 
                 // Step content
                 when (uiState.currentStep) {
-                    CreateArchiveStep.Welcome -> WelcomeStep(
-                        onNext = { viewModel.proceedToNext() }
-                    )
-
                     CreateArchiveStep.SelectDestination -> SelectDestinationStep(
                         destinationName = uiState.destinationName,
                         onSelectDestination = { directoryPickerLauncher.launch(null) },
@@ -200,13 +188,13 @@ private fun WizardHeader(
 
         // Logo
         Image(
-            painter = painterResource(id = R.drawable.ziplock_logo),
+            painter = painterResource(id = R.drawable.ziplock_icon_512),
             contentDescription = "ZipLock Logo",
             modifier = Modifier.size(48.dp)
         )
 
-        // Progress indicator (steps 2-6 show progress)
-        if (currentStep != CreateArchiveStep.Welcome && currentStep != CreateArchiveStep.Success) {
+        // Progress indicator (steps 1-5 show progress)
+        if (currentStep != CreateArchiveStep.Success) {
             val (currentStepNumber, totalSteps) = getStepProgress(currentStep)
 
             Column(
@@ -233,48 +221,6 @@ private fun WizardHeader(
 }
 
 @Composable
-private fun WelcomeStep(
-    onNext: () -> Unit
-) {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Text(
-            text = "Create New Archive",
-            style = ZipLockTypography.ExtraLarge,
-            color = ZipLockColors.LogoPurple,
-            textAlign = TextAlign.Center
-        )
-
-        Spacer(modifier = Modifier.height(ZipLockSpacing.Standard))
-
-        Text(
-            text = "Welcome to the ZipLock archive creation wizard. This will guide you through creating a new encrypted password archive.",
-            style = ZipLockTypography.Normal,
-            color = ZipLockColors.LightGrayText,
-            textAlign = TextAlign.Center
-        )
-
-        Spacer(modifier = Modifier.height(ZipLockSpacing.ExtraLarge))
-
-        Text(
-            text = "🔐",
-            style = ZipLockTypography.ExtraLarge.copy(fontSize = 48.sp)
-        )
-
-        Spacer(modifier = Modifier.height(ZipLockSpacing.ExtraLarge))
-
-        ZipLockButton(
-            text = "Get Started",
-            onClick = onNext,
-            style = ZipLockButtonStyle.Primary,
-            icon = ZipLockIcons.ArrowRight,
-            modifier = Modifier.fillMaxWidth()
-        )
-    }
-}
-
-@Composable
 private fun SelectDestinationStep(
     destinationName: String?,
     onSelectDestination: () -> Unit,
@@ -283,6 +229,26 @@ private fun SelectDestinationStep(
     canProceed: Boolean
 ) {
     Column {
+        Text(
+            text = "Create New Archive",
+            style = ZipLockTypography.ExtraLarge,
+            color = ZipLockColors.LogoPurple,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        Spacer(modifier = Modifier.height(ZipLockSpacing.Standard))
+
+        Text(
+            text = "Welcome to the ZipLock archive creation wizard. This will guide you through creating a new encrypted password archive.",
+            style = ZipLockTypography.Normal,
+            color = ZipLockColors.LightGrayText,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        Spacer(modifier = Modifier.height(ZipLockSpacing.ExtraLarge))
+
         Text(
             text = "Select Destination",
             style = ZipLockTypography.Header,
@@ -863,13 +829,12 @@ private fun validateArchiveNameClient(name: String): String? {
  */
 private fun getStepProgress(currentStep: CreateArchiveStep): Pair<Int, Int> {
     return when (currentStep) {
-        CreateArchiveStep.Welcome -> 0 to 5
-        CreateArchiveStep.SelectDestination -> 1 to 5
-        CreateArchiveStep.ArchiveName -> 2 to 5
-        CreateArchiveStep.CreatePassphrase -> 3 to 5
-        CreateArchiveStep.ConfirmPassphrase -> 4 to 5
-        CreateArchiveStep.Creating -> 5 to 5
-        CreateArchiveStep.Success -> 5 to 5
+        CreateArchiveStep.SelectDestination -> 1 to 4
+        CreateArchiveStep.ArchiveName -> 2 to 4
+        CreateArchiveStep.CreatePassphrase -> 3 to 4
+        CreateArchiveStep.ConfirmPassphrase -> 4 to 4
+        CreateArchiveStep.Creating -> 4 to 4
+        CreateArchiveStep.Success -> 4 to 4
     }
 }
 

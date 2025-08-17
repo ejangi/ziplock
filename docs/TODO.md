@@ -8,6 +8,5 @@ Run one of the following prompts in Zed's agent panel and when you're ready to b
 
 
 ## Android
-- Taking into consideration `docs/technical.md`, `docs/technical/android.md`, `docs/design.md`, I can see that the logo used the app load screen and the RepositorySelectionScreen are both different and not completely consistent with the logo. I think i recall in a previous thread that Android doesn't read in SVG images, is that right? If so, can we just use `assets/icons/ziplock-logo0512.png` as the logo in all places it's currently being used in the Android app?
 - Taking into consideration `docs/technical.md`, `docs/technical/android.md`, `docs/design.md` and `docs/technical/cloud-storage-implementation.md` can you please ensure that once a user has selected an archive file to open that the app keeps a persistent memory of the file path so that each subsequent time the app is opened the user only needs to enter their passphrase and click "Open".
 - Taking into consideration `docs/technical.md`, `docs/technical/android.md`, `docs/design.md` and `docs/technical/cloud-storage-implementation.md` can you ensure that this Android app is one of the options that the user can select to open a *.7z archive file?
