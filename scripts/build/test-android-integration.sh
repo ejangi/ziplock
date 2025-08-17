@@ -26,7 +26,7 @@ OUTPUT_DIR="$PROJECT_ROOT/target/android"
 test_library_loading() {
     echo "Testing library loading..."
 
-    for arch in arm64-v8a armeabi-v7a x86_64 x86; do
+    for arch in arm64-v8a armeabi-v7a; do
         lib_path="$OUTPUT_DIR/$arch/libziplock_shared.so"
         if [ -f "$lib_path" ]; then
             if command -v readelf >/dev/null 2>&1; then
@@ -86,7 +86,7 @@ test_library_dependencies() {
 test_library_properties() {
     echo "Testing library properties..."
 
-    for arch in arm64-v8a armeabi-v7a x86_64 x86; do
+    for arch in arm64-v8a armeabi-v7a; do
         lib_path="$OUTPUT_DIR/$arch/libziplock_shared.so"
         if [ -f "$lib_path" ]; then
             # Check file size (should not be too large or too small)
@@ -194,7 +194,7 @@ test_cross_compilation_consistency() {
 
     reference_symbols=$(nm -D "$reference_lib" 2>/dev/null | grep -E "ziplock_" | cut -d' ' -f3 | sort)
 
-    for arch in armeabi-v7a x86_64 x86; do
+    for arch in armeabi-v7a; do
         lib_path="$OUTPUT_DIR/$arch/libziplock_shared.so"
         if [ -f "$lib_path" ]; then
             arch_symbols=$(nm -D "$lib_path" 2>/dev/null | grep -E "ziplock_" | cut -d' ' -f3 | sort)
@@ -220,7 +220,7 @@ test_android_project_structure() {
     mkdir -p "$jni_libs_dir"/{arm64-v8a,armeabi-v7a,x86_64,x86}
 
     # Copy libraries
-    for arch in arm64-v8a armeabi-v7a x86_64 x86; do
+    for arch in arm64-v8a armeabi-v7a; do
         if [ -f "$OUTPUT_DIR/$arch/libziplock_shared.so" ]; then
             cp "$OUTPUT_DIR/$arch/libziplock_shared.so" "$jni_libs_dir/$arch/"
             echo "✓ Copied $arch library to Android project structure"
@@ -243,7 +243,7 @@ test_performance_smoke() {
     echo "Running performance smoke test..."
 
     # Check that libraries are not obviously broken
-    for arch in arm64-v8a armeabi-v7a x86_64 x86; do
+    for arch in arm64-v8a armeabi-v7a; do
         lib_path="$OUTPUT_DIR/$arch/libziplock_shared.so"
         if [ -f "$lib_path" ]; then
             # Check for obvious performance killers
@@ -271,7 +271,7 @@ test_performance_smoke() {
 test_security_smoke() {
     echo "Running security smoke test..."
 
-    for arch in arm64-v8a armeabi-v7a x86_64 x86; do
+    for arch in arm64-v8a armeabi-v7a; do
         lib_path="$OUTPUT_DIR/$arch/libziplock_shared.so"
         if [ -f "$lib_path" ]; then
             # Check for common security features
@@ -330,7 +330,7 @@ run_all_tests() {
     echo ""
     echo "Build Summary:"
     echo "=============="
-    for arch in arm64-v8a armeabi-v7a x86_64 x86; do
+    for arch in arm64-v8a armeabi-v7a; do
         lib_path="$OUTPUT_DIR/$arch/libziplock_shared.so"
         if [ -f "$lib_path" ]; then
             size=$(du -h "$lib_path" | cut -f1)

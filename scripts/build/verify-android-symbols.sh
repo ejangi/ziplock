@@ -203,7 +203,7 @@ verify_all_symbols() {
     local failed_archs=()
     local successful_archs=()
 
-    for arch in arm64-v8a armeabi-v7a x86_64 x86; do
+    for arch in arm64-v8a armeabi-v7a; do
         local lib_path="$OUTPUT_DIR/$arch/libziplock_shared.so"
 
         if [ -f "$lib_path" ]; then
@@ -265,7 +265,7 @@ compare_symbols_across_archs() {
     echo "Using $reference_arch as reference ($(echo "$reference_symbols" | wc -l) symbols)"
     echo ""
 
-    for arch in armeabi-v7a x86_64 x86; do
+    for arch in armeabi-v7a; do
         local lib_path="$OUTPUT_DIR/$arch/libziplock_shared.so"
 
         if [ -f "$lib_path" ]; then

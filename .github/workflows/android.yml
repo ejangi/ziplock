@@ -68,7 +68,7 @@ jobs:
           echo "| Architecture | Status | Size |" >> $GITHUB_STEP_SUMMARY
           echo "|--------------|--------|------|" >> $GITHUB_STEP_SUMMARY
 
-          for arch in arm64-v8a armeabi-v7a x86_64 x86; do
+          for arch in arm64-v8a armeabi-v7a; do
             lib_path="target/android/$arch/libziplock_shared.so"
             if [ -f "$lib_path" ]; then
               size=$(du -h "$lib_path" | cut -f1)
@@ -111,7 +111,7 @@ jobs:
           echo "| Architecture | Size (bytes) | Size (MB) | Status |" >> $GITHUB_STEP_SUMMARY
           echo "|--------------|--------------|-----------|--------|" >> $GITHUB_STEP_SUMMARY
 
-          for arch in arm64-v8a armeabi-v7a x86_64 x86; do
+          for arch in arm64-v8a armeabi-v7a; do
             lib_path="target/android/$arch/libziplock_shared.so"
             if [ -f "$lib_path" ]; then
               size_bytes=$(stat -c%s "$lib_path")
@@ -159,7 +159,7 @@ jobs:
           echo "## Security Analysis" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
 
-          for arch in arm64-v8a armeabi-v7a x86_64 x86; do
+          for arch in arm64-v8a armeabi-v7a; do
             lib_path="target/android/$arch/libziplock_shared.so"
             if [ -f "$lib_path" ]; then
               echo "### $arch" >> $GITHUB_STEP_SUMMARY
@@ -210,10 +210,10 @@ jobs:
       - name: Create release package
         run: |
           # Create release directory structure
-          mkdir -p release/android/{arm64-v8a,armeabi-v7a,x86_64,x86}
+          mkdir -p release/android/{arm64-v8a,armeabi-v7a}
 
           # Copy libraries
-          for arch in arm64-v8a armeabi-v7a x86_64 x86; do
+          for arch in arm64-v8a armeabi-v7a; do
             if [ -f "target/android/$arch/libziplock_shared.so" ]; then
               cp "target/android/$arch/libziplock_shared.so" "release/android/$arch/"
             fi
@@ -230,11 +230,12 @@ jobs:
 
           ## Contents
 
-          - `arm64-v8a/libziplock_shared.so` - ARM64 library (primary target)
-          - `armeabi-v7a/libziplock_shared.so` - ARMv7 library (legacy support)
-          - `x86_64/libziplock_shared.so` - x86_64 library (emulator)
-          - `x86/libziplock_shared.so` - x86 library (emulator)
+          - `arm64-v8a/libziplock_shared.so` - ARM64 library (modern Android devices)
+          - `armeabi-v7a/libziplock_shared.so` - ARMv7 library (older Android devices)
           - `ziplock.h` - C header file for FFI integration
+
+          Note: This package focuses on real Android device architectures.
+          For emulator support (x86/x86_64), build separately using the build scripts.
 
           ## Integration
 

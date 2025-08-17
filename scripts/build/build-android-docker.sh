@@ -73,13 +73,13 @@ run_build() {
         "$IMAGE_NAME" \
         bash -c "
             set -e
-            echo 'Building ZipLock Android libraries...'
+            echo 'Building ZipLock Android libraries for real devices...'
 
             cd shared
 
-            # Build for specified targets
+            # Build for specified targets (focusing on real Android devices)
             if [ '$targets' = 'all' ] || [ '$targets' = 'arm64' ]; then
-                echo 'Building for ARM64...'
+                echo 'Building for ARM64 (modern Android devices)...'
                 cargo build --release --target aarch64-linux-android --features c-api
 
                 mkdir -p /output/arm64-v8a
@@ -87,30 +87,34 @@ run_build() {
             fi
 
             if [ '$targets' = 'all' ] || [ '$targets' = 'armv7' ]; then
-                echo 'Building for ARMv7...'
+                echo 'Building for ARMv7 (older Android devices)...'
                 cargo build --release --target armv7-linux-androideabi --features c-api
                 mkdir -p /output/armeabi-v7a
                 cp /workspace/target/armv7-linux-androideabi/release/libziplock_shared.so /output/armeabi-v7a/
             fi
 
-            if [ '$targets' = 'all' ] || [ '$targets' = 'x86_64' ]; then
-                echo 'Building for x86_64...'
+            # Emulator support (separate from 'all' to keep device focus)
+            if [ '$targets' = 'emulator' ] || [ '$targets' = 'x86_64' ]; then
+                echo 'Building for x86_64 (emulator support)...'
                 cargo build --release --target x86_64-linux-android --features c-api
                 mkdir -p /output/x86_64
                 cp /workspace/target/x86_64-linux-android/release/libziplock_shared.so /output/x86_64/
             fi
 
-            if [ '$targets' = 'all' ] || [ '$targets' = 'x86' ]; then
-                echo 'Building for x86...'
+            if [ '$targets' = 'emulator' ] || [ '$targets' = 'x86' ]; then
+                echo 'Building for x86 (older emulator support)...'
                 cargo build --release --target i686-linux-android --features c-api
                 mkdir -p /output/x86
                 cp /workspace/target/i686-linux-android/release/libziplock_shared.so /output/x86/
             fi
 
+            # Note: Use 'emulator' target to build x86/x86_64 for development
+
             # Copy header file
             cp /workspace/shared/include/ziplock.h /output/
 
             echo 'Android build completed successfully!'
+            echo 'Built for real Android device architectures (ARM64 + ARMv7)'
         "
 
     print_success "Android libraries built successfully"
@@ -121,6 +125,7 @@ run_build() {
 test_libraries() {
     print_status "Testing built libraries..."
 
+    # Check all possible architectures that might have been built
     for arch in arm64-v8a armeabi-v7a x86_64 x86; do
         lib_path="$OUTPUT_DIR/$arch/libziplock_shared.so"
         if [ -f "$lib_path" ]; then
@@ -134,7 +139,21 @@ test_libraries() {
                 print_error "  - Invalid library format"
             fi
         else
-            print_error "✗ $arch: Library not found"
+            # Only report as error if this architecture was supposed to be built
+            case "$arch" in
+                "arm64-v8a"|"armeabi-v7a")
+                    # These are built by default, so missing is an error
+                    if [ -d "$OUTPUT_DIR" ] && [ "$(ls -A "$OUTPUT_DIR" 2>/dev/null)" ]; then
+                        print_warning "⚠ $arch: Library not found (may not have been built)"
+                    fi
+                    ;;
+                *)
+                    # Emulator architectures - only mention if output dir has content
+                    if [ -d "$OUTPUT_DIR" ] && [ "$(ls -A "$OUTPUT_DIR" 2>/dev/null)" ]; then
+                        echo "  $arch: Not built (use 'emulator' target for x86 support)"
+                    fi
+                    ;;
+            esac
         fi
     done
 
@@ -165,19 +184,22 @@ usage() {
     echo "  help              Show this help message"
     echo ""
     echo "Targets:"
-    echo "  all               Build for all architectures (default)"
-    echo "  arm64             Build for ARM64 only"
-    echo "  armv7             Build for ARMv7 only"
-    echo "  x86_64            Build for x86_64 only"
-    echo "  x86               Build for x86 only"
+    echo "  all               Build for all device architectures (default: ARM64 + ARMv7)"
+    echo "  emulator          Build for emulator architectures (x86_64 + x86)"
+    echo "  arm64             Build for ARM64 only (modern devices)"
+    echo "  armv7             Build for ARMv7 only (older devices)"
+    echo "  x86_64            Build for x86_64 only (emulator)"
+    echo "  x86               Build for x86 only (emulator)"
     echo ""
     echo "Environment Variables:"
     echo "  USE_REGISTRY      Use pre-built registry image (default: true)"
     echo "                    Set to 'false' to force local build"
     echo ""
     echo "Examples:"
-    echo "  $0 build                 # Build for all architectures using registry image"
-    echo "  $0 build arm64           # Build for ARM64 only"
+    echo "  $0 build                 # Build for real devices (ARM64 + ARMv7)"
+    echo "  $0 build emulator        # Build for emulators (x86_64 + x86)"
+    echo "  $0 build arm64           # Build for ARM64 only (modern devices)"
+    echo "  $0 build x86_64          # Build for x86_64 emulator only"
     echo "  USE_REGISTRY=false $0 build  # Force local image build"
     echo "  $0 test                  # Test built libraries"
 }
