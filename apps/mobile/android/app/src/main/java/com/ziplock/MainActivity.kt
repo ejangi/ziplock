@@ -1,9 +1,11 @@
 package com.ziplock
 
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
+import com.ziplock.ffi.ZipLockNative
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -28,6 +30,18 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Initialize the native library
+        try {
+            val initResult = ZipLockNative.init()
+            if (initResult) {
+                Log.d("MainActivity", "ZipLock native library initialized successfully")
+            } else {
+                Log.e("MainActivity", "Failed to initialize ZipLock native library")
+            }
+        } catch (e: Exception) {
+            Log.e("MainActivity", "Error initializing ZipLock native library: ${e.message}")
+        }
 
         setContent {
             ZipLockTheme {

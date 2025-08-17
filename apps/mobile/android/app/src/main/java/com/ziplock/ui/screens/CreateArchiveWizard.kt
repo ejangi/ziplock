@@ -1,11 +1,14 @@
 package com.ziplock.ui.screens
 
+import android.content.Context
+import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -14,7 +17,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -112,16 +119,28 @@ fun CreateArchiveWizard(
                     CreateArchiveStep.SelectDestination -> SelectDestinationStep(
                         destinationName = uiState.destinationName,
                         onSelectDestination = { directoryPickerLauncher.launch(null) },
-                        onNext = { viewModel.proceedToNext() },
-                        onBack = { viewModel.goBack() },
+                        onNext = {
+                            Log.d("CreateArchiveWizard", "SelectDestination onNext clicked")
+                            viewModel.proceedToNext()
+                        },
+                        onBack = {
+                            Log.d("CreateArchiveWizard", "SelectDestination onBack clicked")
+                            viewModel.goBack()
+                        },
                         canProceed = viewModel.canProceed()
                     )
 
                     CreateArchiveStep.ArchiveName -> ArchiveNameStep(
                         archiveName = uiState.archiveName,
                         onArchiveNameChange = { viewModel.updateArchiveName(it) },
-                        onNext = { viewModel.proceedToNext() },
-                        onBack = { viewModel.goBack() },
+                        onNext = {
+                            Log.d("CreateArchiveWizard", "ArchiveName onNext clicked")
+                            viewModel.proceedToNext()
+                        },
+                        onBack = {
+                            Log.d("CreateArchiveWizard", "ArchiveName onBack clicked")
+                            viewModel.goBack()
+                        },
                         canProceed = viewModel.canProceed()
                     )
 
@@ -131,8 +150,14 @@ fun CreateArchiveWizard(
                         passphraseStrength = passphraseStrength,
                         onPassphraseChange = { viewModel.updatePassphrase(it) },
                         onToggleVisibility = { viewModel.togglePassphraseVisibility() },
-                        onNext = { viewModel.proceedToNext() },
-                        onBack = { viewModel.goBack() },
+                        onNext = {
+                            Log.d("CreateArchiveWizard", "CreatePassphrase onNext clicked")
+                            viewModel.proceedToNext()
+                        },
+                        onBack = {
+                            Log.d("CreateArchiveWizard", "CreatePassphrase onBack clicked")
+                            viewModel.goBack()
+                        },
                         canProceed = viewModel.canProceed()
                     )
 
@@ -142,8 +167,19 @@ fun CreateArchiveWizard(
                         showConfirmPassphrase = uiState.showConfirmPassphrase,
                         onConfirmPassphraseChange = { viewModel.updateConfirmPassphrase(it) },
                         onToggleVisibility = { viewModel.toggleConfirmPassphraseVisibility() },
-                        onNext = { viewModel.proceedToNext() },
-                        onBack = { viewModel.goBack() },
+                        onNext = {
+                            Log.d("CreateArchiveWizard", "ConfirmPassphrase onNext clicked (Create Archive)")
+                            // Use the new context-aware archive creation method
+                            if (uiState.passphrase == uiState.confirmPassphrase) {
+                                viewModel.startArchiveCreation(context)
+                            } else {
+                                viewModel.proceedToNext() // This will show the error message
+                            }
+                        },
+                        onBack = {
+                            Log.d("CreateArchiveWizard", "ConfirmPassphrase onBack clicked")
+                            viewModel.goBack()
+                        },
                         canProceed = viewModel.canProceed()
                     )
 
@@ -665,7 +701,10 @@ private fun WizardNavigationButtons(
 
         ZipLockButton(
             text = nextText,
-            onClick = onNext,
+            onClick = {
+                Log.d("CreateArchiveWizard", "WizardNavigationButtons: '$nextText' clicked, enabled: $canProceed")
+                onNext()
+            },
             enabled = canProceed,
             style = if (canProceed) ZipLockButtonStyle.Primary else ZipLockButtonStyle.Disabled,
             icon = ZipLockIcons.ArrowRight,

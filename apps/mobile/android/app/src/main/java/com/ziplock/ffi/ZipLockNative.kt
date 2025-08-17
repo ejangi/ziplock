@@ -1,5 +1,6 @@
 package com.ziplock.ffi
 
+import android.util.Log
 import com.sun.jna.Library
 import com.sun.jna.Native
 import com.sun.jna.Pointer
@@ -34,7 +35,6 @@ object ZipLockNative {
         // Library management
         fun ziplock_init(): Int
         fun ziplock_get_version(): Pointer?
-        fun ziplock_get_last_error(): Pointer?
 
         // Memory management
         fun ziplock_string_free(str: Pointer?)
@@ -52,6 +52,11 @@ object ZipLockNative {
             includeSymbols: Int
         ): Pointer?
 
+        // Archive operations
+        fun ziplock_archive_create(path: String, masterPassword: String): Int
+        fun ziplock_archive_open(path: String, masterPassword: String): Int
+        fun ziplock_is_archive_open(): Int
+
         // Testing
         fun ziplock_test_echo(input: String): Pointer?
         fun ziplock_debug_logging(enabled: Int): Int
@@ -68,10 +73,13 @@ object ZipLockNative {
      *
      * @return true if initialization was successful
      */
-    fun initialize(): Boolean {
+    fun init(): Boolean {
         return try {
-            library.ziplock_init() == 0
+            val result = library.ziplock_init()
+            Log.d("ZipLockNative", "Library initialization result: $result")
+            result == 0
         } catch (e: Exception) {
+            Log.e("ZipLockNative", "Library initialization failed: ${e.message}")
             false
         }
     }
@@ -133,18 +141,26 @@ object ZipLockNative {
     }
 
     /**
-     * Create archive (placeholder - needs actual implementation)
+     * Create archive using the native library
      */
     fun createArchive(archivePath: String, passphrase: String): ArchiveResult {
         return try {
-            // For now, simulate success since archive creation needs additional FFI functions
-            // This would need ziplock_archive_create() to be implemented in the C API
-            Thread.sleep(100) // Simulate work
-            ArchiveResult(
-                success = true,
-                sessionId = "mock_session_${System.currentTimeMillis()}",
-                errorMessage = null
-            )
+            val result = library.ziplock_archive_create(archivePath, passphrase)
+            if (result == 0) {
+                ArchiveResult(
+                    success = true,
+                    sessionId = "session_${System.currentTimeMillis()}",
+                    errorMessage = null
+                )
+            } else {
+                val errorMessage = mapErrorCode(result)
+                ArchiveResult(
+                    success = false,
+                    sessionId = null,
+                    errorMessage = errorMessage,
+                    errorCode = result
+                )
+            }
         } catch (e: Exception) {
             ArchiveResult(
                 success = false,
@@ -156,40 +172,69 @@ object ZipLockNative {
     }
 
     /**
-     * Open archive (placeholder - needs actual implementation)
+     * Open archive using the native library
      */
     fun openArchive(archivePath: String, passphrase: String): ArchiveResult {
         return try {
-            // For now, simulate success since archive opening needs additional FFI functions
-            Thread.sleep(100) // Simulate work
-            ArchiveResult(
-                success = true,
-                sessionId = "mock_session_${System.currentTimeMillis()}",
-                errorMessage = null
-            )
+            val result = library.ziplock_archive_open(archivePath, passphrase)
+            if (result == 0) {
+                ArchiveResult(
+                    success = true,
+                    sessionId = "session_${System.currentTimeMillis()}",
+                    errorMessage = null
+                )
+            } else {
+                val errorMessage = mapErrorCode(result)
+                ArchiveResult(
+                    success = false,
+                    sessionId = null,
+                    errorMessage = errorMessage,
+                    errorCode = result
+                )
+            }
         } catch (e: Exception) {
             ArchiveResult(
                 success = false,
                 sessionId = null,
-                errorMessage = "Failed to open archive: ${e.message}",
-                errorCode = 2
+                errorMessage = "Archive opening failed: ${e.message}",
+                errorCode = 1
             )
         }
     }
 
     /**
      * Get the last error message from the native library
+     * TODO: Implement ziplock_get_last_error in FFI layer
      *
      * @return error message string
      */
     fun getLastError(): String {
-        return try {
-            val ptr = library.ziplock_get_last_error()
-            val error = ptr?.getString(0) ?: "Unknown error"
-            library.ziplock_string_free(ptr)
-            error
-        } catch (e: Exception) {
-            "Unknown error"
+        return "Error details not available"
+    }
+
+    /**
+     * Map FFI error codes to user-friendly messages
+     */
+    private fun mapErrorCode(errorCode: Int): String {
+        return when (errorCode) {
+            0 -> "Success"
+            1 -> "Invalid parameter provided"
+            2 -> "Library not initialized"
+            3 -> "Library already initialized"
+            4 -> "Archive file not found"
+            5 -> "Archive file is corrupted"
+            6 -> "Invalid password"
+            7 -> "Permission denied"
+            8 -> "Out of memory"
+            9 -> "Internal error"
+            10 -> "Session not found"
+            11 -> "Session expired"
+            12 -> "No archive is currently open"
+            13 -> "Credential not found"
+            14 -> "Validation failed"
+            15 -> "Cryptographic error"
+            16 -> "File I/O error"
+            else -> "Unknown error (code: $errorCode)"
         }
     }
 

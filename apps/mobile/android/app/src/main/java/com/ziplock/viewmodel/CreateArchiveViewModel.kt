@@ -1,10 +1,15 @@
 package com.ziplock.viewmodel
 
+import android.content.Context
+import android.net.Uri
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ziplock.ffi.ZipLockNative
 import com.ziplock.ffi.ZipLockNativeHelper
 import com.ziplock.ffi.PassphraseStrengthResult
+import com.ziplock.utils.FileUtils
+import com.ziplock.utils.WritableArchiveInfo
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -35,6 +40,7 @@ class CreateArchiveViewModel : ViewModel() {
      * Update the current wizard step
      */
     fun updateStep(step: CreateArchiveStep) {
+        Log.d("CreateArchiveViewModel", "updateStep called: $step")
         _uiState.value = _uiState.value.copy(
             currentStep = step,
             errorMessage = null
@@ -45,6 +51,7 @@ class CreateArchiveViewModel : ViewModel() {
      * Set the destination folder path
      */
     fun setDestination(path: String, name: String) {
+        Log.d("CreateArchiveViewModel", "setDestination called: path=$path, name=$name")
         _uiState.value = _uiState.value.copy(
             destinationPath = path,
             destinationName = name,
@@ -206,20 +213,26 @@ class CreateArchiveViewModel : ViewModel() {
     }
 
     /**
-     * Check if the current step can proceed
+     * Check if the user can proceed to the next step
      */
     fun canProceed(): Boolean {
-        return when (_uiState.value.currentStep) {
-            CreateArchiveStep.SelectDestination -> _uiState.value.destinationPath != null
-            CreateArchiveStep.ArchiveName -> _uiState.value.archiveName.isNotBlank()
+        val currentState = _uiState.value
+        val result = when (currentState.currentStep) {
+            CreateArchiveStep.SelectDestination -> currentState.destinationPath != null
+            CreateArchiveStep.ArchiveName -> currentState.archiveName.isNotBlank()
             CreateArchiveStep.CreatePassphrase -> _passphraseStrength.value?.isValid == true
             CreateArchiveStep.ConfirmPassphrase -> {
-                _uiState.value.confirmPassphrase.isNotEmpty() &&
-                _uiState.value.passphrase == _uiState.value.confirmPassphrase
+                currentState.confirmPassphrase.isNotEmpty() &&
+                currentState.passphrase == currentState.confirmPassphrase
             }
             CreateArchiveStep.Creating -> false
             CreateArchiveStep.Success -> true
         }
+        Log.d("CreateArchiveViewModel", "canProceed for ${currentState.currentStep}: $result")
+        Log.d("CreateArchiveViewModel", "destinationPath: ${currentState.destinationPath}")
+        Log.d("CreateArchiveViewModel", "archiveName: '${currentState.archiveName}'")
+        Log.d("CreateArchiveViewModel", "passphrase strength valid: ${_passphraseStrength.value?.isValid}")
+        return result
     }
 
     /**
@@ -227,33 +240,46 @@ class CreateArchiveViewModel : ViewModel() {
      */
     fun proceedToNext() {
         val currentState = _uiState.value
+        Log.d("CreateArchiveViewModel", "proceedToNext called, current step: ${currentState.currentStep}")
 
         when (currentState.currentStep) {
             CreateArchiveStep.SelectDestination -> {
+                Log.d("CreateArchiveViewModel", "SelectDestination step, destinationPath: ${currentState.destinationPath}")
                 if (currentState.destinationPath != null) {
+                    Log.d("CreateArchiveViewModel", "Proceeding to ArchiveName step")
                     updateStep(CreateArchiveStep.ArchiveName)
                 } else {
+                    Log.d("CreateArchiveViewModel", "No destination selected, showing error")
                     setError("Please select a destination folder where your archive will be saved.")
                 }
             }
             CreateArchiveStep.ArchiveName -> {
+                Log.d("CreateArchiveViewModel", "ArchiveName step, archiveName: '${currentState.archiveName}'")
                 if (currentState.archiveName.isNotBlank()) {
+                    Log.d("CreateArchiveViewModel", "Proceeding to CreatePassphrase step")
                     updateStep(CreateArchiveStep.CreatePassphrase)
                 } else {
+                    Log.d("CreateArchiveViewModel", "Archive name is blank, showing error")
                     setError("Please enter a name for your archive. This will be the filename of your .7z file.")
                 }
             }
             CreateArchiveStep.CreatePassphrase -> {
+                Log.d("CreateArchiveViewModel", "CreatePassphrase step, passphrase strength valid: ${_passphraseStrength.value?.isValid}")
                 if (_passphraseStrength.value?.isValid == true) {
+                    Log.d("CreateArchiveViewModel", "Proceeding to ConfirmPassphrase step")
                     updateStep(CreateArchiveStep.ConfirmPassphrase)
                 } else {
+                    Log.d("CreateArchiveViewModel", "Passphrase not strong enough, showing error")
                     setError("Please create a stronger passphrase that meets all the security requirements.")
                 }
             }
             CreateArchiveStep.ConfirmPassphrase -> {
+                Log.d("CreateArchiveViewModel", "ConfirmPassphrase step, passphrases match: ${currentState.passphrase == currentState.confirmPassphrase}")
                 if (currentState.passphrase == currentState.confirmPassphrase) {
-                    startArchiveCreation()
+                    Log.d("CreateArchiveViewModel", "Starting archive creation")
+                    setError("Context is required for archive creation. Please use startArchiveCreation(context) instead.")
                 } else {
+                    Log.d("CreateArchiveViewModel", "Passphrases don't match, showing error")
                     setError("The passphrases do not match. Please make sure both entries are identical.")
                 }
             }
@@ -279,10 +305,11 @@ class CreateArchiveViewModel : ViewModel() {
     }
 
     /**
-     * Start the archive creation process
+     * Start the archive creation process with Android context for content URI handling
      */
-    private fun startArchiveCreation() {
+    fun startArchiveCreation(context: Context) {
         val currentState = _uiState.value
+        Log.d("CreateArchiveViewModel", "startArchiveCreation called")
 
         _uiState.value = currentState.copy(
             currentStep = CreateArchiveStep.Creating,
@@ -293,6 +320,7 @@ class CreateArchiveViewModel : ViewModel() {
 
         viewModelScope.launch {
             createArchive(
+                context = context,
                 destinationPath = currentState.destinationPath!!,
                 archiveName = currentState.archiveName,
                 passphrase = currentState.passphrase
@@ -301,46 +329,86 @@ class CreateArchiveViewModel : ViewModel() {
     }
 
     /**
-     * Create the archive using FFI
+     * Create the archive using FFI with proper content URI handling
      */
     private suspend fun createArchive(
+        context: Context,
         destinationPath: String,
         archiveName: String,
         passphrase: String
     ) {
         withContext(Dispatchers.IO) {
+            var archiveInfo: WritableArchiveInfo? = null
             try {
-                // Construct full archive path
-                val fullArchivePath = if (destinationPath.startsWith("content://")) {
-                    // For cloud storage, construct the path appropriately
-                    "$destinationPath/$archiveName.7z"
-                } else {
-                    "$destinationPath/$archiveName.7z"
-                }
+                // Convert destination URI to a writable file path
+                val destinationUri = Uri.parse(destinationPath)
+                archiveInfo = FileUtils.getWritableArchivePath(context, destinationUri, archiveName)
 
                 // Update progress
                 updateProgress(0.1f)
+                Log.d("CreateArchiveViewModel", "Creating archive at working path: ${archiveInfo.workingPath}")
+                if (archiveInfo.needsCopyBack) {
+                    Log.d("CreateArchiveViewModel", "Will copy back to: ${archiveInfo.finalDestinationUri}")
+                }
 
-                // For now, simulate archive creation since full FFI integration needs more work
-                // This allows the wizard to complete without crashing
+                // Create the archive using the FFI library with the real file path
+                val result = ZipLockNative.createArchive(archiveInfo.workingPath, passphrase)
+                Log.d("CreateArchiveViewModel", "Archive creation result: success=${result.success}, error=${result.errorMessage}")
 
-                updateProgress(0.3f)
+                updateProgress(0.5f)
 
-                // Simulate archive creation for now
-                kotlinx.coroutines.delay(1000) // Simulate work
-                updateProgress(0.8f)
+                if (result.success) {
+                    // If we need to copy back to the original location, do it now
+                    if (archiveInfo.needsCopyBack && archiveInfo.finalDestinationUri != null) {
+                        updateProgress(0.7f)
+                        Log.d("CreateArchiveViewModel", "Copying archive back to final destination")
 
-                // For demo purposes, always succeed
-                updateProgress(1.0f)
+                        val copySuccess = FileUtils.copyBackToDestination(
+                            context,
+                            archiveInfo.workingPath,
+                            destinationUri
+                        )
 
-                _uiState.value = _uiState.value.copy(
-                    currentStep = CreateArchiveStep.Success,
-                    isLoading = false,
-                    createdArchivePath = fullArchivePath,
-                    errorMessage = null
-                )
+                        if (!copySuccess) {
+                            throw Exception("Failed to copy archive to destination folder")
+                        }
+                    }
+
+                    updateProgress(1.0f)
+
+                    val finalPath = if (archiveInfo.needsCopyBack) {
+                        archiveInfo.finalDestinationUri?.toString() ?: destinationPath
+                    } else {
+                        archiveInfo.workingPath
+                    }
+
+                    _uiState.value = _uiState.value.copy(
+                        currentStep = CreateArchiveStep.Success,
+                        isLoading = false,
+                        createdArchivePath = finalPath,
+                        errorMessage = null
+                    )
+                } else {
+                    // Map specific error codes to better messages
+                    val userMessage = when (result.errorMessage) {
+                        "Internal error" -> "Failed to create archive. The selected location may not be writable or the filename may be invalid."
+                        "Permission denied" -> "Permission denied. Please check that you have write access to the selected folder."
+                        "Invalid parameter provided" -> "Invalid archive name or destination. Please check your inputs and try again."
+                        else -> result.errorMessage ?: "Failed to create archive"
+                    }
+                    throw Exception(userMessage)
+                }
 
             } catch (e: Exception) {
+                // Clean up working file if creation failed
+                archiveInfo?.let { info ->
+                    try {
+                        java.io.File(info.workingPath).delete()
+                    } catch (cleanupException: Exception) {
+                        // Ignore cleanup errors
+                    }
+                }
+
                 val userMessage = when {
                     e.message?.contains("permission", ignoreCase = true) == true ->
                         "Permission denied. Please check that you have write access to the selected folder."
@@ -348,6 +416,8 @@ class CreateArchiveViewModel : ViewModel() {
                         "Insufficient storage space. Please free up space and try again."
                     e.message?.contains("network", ignoreCase = true) == true ->
                         "Network error. Please check your internet connection for cloud storage."
+                    e.message?.contains("copy", ignoreCase = true) == true ->
+                        "Archive was created but could not be moved to the selected folder. Please try a different location."
                     else -> "Failed to create archive: ${e.message ?: "Unknown error occurred"}"
                 }
                 setError(userMessage)
@@ -397,6 +467,26 @@ class CreateArchiveViewModel : ViewModel() {
      */
     fun getCreatedArchivePath(): String? {
         return _uiState.value.createdArchivePath
+    }
+
+    /**
+     * Clean up resources when ViewModel is destroyed
+     */
+    override fun onCleared() {
+        super.onCleared()
+        // Clean up any temporary files that might have been created
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                _uiState.value.createdArchivePath?.let { path ->
+                    // Only clean up if it's a temporary working file
+                    if (path.contains("/cache/new_archives/")) {
+                        java.io.File(path).delete()
+                    }
+                }
+            } catch (e: Exception) {
+                // Ignore cleanup errors
+            }
+        }
     }
 
     /**
