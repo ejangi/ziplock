@@ -20,9 +20,11 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.ui.text.font.FontWeight
 import com.ziplock.ui.screens.CreateArchiveWizard
 import com.ziplock.ui.screens.RepositorySelectionScreen
+import com.ziplock.ui.screens.CredentialsListScreen
 import com.ziplock.ui.theme.*
 import com.ziplock.viewmodel.RepositoryViewModel
 import com.ziplock.viewmodel.RepositoryViewModelFactory
+import com.ziplock.viewmodel.CredentialsViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.compose.runtime.collectAsState
 import com.ziplock.viewmodel.RepositoryState
@@ -43,14 +45,28 @@ class MainActivity : ComponentActivity() {
 
         // Initialize the native library
         try {
+            println("MainActivity: Initializing ZipLock native library...")
             val initResult = ZipLockNative.init()
+            println("MainActivity: Init result: $initResult")
+
             if (initResult) {
                 Log.d("MainActivity", "ZipLock native library initialized successfully")
+                println("MainActivity: ZipLock native library initialized successfully")
+
+
+
+                // Get library version
+                val version = ZipLockNative.getVersion()
+                println("MainActivity: Library version: $version")
+                Log.d("MainActivity", "ZipLock library version: $version")
             } else {
                 Log.e("MainActivity", "Failed to initialize ZipLock native library")
+                println("MainActivity: ERROR - Failed to initialize ZipLock native library")
             }
         } catch (e: Exception) {
             Log.e("MainActivity", "Error initializing ZipLock native library: ${e.message}")
+            println("MainActivity: EXCEPTION - Error initializing ZipLock native library: ${e.message}")
+            e.printStackTrace()
         }
 
         setContent {
@@ -110,9 +126,9 @@ fun MainApp(
                 val repositorySelectionScreen = currentScreen as Screen.RepositorySelection
                 RepositorySelectionScreen(
                     onRepositorySelected = { filePath, passphrase ->
-                        // TODO: Open the repository and navigate to main screen
                         println("Selected file: $filePath")
                         println("Passphrase length: ${passphrase.length}")
+                        repositoryViewModel.openRepository(filePath, passphrase)
                         currentScreen = Screen.RepositoryOpened(filePath)
                     },
                     onCreateNew = {
@@ -275,76 +291,38 @@ fun RepositoryOpenedScreen(
     onClose: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    // Placeholder for the main password manager interface
-    // This will be implemented in future iterations
+    // Create credentials view model
+    val credentialsViewModel: CredentialsViewModel = viewModel()
+    val credentialsUiState by credentialsViewModel.uiState.collectAsState()
+    val searchQuery by credentialsViewModel.searchQuery.collectAsState()
 
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(ZipLockSpacing.MainContentPadding),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Text(
-            text = "Repository Opened",
-            style = ZipLockTypography.ExtraLarge,
-            color = ZipLockColors.LogoPurple
-        )
-
-        Spacer(modifier = Modifier.height(ZipLockSpacing.Standard))
-
-        Text(
-            text = "Archive: ${archivePath.substringAfterLast('/')}",
-            style = ZipLockTypography.Medium,
-            color = ZipLockColors.DarkText
-        )
-
-        Spacer(modifier = Modifier.height(ZipLockSpacing.ExtraLarge))
-
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(containerColor = ZipLockColors.White),
-            elevation = CardDefaults.cardElevation(defaultElevation = ZipLockDimensions.CardElevation)
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(ZipLockSpacing.ExtraLarge),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Text(
-                    text = "🔓",
-                    style = ZipLockTypography.ExtraLarge.copy(fontSize = 48.sp)
-                )
-
-                Spacer(modifier = Modifier.height(ZipLockSpacing.Standard))
-
-                Text(
-                    text = "Archive Unlocked Successfully",
-                    style = ZipLockTypography.Header,
-                    color = ZipLockColors.DarkText
-                )
-
-                Spacer(modifier = Modifier.height(ZipLockSpacing.Small))
-
-                Text(
-                    text = "The main password manager interface will be implemented here. You can now access your encrypted credentials.",
-                    style = ZipLockTypography.Normal,
-                    color = ZipLockColors.LightGrayText,
-                    textAlign = TextAlign.Center
-                )
-
-                Spacer(modifier = Modifier.height(ZipLockSpacing.ExtraLarge))
-
-                ZipLockButton(
-                    text = "Close Archive",
-                    onClick = onClose,
-                    style = ZipLockButtonStyle.Secondary,
-                    icon = ZipLockIcons.Lock,
-                    modifier = Modifier.fillMaxWidth()
-                )
+    CredentialsListScreen(
+        credentials = credentialsUiState.credentials,
+        searchQuery = searchQuery,
+        onSearchQueryChange = { query ->
+            credentialsViewModel.updateSearchQuery(query)
+        },
+        onCredentialClick = { credential ->
+            credentialsViewModel.selectCredential(credential)
+        },
+        onCloseArchive = {
+            // Close the archive through the credentials view model
+            if (credentialsViewModel.closeArchive()) {
+                onClose()
             }
-        }
-    }
+        },
+        onAddCredential = {
+            // TODO: Navigate to add credential screen
+            println("Add credential button clicked")
+        },
+        onLoadMockData = {
+            // Development feature: Load mock data for testing
+            credentialsViewModel.loadMockCredentials()
+        },
+        isLoading = credentialsUiState.isLoading,
+        errorMessage = credentialsUiState.errorMessage,
+        modifier = modifier
+    )
 }
 
 @Composable

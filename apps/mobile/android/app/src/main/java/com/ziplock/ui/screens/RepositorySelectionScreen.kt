@@ -21,6 +21,7 @@ import androidx.compose.ui.unit.dp
 import androidx.documentfile.provider.DocumentFile
 import com.ziplock.R
 import com.ziplock.ui.theme.*
+import com.ziplock.utils.FileUtils
 
 /**
  * Repository Selection Screen
@@ -214,10 +215,18 @@ fun RepositorySelectionScreen(
                                 isLoading = true
                                 errorMessage = null
 
-                                // TODO: Integrate with FFI library
-                                // For now, simulate the call
                                 try {
-                                    onRepositorySelected(path, passphrase)
+                                    // Convert content URI to usable file path for native library
+                                    val usableFilePath = if (path.startsWith("content://")) {
+                                        val uri = android.net.Uri.parse(path)
+                                        val fileName = selectedFileName ?: "archive.7z"
+                                        FileUtils.getUsableFilePath(context, uri, fileName)
+                                    } else {
+                                        path
+                                    }
+
+                                    println("RepositorySelectionScreen: Converting path '$path' to '$usableFilePath'")
+                                    onRepositorySelected(usableFilePath, passphrase)
                                 } catch (e: Exception) {
                                     isLoading = false
                                     errorMessage = when {

@@ -6,6 +6,7 @@ import com.sun.jna.Native
 import com.sun.jna.Pointer
 import com.sun.jna.Structure
 import com.sun.jna.ptr.IntByReference
+import com.sun.jna.ptr.PointerByReference
 
 /**
  * ZipLock Native FFI Interface using JNA
@@ -25,6 +26,10 @@ import com.sun.jna.ptr.IntByReference
  * consistent security across all platforms.
  */
 object ZipLockNative {
+
+    // Session state management
+    private var currentSessionId: String? = null
+    private var isArchiveCurrentlyOpen: Boolean = false
 
     // JNA interface for the native library
     private interface ZipLockLibrary : Library {
@@ -55,15 +60,41 @@ object ZipLockNative {
         // Archive operations
         fun ziplock_archive_create(path: String, masterPassword: String): Int
         fun ziplock_archive_open(path: String, masterPassword: String): Int
+        fun ziplock_archive_close(): Int
         fun ziplock_is_archive_open(): Int
 
+        // Credential operations
+        fun ziplock_credential_list(credentials: PointerByReference, count: IntByReference): Int
+        fun ziplock_credential_list_free(credentials: Pointer, count: Int)
+
         // Testing
-        fun ziplock_test_echo(input: String): Pointer?
         fun ziplock_debug_logging(enabled: Int): Int
     }
 
-    // Simplified approach - will implement proper structure mapping later
-    // For now we use fallback validation which provides the same functionality
+    // JNA Structure classes for FFI integration
+    @Structure.FieldOrder("id", "title", "credential_type", "notes", "created_at", "updated_at", "field_count", "fields", "tag_count", "tags")
+    class CCredentialRecord : Structure() {
+        @JvmField var id: Pointer? = null
+        @JvmField var title: Pointer? = null
+        @JvmField var credential_type: Pointer? = null
+        @JvmField var notes: Pointer? = null
+        @JvmField var created_at: Long = 0
+        @JvmField var updated_at: Long = 0
+        @JvmField var field_count: Int = 0
+        @JvmField var fields: Pointer? = null
+        @JvmField var tag_count: Int = 0
+        @JvmField var tags: Pointer? = null
+    }
+
+    @Structure.FieldOrder("name", "value", "field_type", "label", "sensitive", "required")
+    class CCredentialField : Structure() {
+        @JvmField var name: Pointer? = null
+        @JvmField var value: Pointer? = null
+        @JvmField var field_type: Pointer? = null
+        @JvmField var label: Pointer? = null
+        @JvmField var sensitive: Int = 0
+        @JvmField var required: Int = 0
+    }
 
     private val library = ZipLockLibrary.INSTANCE
 
@@ -147,12 +178,20 @@ object ZipLockNative {
         return try {
             val result = library.ziplock_archive_create(archivePath, passphrase)
             if (result == 0) {
+                // Successfully created - update session state
+                currentSessionId = "session_${System.currentTimeMillis()}"
+                isArchiveCurrentlyOpen = true
+
                 ArchiveResult(
                     success = true,
-                    sessionId = "session_${System.currentTimeMillis()}",
+                    sessionId = currentSessionId,
                     errorMessage = null
                 )
             } else {
+                // Failed to create - clear session state
+                currentSessionId = null
+                isArchiveCurrentlyOpen = false
+
                 val errorMessage = mapErrorCode(result)
                 ArchiveResult(
                     success = false,
@@ -162,6 +201,10 @@ object ZipLockNative {
                 )
             }
         } catch (e: Exception) {
+            // Exception occurred - clear session state
+            currentSessionId = null
+            isArchiveCurrentlyOpen = false
+
             ArchiveResult(
                 success = false,
                 sessionId = null,
@@ -178,12 +221,20 @@ object ZipLockNative {
         return try {
             val result = library.ziplock_archive_open(archivePath, passphrase)
             if (result == 0) {
+                // Successfully opened - update session state
+                currentSessionId = "session_${System.currentTimeMillis()}"
+                isArchiveCurrentlyOpen = true
+
                 ArchiveResult(
                     success = true,
-                    sessionId = "session_${System.currentTimeMillis()}",
+                    sessionId = currentSessionId,
                     errorMessage = null
                 )
             } else {
+                // Failed to open - clear session state
+                currentSessionId = null
+                isArchiveCurrentlyOpen = false
+
                 val errorMessage = mapErrorCode(result)
                 ArchiveResult(
                     success = false,
@@ -193,6 +244,10 @@ object ZipLockNative {
                 )
             }
         } catch (e: Exception) {
+            // Exception occurred - clear session state
+            currentSessionId = null
+            isArchiveCurrentlyOpen = false
+
             ArchiveResult(
                 success = false,
                 sessionId = null,
@@ -200,6 +255,302 @@ object ZipLockNative {
                 errorCode = 1
             )
         }
+    }
+
+    /**
+     * List all credentials in the currently open archive
+     */
+    fun listCredentials(): CredentialListResult {
+        return try {
+            // Check if archive is open (this will sync state)
+            if (!isArchiveOpen()) {
+                val healthCheck = performHealthCheck()
+                Log.w("ZipLockNative", "Archive not open. Health check:\n$healthCheck")
+                return CredentialListResult(
+                    success = false,
+                    credentials = emptyList(),
+                    errorMessage = "No archive is currently open. FFI Status:\n$healthCheck"
+                )
+            }
+
+            // Call native credential list function
+            Log.d("ZipLockNative", "Calling ziplock_credential_list...")
+            val credentialsPtr = PointerByReference()
+            val count = IntByReference()
+
+            val result = library.ziplock_credential_list(credentialsPtr, count)
+            Log.d("ZipLockNative", "ziplock_credential_list returned: $result")
+
+            if (result != 0) {
+                val errorMessage = mapErrorCode(result)
+                Log.e("ZipLockNative", "Failed to list credentials: $errorMessage (code: $result)")
+                return CredentialListResult(
+                    success = false,
+                    credentials = emptyList(),
+                    errorMessage = errorMessage
+                )
+            }
+
+            val credentialCount = count.value
+            Log.d("ZipLockNative", "Found $credentialCount credentials")
+            val credentials = mutableListOf<Credential>()
+
+            if (credentialCount > 0 && credentialsPtr.value != null) {
+                Log.d("ZipLockNative", "Parsing $credentialCount credentials...")
+                // Parse the array of C credential records
+                val credentialArray = credentialsPtr.value
+
+                for (i in 0 until credentialCount) {
+                    try {
+                        Log.d("ZipLockNative", "Parsing credential $i...")
+                        // Calculate offset for the i-th structure
+                        val structSize = Native.getNativeSize(CCredentialRecord::class.java)
+                        val recordPtr = credentialArray.share((i * structSize).toLong())
+
+                        val record = Structure.newInstance(CCredentialRecord::class.java, recordPtr) as CCredentialRecord
+                        record.read()
+
+                        // Convert C structure to Kotlin data class
+                        val credential = convertCCredentialToKotlin(record)
+                        credentials.add(credential)
+                        Log.d("ZipLockNative", "Successfully parsed credential: ${credential.title}")
+                    } catch (e: Exception) {
+                        Log.e("ZipLockNative", "Failed to parse credential $i: ${e.message}", e)
+                    }
+                }
+
+                Log.d("ZipLockNative", "Freeing native memory for $credentialCount credentials")
+                // Free the native memory
+                library.ziplock_credential_list_free(credentialsPtr.value, credentialCount)
+            } else {
+                Log.d("ZipLockNative", "No credentials found or null pointer")
+            }
+
+            Log.d("ZipLockNative", "Returning ${credentials.size} parsed credentials")
+            CredentialListResult(
+                success = true,
+                credentials = credentials,
+                errorMessage = null
+            )
+        } catch (e: Exception) {
+            Log.e("ZipLockNative", "Exception in listCredentials: ${e.message}", e)
+            CredentialListResult(
+                success = false,
+                credentials = emptyList(),
+                errorMessage = "Failed to list credentials: ${e.message}"
+            )
+        }
+    }
+
+    /**
+     * Create mock credential list for development/testing
+     * This can be used for testing the UI with sample data
+     */
+    private fun createMockCredentialList(): CredentialListResult {
+        val mockCredentials = listOf(
+            Credential(
+                id = "cred_1",
+                title = "Google Account",
+                credentialType = "login",
+                url = "https://accounts.google.com",
+                username = "user@gmail.com"
+            ),
+            Credential(
+                id = "cred_2",
+                title = "Bank of America",
+                credentialType = "bank_account",
+                url = "https://bankofamerica.com"
+            ),
+            Credential(
+                id = "cred_3",
+                title = "Visa Credit Card",
+                credentialType = "credit_card"
+            ),
+            Credential(
+                id = "cred_4",
+                title = "WiFi Password",
+                credentialType = "secure_note",
+                notes = "Home network credentials"
+            ),
+            Credential(
+                id = "cred_5",
+                title = "SSH Server Key",
+                credentialType = "ssh_key",
+                url = "192.168.1.100"
+            )
+        )
+
+        return CredentialListResult(
+            success = true,
+            credentials = mockCredentials,
+            errorMessage = null
+        )
+    }
+
+    /**
+     * Close the current archive and clear session state
+     */
+    fun closeArchive(): Boolean {
+        return try {
+            Log.d("ZipLockNative", "Closing archive...")
+
+            // Call native library close function
+            val result = library.ziplock_archive_close()
+
+            if (result == 0) {
+                Log.d("ZipLockNative", "Archive closed successfully")
+                // Clear our session state only on success
+                currentSessionId = null
+                isArchiveCurrentlyOpen = false
+                true
+            } else {
+                Log.e("ZipLockNative", "Failed to close archive: ${mapErrorCode(result)}")
+                false
+            }
+        } catch (e: Exception) {
+            Log.e("ZipLockNative", "Exception closing archive: ${e.message}", e)
+            // Clear state even on exception to prevent stuck state
+            currentSessionId = null
+            isArchiveCurrentlyOpen = false
+            false
+        }
+    }
+
+    /**
+     * Check if an archive is currently open
+     */
+    fun isArchiveOpen(): Boolean {
+        return try {
+            // Check native library state first
+            val nativeIsOpen = library.ziplock_is_archive_open() == 1
+
+            // Sync our local state with native state
+            if (!nativeIsOpen && isArchiveCurrentlyOpen) {
+                Log.w("ZipLockNative", "Native library says archive is closed, syncing local state")
+                isArchiveCurrentlyOpen = false
+                currentSessionId = null
+            } else if (nativeIsOpen && !isArchiveCurrentlyOpen) {
+                Log.w("ZipLockNative", "Native library says archive is open, syncing local state")
+                isArchiveCurrentlyOpen = true
+                if (currentSessionId == null) {
+                    currentSessionId = "session_${System.currentTimeMillis()}"
+                }
+            }
+
+            Log.d("ZipLockNative", "Archive open status - Native: $nativeIsOpen, Local: $isArchiveCurrentlyOpen")
+            nativeIsOpen
+        } catch (e: Exception) {
+            Log.e("ZipLockNative", "Error checking archive status: ${e.message}", e)
+            false
+        }
+    }
+
+    /**
+     * Get current session ID
+     */
+    fun getCurrentSessionId(): String? {
+        return currentSessionId
+    }
+
+    /**
+     * Convert C credential record to Kotlin data class
+     */
+    private fun convertCCredentialToKotlin(record: CCredentialRecord): Credential {
+        Log.d("ZipLockNative", "Converting C credential to Kotlin...")
+
+        val id = try {
+            record.id?.getString(0) ?: ""
+        } catch (e: Exception) {
+            Log.w("ZipLockNative", "Failed to read id: ${e.message}")
+            ""
+        }
+
+        val title = try {
+            record.title?.getString(0) ?: ""
+        } catch (e: Exception) {
+            Log.w("ZipLockNative", "Failed to read title: ${e.message}")
+            "Unknown"
+        }
+
+        val credentialType = try {
+            record.credential_type?.getString(0) ?: ""
+        } catch (e: Exception) {
+            Log.w("ZipLockNative", "Failed to read credential_type: ${e.message}")
+            "unknown"
+        }
+
+        val notes = try {
+            record.notes?.getString(0) ?: ""
+        } catch (e: Exception) {
+            Log.w("ZipLockNative", "Failed to read notes: ${e.message}")
+            ""
+        }
+
+        Log.d("ZipLockNative", "Basic fields - id: $id, title: $title, type: $credentialType")
+
+        // Parse tags if present
+        val tags = mutableListOf<String>()
+        if (record.tag_count > 0 && record.tags != null) {
+            try {
+                Log.d("ZipLockNative", "Parsing ${record.tag_count} tags...")
+                val tagsArray = record.tags!!.getPointerArray(0, record.tag_count)
+                for (tagPtr in tagsArray) {
+                    if (tagPtr != null) {
+                        val tag = tagPtr.getString(0)
+                        if (tag.isNotBlank()) {
+                            tags.add(tag)
+                            Log.d("ZipLockNative", "Added tag: $tag")
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("ZipLockNative", "Failed to parse tags: ${e.message}", e)
+            }
+        }
+
+        // Parse fields to extract common fields like username, password, url
+        var username = ""
+        var password = ""
+        var url = ""
+
+        if (record.field_count > 0 && record.fields != null) {
+            try {
+                Log.d("ZipLockNative", "Parsing ${record.field_count} fields...")
+                for (i in 0 until record.field_count) {
+                    val fieldStructSize = Native.getNativeSize(CCredentialField::class.java)
+                    val fieldPtr = record.fields!!.share((i * fieldStructSize).toLong())
+
+                    val field = Structure.newInstance(CCredentialField::class.java, fieldPtr) as CCredentialField
+                    field.read()
+
+                    val fieldName = field.name?.getString(0) ?: ""
+                    val fieldValue = field.value?.getString(0) ?: ""
+
+                    Log.d("ZipLockNative", "Field $i: $fieldName = $fieldValue")
+
+                    when (fieldName.lowercase()) {
+                        "username", "user", "login" -> username = fieldValue
+                        "password", "pass" -> password = fieldValue
+                        "url", "website", "site" -> url = fieldValue
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("ZipLockNative", "Failed to parse fields: ${e.message}", e)
+            }
+        }
+
+        return Credential(
+            id = id,
+            title = title,
+            credentialType = credentialType,
+            username = username,
+            password = password,
+            url = url,
+            notes = notes,
+            tags = tags,
+            createdAt = record.created_at,
+            updatedAt = record.updated_at
+        )
     }
 
     /**
@@ -243,11 +594,14 @@ object ZipLockNative {
      */
     fun testConnection(): Boolean {
         return try {
-            val ptr = library.ziplock_test_echo("test")
-            val result = ptr?.getString(0) == "test"
-            library.ziplock_string_free(ptr)
+            Log.d("ZipLockNative", "Testing library connection with version check...")
+            // Use getVersion as a test since ziplock_test_echo doesn't exist in the library
+            val version = getVersion()
+            val result = version.isNotBlank() && version != "unknown"
+            Log.d("ZipLockNative", "Version test result: $result (version: '$version')")
             result
         } catch (e: Exception) {
+            Log.e("ZipLockNative", "Version test failed with exception: ${e.message}", e)
             false
         }
     }
@@ -257,10 +611,53 @@ object ZipLockNative {
      */
     fun setDebugLogging(enabled: Boolean) {
         try {
-            library.ziplock_debug_logging(if (enabled) 1 else 0)
+            Log.d("ZipLockNative", "Setting debug logging to: $enabled")
+            val result = library.ziplock_debug_logging(if (enabled) 1 else 0)
+            Log.d("ZipLockNative", "Debug logging result: $result")
         } catch (e: Exception) {
-            // Ignore errors for debug logging
+            Log.e("ZipLockNative", "Failed to set debug logging: ${e.message}", e)
         }
+    }
+
+    /**
+     * Comprehensive FFI health check
+     */
+    fun performHealthCheck(): String {
+        val results = mutableListOf<String>()
+
+        try {
+            // Test library loading
+            results.add("Library loading: SUCCESS")
+
+            // Test version function
+            try {
+                val version = getVersion()
+                results.add("Version check: SUCCESS ($version)")
+            } catch (e: Exception) {
+                results.add("Version check: FAILED (${e.message})")
+            }
+
+            // Test version function (as connection test)
+            try {
+                val testResult = testConnection()
+                results.add("Connection test: ${if (testResult) "SUCCESS" else "FAILED"}")
+            } catch (e: Exception) {
+                results.add("Connection test: FAILED (${e.message})")
+            }
+
+            // Test archive status check
+            try {
+                val isOpen = library.ziplock_is_archive_open()
+                results.add("Archive status check: SUCCESS (open=$isOpen)")
+            } catch (e: Exception) {
+                results.add("Archive status check: FAILED (${e.message})")
+            }
+
+        } catch (e: Exception) {
+            results.add("Library loading: FAILED (${e.message})")
+        }
+
+        return results.joinToString("\n")
     }
 
     // Helper functions
@@ -430,8 +827,16 @@ data class Credential(
     val tags: List<String> = emptyList(),
     val customFields: Map<String, String> = emptyMap(),
     val createdAt: Long = System.currentTimeMillis(),
-    val updatedAt: Long = System.currentTimeMillis(),
-    val favorite: Boolean = false
+    val updatedAt: Long = System.currentTimeMillis()
+)
+
+/**
+ * Result of credential listing operation
+ */
+data class CredentialListResult(
+    val success: Boolean,
+    val credentials: List<Credential>,
+    val errorMessage: String? = null
 )
 
 /**

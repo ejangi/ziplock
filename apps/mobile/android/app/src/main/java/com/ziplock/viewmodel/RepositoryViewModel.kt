@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import java.io.File
+import com.ziplock.ffi.ZipLockNative
 
 /**
  * Repository View Model
@@ -81,31 +82,28 @@ class RepositoryViewModel(private val context: Context) : ViewModel() {
                     throw IllegalArgumentException("Passphrase is required")
                 }
 
-                // TODO: Integrate with shared FFI library
-                // This is where we'll call the shared library to open the archive
-                // The FFI library handles all cryptographic operations
+                // Call FFI library to open the archive
+                delay(500) // Small delay for better UX
 
-                // Simulate FFI call for now
-                delay(1500) // Simulate processing time
-
-                // Example of what the FFI integration would look like:
-                /*
+                println("RepositoryViewModel: Opening archive at path: $filePath")
                 val result = ZipLockNative.openArchive(filePath, passphrase)
-                if (result.isSuccess()) {
+                println("RepositoryViewModel: Open archive result - success: ${result.success}, sessionId: ${result.sessionId}, error: ${result.errorMessage}")
+
+                if (result.success) {
+                    val sessionId = result.sessionId ?: generateSessionId()
                     _repositoryState.value = RepositoryState.Opened(
                         archivePath = filePath,
-                        sessionId = result.sessionId
+                        sessionId = sessionId
                     )
-                } else {
-                    throw Exception(result.errorMessage)
-                }
-                */
+                    println("RepositoryViewModel: Archive opened successfully with session: $sessionId")
 
-                // For now, simulate successful opening
-                _repositoryState.value = RepositoryState.Opened(
-                    archivePath = filePath,
-                    sessionId = generateSessionId()
-                )
+                    // Verify the archive is actually open
+                    val isOpen = ZipLockNative.isArchiveOpen()
+                    println("RepositoryViewModel: Archive open verification: $isOpen")
+                } else {
+                    println("RepositoryViewModel: Failed to open archive: ${result.errorMessage}")
+                    throw Exception(result.errorMessage ?: "Failed to open archive")
+                }
 
                 // Save the successfully opened archive path
                 configManager.setLastArchivePath(filePath)
