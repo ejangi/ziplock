@@ -219,6 +219,7 @@ test_build_scripts() {
         "build-android-docker.sh"
         "test-android-compilation.sh"
         "test-android-integration.sh"
+        "test-android-builder-image.sh"
     )
 
     for script in "${scripts[@]}"; do
