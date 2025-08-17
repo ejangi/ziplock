@@ -102,13 +102,13 @@ jobs:
       - name: Build Android libraries using pre-built container
         run: |
           # Create output directory
-          mkdir -p android-builds
+          mkdir -p target/android
 
           # Use pre-built container image
           docker run --rm \
             -v "$PWD:/workspace" \
-            -v "$PWD/android-builds:/output" \
-            -w /workspace \
+            -v "$PWD/target/android:/output" \
+            -w /workspace
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/android-builder:latest \
             bash -c "
               set -e
@@ -157,7 +157,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: android-libraries-${{ github.sha }}
-          path: android-builds/
+          path: target/android/
           retention-days: 30
 
       - name: Create build summary
@@ -168,7 +168,7 @@ jobs:
           echo "|--------------|--------|------|" >> $GITHUB_STEP_SUMMARY
 
           for arch in arm64-v8a armeabi-v7a x86_64 x86; do
-            lib_path="android-builds/$arch/libziplock_shared.so"
+            lib_path="target/android/$arch/libziplock_shared.so"
             if [ -f "$lib_path" ]; then
               size=$(du -h "$lib_path" | cut -f1)
               echo "| $arch | ✅ Built | $size |" >> $GITHUB_STEP_SUMMARY
@@ -196,7 +196,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: android-libraries-${{ github.sha }}
-          path: android-builds/
+          path: target/android/
 
       - name: Run performance tests
         run: |
@@ -211,7 +211,7 @@ jobs:
           echo "|--------------|--------------|-----------|--------|" >> $GITHUB_STEP_SUMMARY
 
           for arch in arm64-v8a armeabi-v7a x86_64 x86; do
-            lib_path="android-builds/$arch/libziplock_shared.so"
+            lib_path="target/android/$arch/libziplock_shared.so"
             if [ -f "$lib_path" ]; then
               size_bytes=$(stat -c%s "$lib_path")
               size_mb=$(echo "scale=2; $size_bytes / 1024 / 1024" | bc -l)
@@ -241,7 +241,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: android-libraries-${{ github.sha }}
-          path: android-builds/
+          path: target/android/
 
       - name: Install security analysis tools
         run: |
@@ -259,7 +259,7 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
 
           for arch in arm64-v8a armeabi-v7a x86_64 x86; do
-            lib_path="android-builds/$arch/libziplock_shared.so"
+            lib_path="target/android/$arch/libziplock_shared.so"
             if [ -f "$lib_path" ]; then
               echo "### $arch" >> $GITHUB_STEP_SUMMARY
 
@@ -304,7 +304,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: android-libraries-${{ github.sha }}
-          path: android-builds/
+          path: target/android/
 
       - name: Create release package
         run: |
@@ -313,13 +313,13 @@ jobs:
 
           # Copy libraries
           for arch in arm64-v8a armeabi-v7a x86_64 x86; do
-            if [ -f "android-builds/$arch/libziplock_shared.so" ]; then
-              cp "android-builds/$arch/libziplock_shared.so" "release/android/$arch/"
+            if [ -f "target/android/$arch/libziplock_shared.so" ]; then
+              cp "target/android/$arch/libziplock_shared.so" "release/android/$arch/"
             fi
           done
 
           # Copy header file
-          cp android-builds/ziplock.h release/android/
+          cp target/android/ziplock.h release/android/
 
           # Create README
           cat > release/android/README.md << 'EOF'

@@ -66,8 +66,8 @@ Download from: https://developer.android.com/studio
 
 ### 2. Verify Setup
 ```bash
-cd ziplock/apps/mobile/android
-./verify-setup.sh
+cd ziplock
+./scripts/dev/verify-android-setup.sh
 ```
 
 ### 3. Open Project
@@ -155,7 +155,7 @@ set JAVA_HOME=C:\Program Files\Eclipse Adoptium\jdk-17.0.8.101-hotspot
 ./scripts/build/build-android-docker.sh build
 
 # Verify output
-ls -la android-builds/
+ls -la target/android/
 # Should contain: arm64-v8a/, armeabi-v7a/, x86_64/, x86/
 ```
 
@@ -196,7 +196,39 @@ android/
 
 ### Current Features
 
-#### 1. Persistent Archive Path Memory
+#### 1. .7z File Association
+
+The Android app automatically registers as a handler for .7z archive files, allowing users to open password archives directly from file managers, email attachments, cloud storage apps, and other sources.
+
+**Key Features:**
+- **Intent Filter Registration**: Comprehensive intent filters for various .7z file scenarios
+- **MIME Type Support**: Handles both `application/x-7z-compressed` and generic MIME types
+- **Cloud Storage Integration**: Seamless opening from Google Drive, Dropbox, OneDrive, and other cloud services
+- **Content URI Support**: Full support for Storage Access Framework and content:// URIs
+- **Direct Navigation**: Automatically navigates to repository selection with pre-filled file path
+- **User-Friendly Experience**: Clear file path display and error handling
+
+**Implementation Details:**
+```xml
+<!-- Intent filters in AndroidManifest.xml -->
+<intent-filter>
+    <action android:name="android.intent.action.VIEW" />
+    <category android:name="android.intent.category.DEFAULT" />
+    <category android:name="android.intent.category.BROWSABLE" />
+    <data android:mimeType="application/x-7z-compressed" />
+</intent-filter>
+```
+
+**User Experience:**
+1. User encounters a .7z file in any app or file manager
+2. ZipLock appears in the "Open with" dialog options
+3. Selecting ZipLock launches directly to the repository selection screen
+4. The .7z file path is automatically pre-filled
+5. User enters passphrase to unlock the archive
+
+For complete details, see [File Association Guide](file-association.md).
+
+#### 2. Persistent Archive Path Memory
 
 The Android app now implements persistent memory for the last opened archive file, providing a seamless user experience by automatically remembering and offering to reopen the most recently used archive.
 
@@ -566,7 +598,7 @@ cargo build --release --target aarch64-linux-android --features c-api
 ### Build Output
 
 ```
-android-builds/
+target/android/
 ├── arm64-v8a/
 │   └── libziplock_shared.so    # ARM64 library for modern devices
 ├── armeabi-v7a/
@@ -932,10 +964,10 @@ adb shell dumpsys meminfo com.ziplock
 **Library Verification:**
 ```bash
 # Check symbols in built library
-nm -D android-builds/arm64-v8a/libziplock_shared.so | grep ziplock
+nm -D target/android/arm64-v8a/libziplock_shared.so | grep ziplock
 
 # Verify architecture
-file android-builds/arm64-v8a/libziplock_shared.so
+file target/android/arm64-v8a/libziplock_shared.so
 ```
 
 **Runtime Debugging:**
@@ -1176,10 +1208,10 @@ adb shell dumpsys meminfo com.ziplock
 ./scripts/build/build-android-docker.sh test
 
 # Verify symbols
-nm -D android-builds/arm64-v8a/libziplock_shared.so | grep ziplock
+nm -D target/android/arm64-v8a/libziplock_shared.so | grep ziplock
 
 # Check architecture
-file android-builds/arm64-v8a/libziplock_shared.so
+file target/android/arm64-v8a/libziplock_shared.so
 ```
 
 ### Resources and Documentation
@@ -1213,7 +1245,7 @@ When contributing to the Android implementation:
 If you encounter issues:
 
 1. **Check Logcat**: Use Android Studio's Logcat for detailed error messages
-2. **Verify Setup**: Run `./verify-setup.sh` to check development environment
+2. **Verify Setup**: Run `./scripts/dev/verify-android-setup.sh` to check development environment
 3. **Clean Build**: Try `./gradlew clean build` to resolve build cache issues
 4. **Test in Emulator**: Use x86_64 emulator for faster development iteration
 5. **Check Native Libraries**: Ensure libraries are built for target architecture

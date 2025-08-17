@@ -23,7 +23,7 @@ PROJECT_ROOT="$(dirname "$(dirname "$SCRIPT_DIR")")"
 DOCKER_FILE="$PROJECT_ROOT/.github/docker/android-builder.Dockerfile"
 IMAGE_NAME="ziplock-android-builder"
 REGISTRY_IMAGE="ghcr.io/ejangi/ziplock/android-builder:latest"
-OUTPUT_DIR="$PROJECT_ROOT/android-builds"
+OUTPUT_DIR="$PROJECT_ROOT/target/android"
 USE_REGISTRY="${USE_REGISTRY:-true}"
 
 # Function to get or build Docker image

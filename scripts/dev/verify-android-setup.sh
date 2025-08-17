@@ -18,7 +18,8 @@ print_warning() { echo -e "${YELLOW}[⚠]${NC} $1"; }
 print_error() { echo -e "${RED}[✗]${NC} $1"; }
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(dirname "$(dirname "$(dirname "$SCRIPT_DIR")")")"
+PROJECT_ROOT="$(dirname "$(dirname "$SCRIPT_DIR")")"
+ANDROID_DIR="$PROJECT_ROOT/apps/mobile/android"
 
 echo "================================================================"
 echo "           ZipLock Android Development Setup Check"
@@ -117,7 +118,7 @@ echo ""
 
 # Check 5: Native Libraries
 print_status "Checking native libraries..."
-native_libs_dir="$SCRIPT_DIR/app/src/main/jniLibs"
+native_libs_dir="$ANDROID_DIR/app/src/main/jniLibs"
 
 if [[ -d "$native_libs_dir" ]]; then
     print_success "Native libs directory exists"
@@ -157,10 +158,10 @@ echo ""
 
 # Check 6: Gradle Wrapper
 print_status "Checking Gradle wrapper..."
-if [[ -f "$SCRIPT_DIR/gradlew" ]]; then
+if [[ -f "$ANDROID_DIR/gradlew" ]]; then
     print_success "Gradle wrapper script found"
 
-    if [[ -x "$SCRIPT_DIR/gradlew" ]]; then
+    if [[ -x "$ANDROID_DIR/gradlew" ]]; then
         print_success "Gradle wrapper is executable"
     else
         print_warning "Gradle wrapper is not executable"
@@ -170,15 +171,15 @@ else
     print_error "Gradle wrapper script not found"
 fi
 
-if [[ -f "$SCRIPT_DIR/gradle/wrapper/gradle-wrapper.jar" ]]; then
-    jar_size=$(du -h "$SCRIPT_DIR/gradle/wrapper/gradle-wrapper.jar" | cut -f1)
+if [[ -f "$ANDROID_DIR/gradle/wrapper/gradle-wrapper.jar" ]]; then
+    jar_size=$(du -h "$ANDROID_DIR/gradle/wrapper/gradle-wrapper.jar" | cut -f1)
     print_success "Gradle wrapper JAR found: $jar_size"
 else
     print_error "Gradle wrapper JAR not found"
 fi
 
-if [[ -f "$SCRIPT_DIR/gradle/wrapper/gradle-wrapper.properties" ]]; then
-    gradle_version=$(grep "distributionUrl" "$SCRIPT_DIR/gradle/wrapper/gradle-wrapper.properties" | cut -d'/' -f5 | cut -d'-' -f2)
+if [[ -f "$ANDROID_DIR/gradle/wrapper/gradle-wrapper.properties" ]]; then
+    gradle_version=$(grep "distributionUrl" "$ANDROID_DIR/gradle/wrapper/gradle-wrapper.properties" | sed 's/.*gradle-\([0-9.]*\).*/\1/')
     print_success "Gradle version configured: $gradle_version"
 
     # Check Gradle compatibility with Java
@@ -252,7 +253,7 @@ echo "================================================================"
 print_status "Setup Summary"
 echo "================================================================"
 
-if $all_files_present && [[ -d "$native_libs_dir" ]] && [[ -f "$SCRIPT_DIR/gradlew" ]]; then
+if $all_files_present && [[ -d "$native_libs_dir" ]] && [[ -f "$ANDROID_DIR/gradlew" ]]; then
     print_success "✅ Project structure is ready"
 else
     print_error "❌ Project structure needs attention"

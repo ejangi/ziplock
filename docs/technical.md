@@ -17,6 +17,7 @@ Do not place technical documentation in the root `docs/` directory or other loca
 - [Repository Detection Implementation](technical/repository-detection-implementation.md) - Technical implementation details for repository detection
 - [Configuration Guide](technical/configuration.md) - Complete configuration reference with examples and profiles
 - [Cloud Storage Implementation](technical/cloud-storage-implementation.md) - Cloud storage file handling and conflict prevention for Android
+- [File Association](technical/file-association.md) - .7z file association and intent handling for Android
 
 - [Mobile Integration Guide](technical/mobile-integration.md) - Complete mobile platform integration documentation with examples
 - [Mobile Shared Implementation](technical/mobile-shared-implementation.md) - Shared library integration for mobile platforms
@@ -109,6 +110,9 @@ The `scripts/` directory is organized into functional subdirectories to maintain
 - **`run-integration-tests.sh`** - Executes full integration test suite
 - **`run-tests-with-existing-backend.sh`** - Runs tests against existing backend
 - **`test-backend-connection.sh`** - Tests backend service connectivity
+- **`verify-android-setup.sh`** - Verifies Android development environment setup
+- **`verify-file-association.sh`** - Verifies .7z file association configuration for Android
+- **`android-quick-test-build.sh`** - Quick build and test for Android file associations
 
 ### `scripts/version/` - Version Management
 - **`update-version.sh`** - Automated version bumps and changelog updates

@@ -2,6 +2,7 @@ package com.ziplock
 
 import android.content.Intent
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.Image
@@ -39,6 +40,26 @@ class SplashActivity : ComponentActivity() {
 
     private fun navigateToMain() {
         val intent = Intent(this, MainActivity::class.java)
+
+        // Check if this activity was launched with a .7z file intent
+        val incomingIntent = getIntent()
+
+        // Debug logging
+        Log.d("ZipLock", "SplashActivity - Intent action: ${incomingIntent?.action}")
+        Log.d("ZipLock", "SplashActivity - Intent data: ${incomingIntent?.data}")
+        Log.d("ZipLock", "SplashActivity - Intent type: ${incomingIntent?.type}")
+        Log.d("ZipLock", "SplashActivity - Intent scheme: ${incomingIntent?.data?.scheme}")
+        Log.d("ZipLock", "SplashActivity - Intent path: ${incomingIntent?.data?.path}")
+
+        if (incomingIntent?.action == Intent.ACTION_VIEW && incomingIntent.data != null) {
+            // Pass the file URI to MainActivity
+            intent.putExtra("file_uri", incomingIntent.data.toString())
+            intent.putExtra("opened_from_file", true)
+            Log.d("ZipLock", "SplashActivity - Passing file URI to MainActivity: ${incomingIntent.data}")
+        } else {
+            Log.d("ZipLock", "SplashActivity - Normal app launch (no file intent)")
+        }
+
         startActivity(intent)
         finish()
     }

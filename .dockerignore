@@ -1,6 +1,5 @@
 # Build artifacts
 target/
-android-builds/
 mobile-builds/
 
 # Rust incremental compilation

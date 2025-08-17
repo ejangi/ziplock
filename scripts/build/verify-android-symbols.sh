@@ -20,7 +20,7 @@ print_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 # Configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$(dirname "$SCRIPT_DIR")")"
-OUTPUT_DIR="$PROJECT_ROOT/android-builds"
+OUTPUT_DIR="$PROJECT_ROOT/target/android"
 
 # Expected FFI symbols
 EXPECTED_SYMBOLS=(

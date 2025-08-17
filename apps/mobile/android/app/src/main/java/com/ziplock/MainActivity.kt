@@ -37,6 +37,10 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        // Check for incoming file URI from intent
+        val fileUri = intent.getStringExtra("file_uri")
+        val openedFromFile = intent.getBooleanExtra("opened_from_file", false)
+
         // Initialize the native library
         try {
             val initResult = ZipLockNative.init()
@@ -51,7 +55,10 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             ZipLockTheme {
-                MainApp(repositoryViewModel = repositoryViewModel)
+                MainApp(
+                    repositoryViewModel = repositoryViewModel,
+                    initialFileUri = if (openedFromFile) fileUri else null
+                )
             }
         }
     }
@@ -59,12 +66,22 @@ class MainActivity : ComponentActivity() {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MainApp(repositoryViewModel: RepositoryViewModel) {
-    // Check for last opened archive and determine initial screen
-    val initialScreen = if (repositoryViewModel.hasValidLastArchive()) {
-        Screen.AutoOpenLastArchive
-    } else {
-        Screen.RepositorySelection()
+fun MainApp(
+    repositoryViewModel: RepositoryViewModel,
+    initialFileUri: String? = null
+) {
+    // Check for incoming file URI or last opened archive and determine initial screen
+    val initialScreen = when {
+        initialFileUri != null -> {
+            // If opened from file, go directly to repository selection with the file pre-filled
+            Screen.RepositorySelection(initialFileUri)
+        }
+        repositoryViewModel.hasValidLastArchive() -> {
+            Screen.AutoOpenLastArchive
+        }
+        else -> {
+            Screen.RepositorySelection()
+        }
     }
 
     var currentScreen by remember { mutableStateOf<Screen>(initialScreen) }
@@ -101,7 +118,7 @@ fun MainApp(repositoryViewModel: RepositoryViewModel) {
                     onCreateNew = {
                         currentScreen = Screen.CreateArchive
                     },
-                    initialFilePath = repositorySelectionScreen.lastClosedArchivePath,
+                    initialFilePath = repositorySelectionScreen.initialFilePath,
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(paddingValues)
@@ -141,7 +158,7 @@ fun MainApp(repositoryViewModel: RepositoryViewModel) {
 
 sealed class Screen {
     object AutoOpenLastArchive : Screen()
-    data class RepositorySelection(val lastClosedArchivePath: String? = null) : Screen()
+    data class RepositorySelection(val initialFilePath: String? = null) : Screen()
     object CreateArchive : Screen()
     data class RepositoryOpened(val archivePath: String) : Screen()
 }
