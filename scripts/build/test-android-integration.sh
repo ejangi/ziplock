@@ -49,11 +49,14 @@ test_library_symbols() {
     lib_path="$OUTPUT_DIR/arm64-v8a/libziplock_shared.so"
 
     if command -v nm >/dev/null 2>&1; then
-        # Check for key FFI functions
+        # Check for key FFI functions that actually exist
         required_symbols=(
             "ziplock_init"
             "ziplock_get_version"
-            "ziplock_credential_new"
+            "ziplock_session_create"
+            "ziplock_archive_create"
+            "ziplock_archive_open"
+            "ziplock_credential_list"
             "ziplock_string_free"
         )
 
@@ -159,7 +162,9 @@ test_header_file() {
         required_declarations=(
             "extern \"C\""
             "ziplock_init"
-            "ziplock_credential_new"
+            "ziplock_get_version"
+            "ziplock_session_create"
+            "ziplock_archive_create"
             "ziplock_string_free"
         )
 
@@ -217,7 +222,7 @@ test_android_project_structure() {
     temp_dir=$(mktemp -d)
     jni_libs_dir="$temp_dir/app/src/main/jniLibs"
 
-    mkdir -p "$jni_libs_dir"/{arm64-v8a,armeabi-v7a,x86_64,x86}
+    mkdir -p "$jni_libs_dir"/{arm64-v8a,armeabi-v7a}
 
     # Copy libraries
     for arch in arm64-v8a armeabi-v7a; do
