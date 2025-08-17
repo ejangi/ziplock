@@ -7,10 +7,12 @@ import androidx.activity.compose.setContent
 import androidx.activity.viewModels
 import com.ziplock.ffi.ZipLockNative
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -243,6 +245,16 @@ fun AutoOpenArchiveScreen(
             onValueChange = { passphrase = it },
             placeholder = "Enter your passphrase",
             isPassword = true,
+            imeAction = ImeAction.Done,
+            keyboardActions = KeyboardActions(
+                onDone = {
+                    if (passphrase.isNotBlank() && !uiState.isLoading) {
+                        lastArchivePath?.let { path ->
+                            repositoryViewModel.openRepository(path, passphrase)
+                        }
+                    }
+                }
+            ),
             modifier = Modifier.fillMaxWidth()
         )
 

@@ -6,6 +6,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -182,6 +183,41 @@ fun RepositorySelectionScreen(
                         else -> ZipLockTextInputStyle.Standard
                     },
                     imeAction = ImeAction.Done,
+                    keyboardActions = KeyboardActions(
+                        onDone = {
+                            if (passphrase.isNotBlank() && !isLoading && selectedFilePath != null) {
+                                val path = selectedFilePath!!
+                                isLoading = true
+                                errorMessage = null
+
+                                try {
+                                    // Convert content URI to usable file path for native library
+                                    val usableFilePath = if (path.startsWith("content://")) {
+                                        val uri = android.net.Uri.parse(path)
+                                        val fileName = selectedFileName ?: "archive.7z"
+                                        FileUtils.getUsableFilePath(context, uri, fileName)
+                                    } else {
+                                        path
+                                    }
+
+                                    println("RepositorySelectionScreen: Converting path '$path' to '$usableFilePath'")
+                                    onRepositorySelected(usableFilePath, passphrase)
+                                } catch (e: Exception) {
+                                    isLoading = false
+                                    errorMessage = when {
+                                        e.message?.contains("authentication", ignoreCase = true) == true ->
+                                            "Incorrect passphrase. Please check your password and try again."
+                                        e.message?.contains("not found", ignoreCase = true) == true ->
+                                            "The archive file could not be found. Please check the file path."
+                                        e.message?.contains("permission", ignoreCase = true) == true ->
+                                            "Permission denied. Please check file permissions."
+                                        else -> "Failed to open archive. Please try again."
+                                    }
+                                    passphraseError = errorMessage
+                                }
+                            }
+                        }
+                    ),
                     leadingIcon = ZipLockIcons.Lock,
                     modifier = Modifier.padding(bottom = ZipLockSpacing.Small)
                 )
