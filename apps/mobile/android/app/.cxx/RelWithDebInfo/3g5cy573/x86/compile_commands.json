@@ -1,0 +1,7 @@
+[
+{
+  "directory": "/home/ejangi/Sites/ziplock/apps/mobile/android/app/.cxx/RelWithDebInfo/3g5cy573/x86",
+  "command": "/home/ejangi/Android/Sdk/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/clang++ --target=i686-none-linux-android24 --sysroot=/home/ejangi/Android/Sdk/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot -Dziplock_hybrid_jni_EXPORTS -I/home/ejangi/Sites/ziplock/apps/mobile/android/app/src/main/cpp/../../../../../../../shared/include -g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security  -std=c++17 -O2 -g -DNDEBUG -fPIC -Wall -Wextra -O2 -ffunction-sections -fdata-sections -std=c++17 -o CMakeFiles/ziplock_hybrid_jni.dir/ziplock_hybrid_jni.cpp.o -c /home/ejangi/Sites/ziplock/apps/mobile/android/app/src/main/cpp/ziplock_hybrid_jni.cpp",
+  "file": "/home/ejangi/Sites/ziplock/apps/mobile/android/app/src/main/cpp/ziplock_hybrid_jni.cpp"
+}
+]

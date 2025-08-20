@@ -9,11 +9,23 @@ pub mod file_lock;
 pub mod manager;
 pub mod validation;
 
+// Android Storage Access Framework support
+#[cfg(target_os = "android")]
+pub mod android_saf;
+
 // Re-export commonly used types
 pub use cloud_storage::{is_cloud_storage_path, CloudFileHandle, CloudStorageError};
 pub use file_lock::{FileLock, FileLockError};
 pub use manager::ArchiveManager;
 pub use validation::{RepositoryValidator, ValidationIssue, ValidationReport};
+
+// Re-export Android SAF functionality
+#[cfg(target_os = "android")]
+pub use android_saf::{
+    is_android_saf_available, is_content_uri, ziplock_android_saf_cleanup,
+    ziplock_android_saf_init, ziplock_android_saf_is_available, ziplock_android_saf_test,
+    AndroidSafError, AndroidSafHandle, AndroidSafResult,
+};
 
 use std::path::PathBuf;
 use thiserror::Error;
@@ -183,7 +195,7 @@ impl Default for ArchiveConfig {
             backup_count: 3,
             auto_backup: true,
             backup_dir: None,
-            file_lock_timeout: 30,
+            file_lock_timeout: if cfg!(target_os = "android") { 5 } else { 30 },
             temp_dir: None,
             verify_integrity: true,
             min_password_length: 12,
@@ -197,10 +209,10 @@ impl Default for CompressionConfig {
     fn default() -> Self {
         Self {
             level: 5,
-            solid: true,
+            solid: false, // Use non-solid compression for better compatibility with small archives
             multi_threaded: true,
-            dictionary_size_mb: 32,
-            block_size_mb: 16,
+            dictionary_size_mb: 16, // Reduced for mobile/small archive compatibility
+            block_size_mb: 8,       // Reduced for mobile/small archive compatibility
         }
     }
 }
@@ -260,7 +272,7 @@ mod tests {
     fn test_compression_config_default() {
         let config = CompressionConfig::default();
         assert_eq!(config.level, 5);
-        assert!(config.solid);
+        assert!(!config.solid); // Non-solid compression is default for better compatibility
         assert!(config.multi_threaded);
     }
 

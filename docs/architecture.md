@@ -4,63 +4,75 @@ This document describes the comprehensive architecture of the ZipLock password m
 
 ## **1\. Overview**
 
-ZipLock uses a **unified architecture** where **frontend clients** communicate directly with a **shared core library** through C FFI (Foreign Function Interface) bindings. This eliminates the complexity of separate backend services while providing consistent functionality across all platforms.
+ZipLock uses a **unified hybrid architecture with adaptive runtime strategy** where **frontend clients** communicate with a **shared hybrid FFI layer** that intelligently adapts to both platform capabilities and runtime contexts. This eliminates the complexity of separate backend services while providing consistent functionality with platform and runtime-specific optimizations.
 
-This unified approach provides several key benefits:
+This adaptive hybrid approach provides several key benefits:
 
 * **Security:** The master key is held securely within the shared library's memory space, with cryptographic operations isolated from UI code.
-* **Portability:** A single shared library implementation works across all platforms (Linux, Windows, iOS, Android, macOS) through FFI bindings.
-* **Maintainability:** One implementation to maintain, test, and debug across all platforms.
-* **Performance:** Direct function calls eliminate overhead and serialization costs.
-* **Simplicity:** No background services or complex communication protocols.
+* **Portability:** A single hybrid FFI implementation works across all platforms with adaptive runtime detection.
+* **Maintainability:** One core implementation to maintain, test, and debug across all platforms and runtime contexts.
+* **Performance:** Optimized for each context - direct filesystem operations when safe, external file operations when in async contexts.
+* **Simplicity:** No background services, unified API across platforms with transparent runtime adaptation.
+* **Flexibility:** Automatically adapts to mobile platforms, desktop platforms, async contexts, and sync contexts.
+* **Runtime Safety:** Prevents nested runtime panics through intelligent runtime context detection.
 
 ## **2\. Component Breakdown**
 
-### **2.1 Backend Service**
+### **2.1 Shared Hybrid FFI Layer**
 
-The shared core library provides all cryptographic and file operations through a C FFI interface.
+The shared hybrid FFI layer provides unified data operations with adaptive runtime and platform-optimized file handling through a C FFI interface.
 
-* **Technology:** Written in **Rust** and compiled as a shared library with C FFI bindings for universal platform compatibility.
+* **Technology:** Written in **Rust** and compiled as a shared library with adaptive hybrid FFI bindings for cross-platform and cross-runtime compatibility.
 * **Responsibilities:**
-  * **Secure Storage:** Opens, encrypts, and decrypts the 7z file containing credentials.
+  * **Data Operations:** All credential management, validation, and in-memory repository operations.
+  * **Cryptographic Operations:** Encryption, decryption, and key derivation functions.
   * **Master Key Management:** Securely manages master keys in memory with automatic cleanup.
-  * **File Locking:** Manages file locks to prevent corruption during sync operations.
-  * **FFI Interface:** Exposes a comprehensive C API for all credential and archive operations.
+  * **Runtime Context Detection:** Automatically detects async/sync calling contexts to prevent runtime conflicts.
+  * **Platform Detection:** Automatically adapts behavior for mobile vs desktop platforms.
+  * **Adaptive Filesystem Operations:** Direct 7z operations when safe, external coordination when in async contexts.
+  * **Memory Repository Management:** Unified in-memory operations across all platforms and contexts.
+  * **FFI Interface:** Exposes a comprehensive adaptive hybrid C API for all operations.
   * **Repository Validation:** Performs comprehensive validation and auto-repair of repository format and structure.
-  * **Session Management:** Maintains secure session state within the library context.
   * **Memory Safety:** Rust's memory safety guarantees protect against common security vulnerabilities.
+  * **Runtime Safety:** Prevents nested Tokio runtime panics through intelligent context adaptation.
 
 ### **2.2 Frontend Clients**
 
-The frontend clients are platform-native applications that provide the user interface while delegating all security-critical operations to the shared library.
+The frontend clients are platform-native applications that provide the user interface while delegating operations to the adaptive hybrid FFI layer.
 
 * **Technology:**
-  * **Linux:** **Rust** using iced/GTK4 with direct FFI calls to the shared library.
-  * **Windows:** **Rust** using Tauri with direct FFI calls to the shared library.
-  * **iOS:** **Swift + SwiftUI** calling the shared library through Swift C interop.
-  * **Android:** **Kotlin + Jetpack Compose** calling the shared library through JNI.
-  * **macOS:** **Swift + SwiftUI** calling the shared library through Swift C interop.
+  * **Linux:** **Rust** using iced/GTK4 with adaptive hybrid FFI calls and runtime-safe operations.
+  * **Windows:** **Rust** using Tauri with adaptive hybrid FFI calls and runtime-safe operations.
+  * **iOS:** **Swift + SwiftUI** calling adaptive hybrid FFI for data operations, platform APIs for file operations.
+  * **Android:** **Kotlin + Jetpack Compose** calling adaptive hybrid FFI for data operations, platform APIs for file operations.
+  * **macOS:** **Swift + SwiftUI** calling adaptive hybrid FFI for data operations and runtime-safe operations.
 * **Responsibilities:**
   * **User Interface:** Platform-native UI components for optimal user experience.
-  * **Authentication:** Prompts for master key and passes it securely to the shared library.
-  * **FFI Integration:** Direct function calls to the shared library's C API.
+  * **Authentication:** Prompts for master key and passes it securely to the adaptive hybrid FFI.
+  * **Adaptive FFI Integration:** Unified function calls that automatically adapt to runtime contexts.
+  * **Runtime Context Management:** Async desktop apps automatically trigger external file operation mode when needed.
+  * **File Operations (Mobile/Fallback):** Platform-specific file access and Storage Access Framework integration.
   * **Error Display:** Converts library error codes to user-friendly messages.
-  * **Input Validation:** Uses shared validation logic through FFI calls.
+  * **Input Validation:** Uses shared validation logic through adaptive hybrid FFI calls.
 
-### **2.3 Shared Library**
+### **2.3 Adaptive Shared Library**
 
-The shared library is the core of ZipLock, containing all business logic and providing a C FFI interface for universal platform compatibility.
+The adaptive hybrid shared library is the core of ZipLock, containing all business logic and providing a unified C FFI interface that intelligently adapts to both platform capabilities and runtime contexts.
 
-* **Technology:** A **Rust crate** compiled as a shared library (.so/.dll/.dylib) with C header files for FFI integration.
+* **Technology:** A **Rust crate** compiled as a shared library (.so/.dll/.dylib) with adaptive hybrid FFI bindings for cross-platform and cross-runtime compatibility.
 * **Contents:**
   * **Data Models:** Credential, field, and archive data structures with C-compatible representations.
-  * **Archive Operations:** Complete 7z file creation, opening, saving, and validation logic.
+  * **Adaptive Hybrid FFI Layer:** Unified interface that automatically detects and adapts to platform capabilities and runtime contexts.
+  * **Runtime Strategy Engine:** Intelligent detection and adaptation for async/sync calling contexts.
+  * **Memory Repository:** Unified in-memory credential management across all platforms and contexts.
+  * **Adaptive Archive Operations:** Direct 7z operations when safe, external coordination when in async contexts.
+  * **File Operation Coordination:** Generates file operations for external platform/context handling when needed.
   * **Cryptographic Operations:** All encryption, decryption, and key derivation functions.
   * **Validation Logic:** Comprehensive passphrase and credential validation.
-  * **C FFI Interface:** Complete API for archive management, credential operations, and validation.
+  * **Context Detection:** Automatic platform, runtime, and capability identification.
   * **Memory Management:** Safe memory allocation and cleanup for cross-language compatibility.
-  * **Session Management:** Secure session handling within the library context.
-  * **Utility Functions:** File operations, search, and other shared functionality.
+  * **Runtime Safety:** Prevention of nested runtime panics through context-aware execution.
+  * **Utility Functions:** Search, validation, and other shared functionality.
 
 ## **3\. Security Architecture**
 
@@ -222,26 +234,33 @@ pub enum OpenState {
 * **File Access:** Validation of permissions, safe path handling
 * **Session Management:** Automatic session creation before database operations
 
-## **7\. Communication Architecture**
+## **7\. Adaptive Communication Architecture**
 
-Frontend clients communicate with the shared library through direct C FFI function calls. This provides a clean, efficient interface for all supported operations, such as:
+Frontend clients communicate with the shared library through direct C FFI function calls with intelligent runtime adaptation. This provides a clean, efficient interface for all supported operations, such as:
 
-* Creating and managing sessions
-* Creating and unlocking archives with master keys
+* Creating and managing sessions with runtime context awareness
+* Creating and unlocking archives with adaptive file operations
 * Creating, reading, updating, and deleting credentials
 * Searching for credentials by title, tags, or content
 * Password generation and validation
 * Repository validation and repair operations
+* Runtime context detection and adaptation
 
-### **7.1 FFI Interface**
+### **7.1 Adaptive FFI Interface**
 
-* **Transport:** Direct function calls through C FFI
+* **Transport:** Direct function calls through adaptive C FFI with runtime detection
 * **Data Format:** C-compatible structures with proper memory management
-* **Session Management:** Session state maintained within the library
-* **Error Handling:** Return codes and error structures for comprehensive error reporting
+* **Session Management:** Session state maintained within the library with context awareness
+* **Runtime Strategy:** Automatic detection and adaptation for async/sync contexts
+* **Execution Modes:** 
+  * **Direct Mode:** Creates own runtime for standalone usage
+  * **Existing Runtime Mode:** Adapts to existing async contexts
+  * **External File Operations Mode:** Delegates file operations to caller when needed
+* **Error Handling:** Enhanced return codes including external operation requirements
 * **Memory Safety:** Automatic cleanup and explicit free functions for safe memory management
+* **Runtime Safety:** Prevention of nested runtime panics through intelligent context detection
 
-## **8\. Error Handling Architecture**
+## **8\. Adaptive Error Handling Architecture**
 
 ### **8.1 Error Classification**
 
@@ -250,6 +269,8 @@ Frontend clients communicate with the shared library through direct C FFI functi
 * **Validation Errors:** Input validation, repository format issues
 * **Storage Errors:** File access, corruption, permission issues
 * **Cryptographic Errors:** Encryption/decryption failures, key derivation issues
+* **Runtime Context Errors:** Nested runtime detection, context adaptation failures
+* **External Operation Signals:** Indicators that file operations must be handled externally
 
 ### **8.2 Error Message Conversion**
 
@@ -259,6 +280,16 @@ The system includes intelligent error message conversion from technical library 
 * "Authentication failed" → "Incorrect passphrase. Please check..."
 * "Archive not found" → "The password archive file could not be found..."
 * "Cryptographic error" → "Unable to decrypt data. The file may be corrupted..."
+* "Runtime context conflict" → "Application is busy. Please try again..."
+* "External file operations required" → *Triggers automatic fallback to platform file handling*
+
+### **8.3 Adaptive Error Recovery**
+
+The system provides automatic error recovery and fallback mechanisms:
+
+* **Runtime Conflicts:** Automatically switches to external file operation mode
+* **Platform Limitations:** Gracefully degrades to platform-specific implementations
+* **Context Mismatches:** Provides clear signals for alternative execution paths
 
 ## **9\. Architectural Diagram**
 

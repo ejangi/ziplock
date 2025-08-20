@@ -128,6 +128,7 @@ impl ClipboardManager {
     }
 
     /// Copy regular text to clipboard (no timeout clearing)
+    #[allow(dead_code)]
     pub async fn copy_text(&self, content: String) -> Result<(), ClipboardError> {
         self.copy_to_system_clipboard(&content).await
     }
@@ -208,6 +209,7 @@ impl ClipboardManager {
     }
 
     /// Get information about currently tracked clipboard content
+    #[allow(dead_code)]
     pub async fn current_tracked_content(&self) -> Option<(ClipboardContentType, u32)> {
         let current = self.current_content.lock().await;
         current
@@ -257,7 +259,6 @@ pub enum ClipboardError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tokio::time::{sleep, Duration};
 
     #[tokio::test]
     async fn test_clipboard_manager_creation() {

@@ -35,8 +35,11 @@ pub mod api;
 pub mod archive;
 pub mod client;
 pub mod config;
+pub mod memory_repository;
 
+pub mod logging;
 pub mod models;
+pub mod platform;
 pub mod update_checker;
 pub mod utils;
 pub mod validation;
@@ -45,6 +48,18 @@ pub mod yaml;
 // C FFI module for mobile platform integration
 #[cfg(feature = "c-api")]
 pub mod ffi;
+
+// Hybrid FFI module for Android - data and crypto operations only
+#[cfg(feature = "c-api")]
+pub mod ffi_hybrid;
+
+// Hybrid FFI tests for adaptive runtime strategy
+#[cfg(all(test, feature = "c-api"))]
+pub mod ffi_hybrid_test;
+
+// Integration tests for adaptive runtime strategy
+#[cfg(all(test, feature = "c-api"))]
+pub mod ffi_hybrid_integration_test;
 
 // Re-export commonly used types for convenience
 pub use models::{
@@ -59,7 +74,7 @@ pub use config::{
 };
 
 // Re-export client functionality
-pub use client::ZipLockClient;
+pub use client::{hybrid::ZipLockHybridClient, ZipLockClient};
 
 // Re-export utilities
 pub use utils::*;
@@ -81,9 +96,27 @@ pub use api::{ApiError, ApiResult, ApiSession, ZipLockApi};
 // Re-export archive functionality
 pub use archive::{ArchiveConfig, ArchiveError, ArchiveManager, ArchiveResult};
 
+// Re-export memory repository functionality
+pub use memory_repository::{
+    FileOperation, MemoryRepository, MemoryRepositoryError, MemoryRepositoryResult,
+    RepositoryFileInfo, RepositoryStructure,
+};
+
 // Re-export update checker functionality
 pub use update_checker::{
     InstallationMethod, ReleaseAsset, ReleaseInfo, UpdateCheckResult, UpdateChecker,
+};
+
+// Re-export logging functionality
+pub use logging::{
+    configure_logging, get_config, init_logging, is_debug_enabled, set_debug_enabled,
+    LoggingConfig, MobileLogWriter,
+};
+
+// Re-export Android SAF functionality
+#[cfg(target_os = "android")]
+pub use archive::{
+    is_android_saf_available, is_content_uri, AndroidSafError, AndroidSafHandle, AndroidSafResult,
 };
 
 /// Current library version
@@ -134,6 +167,9 @@ pub mod error {
 
         #[error("Authentication error: {message}")]
         Auth { message: String },
+
+        #[error("Memory repository error: {0}")]
+        MemoryRepository(#[from] crate::memory_repository::MemoryRepositoryError),
     }
 
     impl From<anyhow::Error> for SharedError {
@@ -432,8 +468,8 @@ mod tests {
         );
         assert_eq!(content_field.label, "Content");
         assert!(
-            content_field.sensitive,
-            "Secure note content should be marked as sensitive"
+            !content_field.sensitive,
+            "Secure note content should not be marked as sensitive to allow multi-line display"
         );
     }
 

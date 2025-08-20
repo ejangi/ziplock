@@ -1,0 +1,20 @@
+                        -H/home/ejangi/Sites/ziplock/apps/mobile/android/app/src/main/cpp
+-DCMAKE_SYSTEM_NAME=Android
+-DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+-DCMAKE_SYSTEM_VERSION=24
+-DANDROID_PLATFORM=android-24
+-DANDROID_ABI=x86
+-DCMAKE_ANDROID_ARCH_ABI=x86
+-DANDROID_NDK=/home/ejangi/Android/Sdk/ndk/25.2.9519653
+-DCMAKE_ANDROID_NDK=/home/ejangi/Android/Sdk/ndk/25.2.9519653
+-DCMAKE_TOOLCHAIN_FILE=/home/ejangi/Android/Sdk/ndk/25.2.9519653/build/cmake/android.toolchain.cmake
+-DCMAKE_MAKE_PROGRAM=/home/ejangi/Android/Sdk/cmake/3.22.1/bin/ninja
+-DCMAKE_CXX_FLAGS=-std=c++17
+-DCMAKE_LIBRARY_OUTPUT_DIRECTORY=/home/ejangi/Sites/ziplock/apps/mobile/android/app/build/intermediates/cxx/Debug/4x4gs511/obj/x86
+-DCMAKE_RUNTIME_OUTPUT_DIRECTORY=/home/ejangi/Sites/ziplock/apps/mobile/android/app/build/intermediates/cxx/Debug/4x4gs511/obj/x86
+-DCMAKE_BUILD_TYPE=Debug
+-B/home/ejangi/Sites/ziplock/apps/mobile/android/app/.cxx/Debug/4x4gs511/x86
+-GNinja
+-DANDROID_STL=c++_shared
+                        Build command args: []
+                        Version: 2

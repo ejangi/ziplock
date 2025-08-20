@@ -7,7 +7,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ziplock.ffi.ZipLockNative
 import com.ziplock.ffi.ZipLockNativeHelper
-import com.ziplock.ffi.PassphraseStrengthResult
+
 import com.ziplock.utils.FileUtils
 import com.ziplock.utils.WritableArchiveInfo
 import kotlinx.coroutines.Dispatchers
@@ -28,8 +28,8 @@ class CreateArchiveViewModel : ViewModel() {
     private val _uiState = MutableStateFlow(CreateArchiveUiState())
     val uiState: StateFlow<CreateArchiveUiState> = _uiState.asStateFlow()
 
-    private val _passphraseStrength = MutableStateFlow<PassphraseStrengthResult?>(null)
-    val passphraseStrength: StateFlow<PassphraseStrengthResult?> = _passphraseStrength.asStateFlow()
+    private val _passphraseStrength = MutableStateFlow<ZipLockNative.PassphraseStrengthResult?>(null)
+    val passphraseStrength: StateFlow<ZipLockNative.PassphraseStrengthResult?> = _passphraseStrength.asStateFlow()
 
     init {
         // Initialize gracefully without crashing
@@ -143,7 +143,7 @@ class CreateArchiveViewModel : ViewModel() {
     /**
      * Create fallback passphrase validation when FFI is not available
      */
-    private fun createFallbackValidation(passphrase: String): PassphraseStrengthResult {
+    private fun createFallbackValidation(passphrase: String): ZipLockNative.PassphraseStrengthResult {
         val requirements = mutableListOf<String>()
         val satisfied = mutableListOf<String>()
         var score = 0
@@ -203,7 +203,7 @@ class CreateArchiveViewModel : ViewModel() {
             else -> "Very Strong"
         }
 
-        return PassphraseStrengthResult(
+        return ZipLockNative.PassphraseStrengthResult(
             score = score.coerceAtMost(100),
             strength = strength,
             requirements = requirements,
@@ -494,7 +494,7 @@ class CreateArchiveViewModel : ViewModel() {
      */
     private fun isFFIAvailable(): Boolean {
         return try {
-            ZipLockNativeHelper.validateLibrary()
+            ZipLockNative.validateLibrary()
         } catch (e: UnsatisfiedLinkError) {
             false
         } catch (e: Exception) {

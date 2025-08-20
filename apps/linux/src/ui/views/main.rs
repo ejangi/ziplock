@@ -31,6 +31,7 @@ pub enum MainViewMessage {
     OperationCompleted(Result<String, String>),
 
     // UI actions
+    LockDatabase,
     ShowSettings,
     ShowAbout,
     CheckForUpdates,
@@ -239,6 +240,20 @@ impl MainView {
 
             MainViewMessage::TriggerValidationError => {
                 // These would be handled at the application level
+                Command::none()
+            }
+
+            MainViewMessage::LockDatabase => {
+                // Lock the credential store
+                let credential_store = crate::services::get_credential_store();
+                credential_store.lock();
+
+                // Clear local state
+                self.session_id = None;
+                self.is_authenticated = false;
+                self.credentials.clear();
+
+                tracing::info!("Database locked successfully");
                 Command::none()
             }
 
@@ -628,68 +643,45 @@ impl MainView {
     async fn load_credentials_async(
         session_id: Option<String>,
     ) -> Result<(Vec<CredentialItem>, Option<String>, bool), String> {
-        let mut client = ziplock_shared::ZipLockClient::new().map_err(|e| e.to_string())?;
+        // Use credential store instead of hybrid client to avoid FFI issues
+        let credential_store = crate::services::get_credential_store();
 
-        // Connect to backend
-        client
-            .connect()
-            .await
-            .map_err(|e| format!("Could not connect to ZipLock backend: {}", e))?;
-
-        // Create a session if we don't have one
-        let current_session_id = if let Some(sid) = session_id {
-            client.set_session_id(sid.clone());
-            sid
-        } else {
-            // Create a new session
-            client
-                .create_session()
-                .await
-                .map_err(|e| format!("Failed to create session: {}", e))?;
-
-            // Get the session ID from the client
-            match client.get_session_id() {
-                Some(sid) => sid,
-                None => return Err("Failed to obtain session ID after creation".to_string()),
-            }
-        };
-
-        // Try listing credentials with the session
-        match client.list_credentials().await {
-            Ok(records) => {
-                let credentials = records
-                    .into_iter()
-                    .map(|record| CredentialItem {
-                        id: record.id,
-                        title: record.title,
-                        username: record.credential_type.clone(),
-                        url: None,
-                        last_modified: record
-                            .updated_at
-                            .duration_since(std::time::UNIX_EPOCH)
-                            .unwrap_or_default()
-                            .as_secs()
-                            .to_string()
-                            + " (timestamp)",
-                    })
-                    .collect();
-                Ok((credentials, Some(current_session_id), true))
-            }
-            Err(e) => {
-                let error_msg = e.to_string();
-                if error_msg.contains("Database not unlocked")
-                    || error_msg.contains("NotAuthenticated")
-                {
-                    // Database is not unlocked - this is expected behavior
-                    Ok((Vec::new(), Some(current_session_id), false))
-                } else if ziplock_shared::ZipLockClient::is_session_timeout_error(&error_msg) {
-                    // Session timeout - return error to trigger timeout handling
-                    Err(format!("Session expired: {}", e))
-                } else {
-                    Err(format!("Failed to load credentials: {}", e))
-                }
-            }
+        // Check if the credential store is unlocked (has credentials loaded)
+        if !credential_store.is_unlocked() {
+            return Ok((Vec::new(), session_id, false));
         }
+
+        // Use the provided session ID or generate a new one for compatibility
+        let current_session_id = session_id.unwrap_or_else(|| {
+            // Generate a simple session ID without uuid dependency
+            use std::time::{SystemTime, UNIX_EPOCH};
+            let timestamp = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos();
+            format!("session_{}", timestamp)
+        });
+
+        // Get credentials from the credential store
+        let simple_credentials = credential_store.list_credentials();
+
+        let credentials: Vec<CredentialItem> = simple_credentials
+            .into_iter()
+            .map(|cred| CredentialItem {
+                id: cred.id.clone(),
+                title: cred.title,
+                username: cred.username.unwrap_or_else(|| "No username".to_string()),
+                url: cred.url,
+                last_modified: cred.updated_at,
+            })
+            .collect();
+
+        tracing::info!(
+            "Successfully loaded {} credentials from credential store",
+            credentials.len()
+        );
+
+        Ok((credentials, Some(current_session_id), true))
     }
 
     /// Async function to lock the database
@@ -698,7 +690,9 @@ impl MainView {
         &mut self,
         error_msg: &str,
     ) -> Option<Command<MainViewMessage>> {
-        if ziplock_shared::ZipLockClient::is_session_timeout_error(error_msg) {
+        if error_msg.contains("session")
+            && (error_msg.contains("timeout") || error_msg.contains("expired"))
+        {
             // Clear local session state immediately
             self.session_id = None;
             self.is_authenticated = false;

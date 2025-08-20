@@ -4,6 +4,8 @@
 //! by using the new shared API directly. This replaces the IPC-based client for
 //! desktop platforms and provides FFI bindings for mobile platforms.
 
+pub mod hybrid;
+
 use crate::api::{ApiSession, ZipLockApi};
 use crate::archive::ArchiveConfig;
 use crate::error::{SharedError, SharedResult};

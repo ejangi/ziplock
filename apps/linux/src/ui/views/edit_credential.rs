@@ -550,13 +550,15 @@ impl EditCredentialView {
 
     /// Load a specific credential asynchronously
     async fn load_credential_async(
-        session_id: Option<String>,
+        _session_id: Option<String>,
         credential_id: String,
     ) -> Result<CredentialRecord, String> {
-        let mut client = ziplock_shared::ZipLockClient::new().map_err(|e| e.to_string())?;
-        client.connect().await.map_err(|e| e.to_string())?;
-        client
-            .get_credential(session_id, credential_id)
+        // Use hybrid client for unified architecture
+        let hybrid_client =
+            ziplock_shared::ZipLockHybridClient::new().map_err(|e| e.to_string())?;
+
+        hybrid_client
+            .get_credential(&credential_id)
             .await
             .map_err(|e| e.to_string())
     }
@@ -564,34 +566,36 @@ impl EditCredentialView {
     /// Update a credential asynchronously
     /// Delete a credential asynchronously
     async fn delete_credential_async(
-        session_id: Option<String>,
+        _session_id: Option<String>,
         credential_id: String,
     ) -> Result<(), String> {
         tracing::debug!("Starting credential deletion for ID: {}", credential_id);
 
-        let mut client = ziplock_shared::ZipLockClient::new().map_err(|e| e.to_string())?;
-        client.connect().await.map_err(|e| e.to_string())?;
+        // Use hybrid client for unified architecture
+        let hybrid_client =
+            ziplock_shared::ZipLockHybridClient::new().map_err(|e| e.to_string())?;
 
         tracing::debug!(
-            "Calling FFI client to delete credential with ID: {}",
+            "Calling hybrid client to delete credential with ID: {}",
             credential_id
         );
 
-        client
-            .delete_credential(session_id, credential_id)
+        hybrid_client
+            .delete_credential(&credential_id)
             .await
             .map_err(|e| e.to_string())
     }
 
     async fn update_credential_async(
-        session_id: Option<String>,
+        _session_id: Option<String>,
         id: String,
         title: String,
         field_values: HashMap<String, String>,
         credential_type: String,
     ) -> Result<(), String> {
-        let mut client = ziplock_shared::ZipLockClient::new().map_err(|e| e.to_string())?;
-        client.connect().await.map_err(|e| e.to_string())?;
+        // Use hybrid client for unified architecture
+        let hybrid_client =
+            ziplock_shared::ZipLockHybridClient::new().map_err(|e| e.to_string())?;
 
         // Get the template to properly map field types and sensitivity
         let template = match credential_type.as_str() {
@@ -643,7 +647,7 @@ impl EditCredentialView {
             })
             .collect();
 
-        tracing::debug!("Calling IPC client to update credential with ID: {}", id);
+        tracing::debug!("Updating credential with hybrid client, ID: {}", id);
         tracing::debug!("Title: {}", title);
         tracing::debug!("Credential type: {}", credential_type);
         tracing::debug!("Fields: {:?}", fields);
@@ -655,8 +659,8 @@ impl EditCredentialView {
         credential.tags = Vec::new(); // tags
         credential.notes = None; // notes
 
-        client
-            .update_credential(session_id, credential)
+        hybrid_client
+            .update_credential(credential)
             .await
             .map_err(|e| e.to_string())
     }

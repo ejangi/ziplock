@@ -1,0 +1,1 @@
+/home/ejangi/Sites/ziplock/apps/mobile/android/app/src/main/cpp/CMakeLists.txt

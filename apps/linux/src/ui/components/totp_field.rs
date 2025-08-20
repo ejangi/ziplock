@@ -70,15 +70,13 @@ pub struct TotpField {
     /// Whether the field is in edit mode
     is_editing: bool,
 
-    /// Field name for identification
-    field_name: String,
     /// Time step for TOTP generation (typically 30 seconds)
     time_step: u64,
 }
 
 impl TotpField {
     /// Create a new TOTP field
-    pub fn new(field_name: String, secret: String) -> Self {
+    pub fn new(_field_name: String, secret: String) -> Self {
         let mut field = Self {
             secret: secret.clone(),
             // Show secret input if empty, code view if populated
@@ -90,7 +88,6 @@ impl TotpField {
             current_code: None,
             last_refresh: None,
             is_editing: false,
-            field_name,
             time_step: 30u64,
         };
 

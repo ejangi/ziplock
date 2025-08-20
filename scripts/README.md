@@ -37,7 +37,9 @@ Scripts for migrating data and configuration between versions.
 - **`migrate-config-from-toml-to-yaml.sh`** - Migrates configuration files from TOML to YAML format
 
 ### `deploy/` - Deployment Scripts
-Reserved for future deployment automation scripts.
+- **`setup-logging.sh`** - Complete logging setup for deployed systems with systemd service creation
+- **`manage-service.sh`** - Comprehensive service management (install, start, stop, monitor, logs)
+- **`package-for-deployment.sh`** - Creates complete deployment packages with configs and scripts
 
 ## Common Usage Examples
 
@@ -476,6 +478,99 @@ Tests the changelog extraction logic used by GitHub Actions for release notes.
 3. Shows available changelog sections
 4. Verifies the same logic used in CI/CD pipeline
 
+## Deployment Scripts Details
+
+### `deploy/setup-logging.sh`
+Comprehensive logging setup script for production deployments:
+
+**Features:**
+- Creates system user and group for ZipLock
+- Sets up log directories with proper permissions
+- Generates systemd service file with security settings
+- Configures logrotate for automatic log rotation
+- Sets up systemd journal persistent storage
+- Validates configuration before deployment
+
+**Usage:**
+```bash
+# Standard installation
+sudo ./scripts/deploy/setup-logging.sh
+
+# Custom configuration
+sudo ./scripts/deploy/setup-logging.sh --user myuser --log-dir /opt/logs
+```
+
+### `deploy/manage-service.sh`
+Complete service management tool for deployed ZipLock instances:
+
+**Commands:**
+- `install` - Install ZipLock as systemd service
+- `start/stop/restart` - Service lifecycle management
+- `status` - Detailed service status and health
+- `logs` - View systemd and application logs
+- `monitor` - Interactive health monitoring
+- `test` - Validate service configuration
+- `uninstall` - Complete service removal
+
+**Usage:**
+```bash
+# Service management
+sudo ./scripts/deploy/manage-service.sh install
+sudo ./scripts/deploy/manage-service.sh start
+sudo ./scripts/deploy/manage-service.sh monitor
+
+# Log management
+sudo ./scripts/deploy/manage-service.sh logs 100
+sudo ./scripts/deploy/manage-service.sh file-logs-follow
+```
+
+### `deploy/package-for-deployment.sh`
+Creates comprehensive deployment packages with all necessary components:
+
+**Package Contents:**
+- Optimized binary for target platform
+- Configuration templates for all environments
+- Installation and management scripts
+- Systemd service files
+- Complete documentation
+- Examples and troubleshooting guides
+
+**Usage:**
+```bash
+# Standard package creation
+./scripts/deploy/package-for-deployment.sh
+
+# Custom configuration
+./scripts/deploy/package-for-deployment.sh \
+    --target aarch64-unknown-linux-gnu \
+    --build-mode release \
+    --package-name ziplock-arm64
+```
+
+## Development Scripts Details - Logging
+
+### `dev/test-logging.sh`
+Comprehensive logging system testing with multiple environments:
+
+**Test Types:**
+- Local development logging
+- Production simulation
+- Docker container logging
+- Log rotation functionality
+- Performance analysis
+
+**Usage:**
+```bash
+# Full test suite
+./scripts/dev/test-logging.sh
+
+# Docker-only tests
+./scripts/dev/test-logging.sh --docker-only
+
+# Local tests only
+./scripts/dev/test-logging.sh --local-only --skip-build
+```
+
 ## Migration Scripts Details
 
 ### `migrations/migrate-config-from-toml-to-yaml.sh`
@@ -549,14 +644,45 @@ When adding new scripts:
 - **Migration**: Data and configuration migrations
 - **Deploy**: Deployment automation (future use)
 
+## Logging Configuration
+
+ZipLock uses a sophisticated logging system with environment-specific configurations:
+
+### Configuration File
+The logging system reads from `config/logging.yaml` with support for multiple environments:
+- `development` - Verbose logging with debug features
+- `production` - Optimized logging for deployed systems
+- `systemd` - Integration with systemd journal
+- `docker` - Container-optimized logging
+- `testing` - Comprehensive logging for test environments
+
+### Environment Variables
+Override logging behavior with environment variables:
+```bash
+ZIPLOCK_ENV=production           # Select logging profile
+ZIPLOCK_LOG_DIR=/custom/path     # Override log directory
+ZIPLOCK_LOG_CONSOLE_LEVEL=debug  # Override console log level
+ZIPLOCK_LOG_FILE_LEVEL=info      # Override file log level
+```
+
+### Log Files
+- **Application logs**: `/var/log/ziplock/ziplock.log`
+- **Systemd logs**: `journalctl -u ziplock`
+- **Rotation**: Automatic daily rotation, 30-day retention
+- **Compression**: Old logs compressed automatically
+
 ## Getting Help
 
-For script-specific help, most scripts support the `--help` option:
+For script-specific help, most scripts support `--help`:
 ```bash
 ./scripts/build/build-linux.sh --help
+./scripts/dev/run-integration-tests.sh --help
+./scripts/deploy/manage-service.sh --help
+./scripts/deploy/setup-logging.sh --help
 ./scripts/version/update-version.sh --help
 ```
 
+For questions about the build system, logging, or suggestions for new scripts, please open an issue in the project repository.
 For general questions about the build system or scripts, refer to:
 - [Build Guide](../docs/technical/build.md) - Comprehensive build documentation
 - [Technical Documentation](../docs/technical.md) - Architecture and implementation details

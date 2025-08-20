@@ -1,0 +1,29 @@
+{
+  "buildFiles": [
+    "/home/ejangi/Sites/ziplock/apps/mobile/android/app/src/main/cpp/CMakeLists.txt"
+  ],
+  "cleanCommandsComponents": [
+    [
+      "/home/ejangi/Android/Sdk/cmake/3.22.1/bin/ninja",
+      "-C",
+      "/home/ejangi/Sites/ziplock/apps/mobile/android/app/.cxx/RelWithDebInfo/3g5cy573/arm64-v8a",
+      "clean"
+    ]
+  ],
+  "buildTargetsCommandComponents": [
+    "/home/ejangi/Android/Sdk/cmake/3.22.1/bin/ninja",
+    "-C",
+    "/home/ejangi/Sites/ziplock/apps/mobile/android/app/.cxx/RelWithDebInfo/3g5cy573/arm64-v8a",
+    "{LIST_OF_TARGETS_TO_BUILD}"
+  ],
+  "libraries": {
+    "ziplock_hybrid_jni::@6890427a1f51a3e7e1df": {
+      "artifactName": "ziplock_hybrid_jni",
+      "abi": "arm64-v8a",
+      "output": "/home/ejangi/Sites/ziplock/apps/mobile/android/app/build/intermediates/cxx/RelWithDebInfo/3g5cy573/obj/arm64-v8a/libziplock_hybrid_jni.so",
+      "runtimeFiles": [
+        "/home/ejangi/Sites/ziplock/apps/mobile/android/app/src/main/jniLibs/arm64-v8a/libziplock_shared.so"
+      ]
+    }
+  }
+}

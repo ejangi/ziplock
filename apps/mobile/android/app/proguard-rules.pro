@@ -50,6 +50,19 @@
 -dontwarn javax.crypto.**
 -dontwarn java.security.**
 
+# Keep Apache Commons Compress classes
+-keep class org.apache.commons.compress.** { *; }
+-dontwarn org.apache.commons.compress.**
+
+# Keep XZ library classes for LZMA compression
+-keep class org.tukaani.xz.** { *; }
+-dontwarn org.tukaani.xz.**
+
+# Keep LZMA2Options specifically (the class that's missing)
+-keep class org.tukaani.xz.LZMA2Options { *; }
+-keep class org.tukaani.xz.LZMAInputStream { *; }
+-keep class org.tukaani.xz.LZMAOutputStream { *; }
+
 # Remove debug logging in release builds
 -assumenosideeffects class android.util.Log {
     public static boolean isLoggable(java.lang.String, int);

@@ -1,0 +1,3 @@
+/home/ejangi/Sites/ziplock/apps/mobile/android/app/.cxx/Debug/4x4gs511/armeabi-v7a/CMakeFiles/ziplock_hybrid_jni.dir
+/home/ejangi/Sites/ziplock/apps/mobile/android/app/.cxx/Debug/4x4gs511/armeabi-v7a/CMakeFiles/edit_cache.dir
+/home/ejangi/Sites/ziplock/apps/mobile/android/app/.cxx/Debug/4x4gs511/armeabi-v7a/CMakeFiles/rebuild_cache.dir

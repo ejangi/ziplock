@@ -2,7 +2,7 @@ package com.ziplock.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.ziplock.ffi.Credential
+
 import com.ziplock.ffi.ZipLockNative
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -21,12 +21,17 @@ class CredentialsViewModel : ViewModel() {
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
 
+    private val _archiveOpen = MutableStateFlow(false)
+    val archiveOpen: StateFlow<Boolean> = _archiveOpen.asStateFlow()
+
     init {
         println("CredentialsViewModel: Initializing...")
         // Check initial state
         val initiallyOpen = ZipLockNative.isArchiveOpen()
         println("CredentialsViewModel: Initial archive open status: $initiallyOpen")
-        loadCredentials()
+        _archiveOpen.value = initiallyOpen
+        // Note: loadCredentials() is now called externally when archive is confirmed open
+        // This prevents race conditions where the UI loads before the archive is fully opened
     }
 
     /**
@@ -76,6 +81,7 @@ class CredentialsViewModel : ViewModel() {
                 // Check if archive is open first
                 val isOpen = ZipLockNative.isArchiveOpen()
                 println("CredentialsViewModel: Archive is open: $isOpen")
+                _archiveOpen.value = isOpen
 
                 if (!isOpen) {
                     _uiState.value = _uiState.value.copy(
@@ -129,7 +135,7 @@ class CredentialsViewModel : ViewModel() {
                 delay(1000) // Simulate network/disk delay
 
                 val mockCredentials = listOf(
-                    Credential(
+                    ZipLockNative.Credential(
                         id = "cred_1",
                         title = "Google Account",
                         credentialType = "login",
@@ -137,27 +143,27 @@ class CredentialsViewModel : ViewModel() {
                         username = "user@gmail.com",
                         tags = listOf("work", "email")
                     ),
-                    Credential(
+                    ZipLockNative.Credential(
                         id = "cred_2",
                         title = "Bank of America",
                         credentialType = "bank_account",
                         url = "https://bankofamerica.com",
                         tags = listOf("finance", "bank")
                     ),
-                    Credential(
+                    ZipLockNative.Credential(
                         id = "cred_3",
                         title = "Visa Credit Card",
                         credentialType = "credit_card",
                         tags = listOf("finance", "payment")
                     ),
-                    Credential(
+                    ZipLockNative.Credential(
                         id = "cred_4",
                         title = "WiFi Password",
                         credentialType = "secure_note",
                         notes = "Home network credentials",
                         tags = listOf("home", "network")
                     ),
-                    Credential(
+                    ZipLockNative.Credential(
                         id = "cred_5",
                         title = "SSH Server Key",
                         credentialType = "ssh_key",
@@ -216,6 +222,20 @@ class CredentialsViewModel : ViewModel() {
     fun closeArchive(): Boolean {
         return try {
             println("CredentialsViewModel: Closing archive...")
+
+            // Check if an archive is actually open before trying to close
+            val isOpen = ZipLockNative.isArchiveOpen()
+            if (!isOpen) {
+                println("CredentialsViewModel: No archive is open, clearing UI state")
+                // Clear credentials UI state even if no archive was open
+                _uiState.value = _uiState.value.copy(
+                    credentials = emptyList(),
+                    errorMessage = null
+                )
+                _archiveOpen.value = false
+                return true // Return success since the desired state (no open archive) is achieved
+            }
+
             val result = ZipLockNative.closeArchive()
             println("CredentialsViewModel: Close archive result: $result")
 
@@ -225,6 +245,7 @@ class CredentialsViewModel : ViewModel() {
                     credentials = emptyList(),
                     errorMessage = null
                 )
+                _archiveOpen.value = false
                 println("CredentialsViewModel: Archive closed successfully, cleared credentials")
             } else {
                 println("CredentialsViewModel: Failed to close archive")
@@ -252,7 +273,7 @@ class CredentialsViewModel : ViewModel() {
     /**
      * Handle credential selection
      */
-    fun selectCredential(credential: Credential) {
+    fun addCredential(credential: ZipLockNative.Credential) {
         // For now, just log the selection
         // TODO: Navigate to credential detail view
         println("Selected credential: ${credential.title} (${credential.id})")
@@ -266,22 +287,35 @@ class CredentialsViewModel : ViewModel() {
     }
 
     /**
+     * Clear credentials state for cleanup
+     */
+    fun clearCredentials() {
+        _uiState.value = _uiState.value.copy(
+            credentials = emptyList(),
+            errorMessage = null,
+            isLoading = false
+        )
+        _archiveOpen.value = false
+        println("CredentialsViewModel: Cleared credentials state")
+    }
+
+    /**
      * Get filtered credentials based on search query
      */
-    fun getFilteredCredentials(): List<Credential> {
+    fun getFilteredCredentials(): List<ZipLockNative.Credential> {
         val query = _searchQuery.value
         val credentials = _uiState.value.credentials
 
         return if (query.isBlank()) {
             credentials
         } else {
-            credentials.filter { credential ->
+            credentials.filter { credential: ZipLockNative.Credential ->
                 credential.title.contains(query, ignoreCase = true) ||
                 credential.credentialType.contains(query, ignoreCase = true) ||
                 credential.username.contains(query, ignoreCase = true) ||
                 credential.url.contains(query, ignoreCase = true) ||
                 credential.notes.contains(query, ignoreCase = true) ||
-                credential.tags.any { tag -> tag.contains(query, ignoreCase = true) }
+                credential.tags.any { tag: String -> tag.contains(query, ignoreCase = true) }
             }
         }
     }
@@ -289,7 +323,7 @@ class CredentialsViewModel : ViewModel() {
     /**
      * Get credentials grouped by type for potential future use
      */
-    fun getCredentialsGroupedByType(): Map<String, List<Credential>> {
+    fun getCredentialsGroupedByType(): Map<String, List<ZipLockNative.Credential>> {
         return _uiState.value.credentials.groupBy { it.credentialType }
     }
 
@@ -308,7 +342,7 @@ class CredentialsViewModel : ViewModel() {
      */
     fun getAllTags(): List<String> {
         return _uiState.value.credentials
-            .flatMap { it.tags }
+            .flatMap { credential: ZipLockNative.Credential -> credential.tags }
             .distinct()
             .sorted()
     }
@@ -318,12 +352,12 @@ class CredentialsViewModel : ViewModel() {
      */
     fun getCredentialsStats(): CredentialsStats {
         val credentials = _uiState.value.credentials
-        val typeGroups = credentials.groupBy { it.credentialType }
+        val typeGroups = credentials.groupBy { credential: ZipLockNative.Credential -> credential.credentialType }
 
         return CredentialsStats(
             totalCount = credentials.size,
             typeCount = typeGroups.size,
-            mostCommonType = typeGroups.maxByOrNull { it.value.size }?.key ?: "",
+            mostCommonType = typeGroups.maxByOrNull { (_, credentialList): Map.Entry<String, List<ZipLockNative.Credential>> -> credentialList.size }?.key ?: "",
             tagCount = getAllTags().size
         )
     }
@@ -334,7 +368,7 @@ class CredentialsViewModel : ViewModel() {
  */
 data class CredentialsUiState(
     val isLoading: Boolean = false,
-    val credentials: List<Credential> = emptyList(),
+    val credentials: List<ZipLockNative.Credential> = emptyList(),
     val errorMessage: String? = null
 ) {
     val isEmpty: Boolean

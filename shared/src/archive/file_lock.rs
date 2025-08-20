@@ -8,7 +8,7 @@ use std::fs::File;
 use std::path::Path;
 use std::time::Duration;
 use thiserror::Error;
-use tracing::{debug, warn};
+use tracing::{debug, info, warn};
 
 #[derive(Error, Debug)]
 pub enum FileLockError {
@@ -77,9 +77,14 @@ impl FileLock {
                     continue;
                 }
                 Err(e) => {
-                    return Err(FileLockError::LockFailed {
-                        reason: e.to_string(),
-                    });
+                    let error_msg = format!(
+                        "Failed to acquire lock on {:?} after {}s timeout. Error: {}. This may indicate the file is open in another application or a previous lock wasn't released properly.",
+                        path,
+                        timeout_seconds,
+                        e
+                    );
+                    warn!("{}", error_msg);
+                    return Err(FileLockError::LockFailed { reason: error_msg });
                 }
             }
         }
@@ -222,19 +227,111 @@ impl LockFile {
             base_path.extension().and_then(|s| s.to_str()).unwrap_or("")
         ));
 
+        // Check for existing stale lock files and try to clean them up
+        if lock_path.exists() {
+            debug!("Found existing lock file: {:?}", lock_path);
+
+            // Try to read lock file content to check if it's stale
+            if let Ok(content) = std::fs::read_to_string(&lock_path) {
+                if content.trim() == "ziplock" {
+                    debug!("Lock file appears to be from ZipLock, checking if stale");
+
+                    // Check if lock file is stale by trying to access the original file
+                    if Self::is_lock_file_stale(&lock_path, base_path) {
+                        info!("Removing stale lock file: {:?}", lock_path);
+                        if let Err(e) = std::fs::remove_file(&lock_path) {
+                            warn!("Failed to remove stale lock file {:?}: {}", lock_path, e);
+                        } else {
+                            info!("Successfully removed stale lock file: {:?}", lock_path);
+                        }
+                    } else {
+                        debug!("Lock file appears to be active, not removing");
+                    }
+                }
+            }
+        }
+
         // Create the lock file if it doesn't exist
         if !lock_path.exists() {
             std::fs::write(&lock_path, b"ziplock").map_err(|e| FileLockError::LockFailed {
-                reason: format!("Failed to create lock file: {}", e),
+                reason: format!("Failed to create lock file {:?}: {}", lock_path, e),
             })?;
         }
 
-        let file_lock = FileLock::new(&lock_path, timeout_seconds)?;
+        let file_lock = FileLock::new(&lock_path, timeout_seconds).map_err(|e| {
+            // If lock fails, provide additional context
+            let additional_info = if lock_path.exists() {
+                format!(" Lock file exists at {:?}. This may indicate another ZipLock instance is using this archive, or a previous session didn't clean up properly.", lock_path)
+            } else {
+                " Lock file does not exist.".to_string()
+            };
+
+            match e {
+                FileLockError::LockFailed { reason } => FileLockError::LockFailed {
+                    reason: format!("{}{}", reason, additional_info)
+                },
+                other => other,
+            }
+        })?;
 
         Ok(Self {
             lock_path: lock_path.clone(),
             _file_lock: file_lock,
         })
+    }
+
+    /// Check if a lock file is stale by attempting various heuristics
+    fn is_lock_file_stale(lock_path: &Path, base_path: &Path) -> bool {
+        // Get lock file metadata
+        let lock_metadata = match std::fs::metadata(lock_path) {
+            Ok(metadata) => metadata,
+            Err(_) => return true, // If we can't read metadata, assume stale
+        };
+
+        // Check if lock file is very old (more than 1 hour)
+        if let Ok(modified_time) = lock_metadata.modified() {
+            if let Ok(elapsed) = modified_time.elapsed() {
+                if elapsed > std::time::Duration::from_secs(3600) {
+                    debug!("Lock file is older than 1 hour, considering stale");
+                    return true;
+                }
+            }
+        }
+
+        // Try to test if we can open the base file for reading
+        // If we can open it successfully, the lock might be stale
+        match std::fs::File::open(base_path) {
+            Ok(_) => {
+                debug!("Can open base file for reading, lock might be stale");
+                // Additional check: try to create a test lock to see if it's really available
+                Self::test_lock_availability(base_path)
+            }
+            Err(_) => {
+                debug!("Cannot open base file, lock might be legitimate");
+                false
+            }
+        }
+    }
+
+    /// Test if we can acquire a lock on the file (indicates stale lock)
+    fn test_lock_availability(base_path: &Path) -> bool {
+        match std::fs::File::open(base_path) {
+            Ok(file) => {
+                // Try to acquire a non-blocking exclusive lock
+                match FileLock::try_lock(&file) {
+                    Ok(()) => {
+                        debug!("Successfully acquired test lock - original lock is stale");
+                        // Note: lock will be released when file handle drops
+                        true
+                    }
+                    Err(_) => {
+                        debug!("Could not acquire test lock - original lock is active");
+                        false
+                    }
+                }
+            }
+            Err(_) => false,
+        }
     }
 
     /// Get the path of the lock file
@@ -287,8 +384,7 @@ fn is_cloud_storage_path(path: &Path) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::fs;
-    use std::sync::atomic::{AtomicBool, Ordering};
+
     use std::sync::{Arc, Mutex};
     use std::thread;
     use tempfile::NamedTempFile;
