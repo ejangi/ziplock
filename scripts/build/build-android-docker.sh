@@ -94,14 +94,14 @@ run_build() {
             fi
 
             # Emulator support (separate from 'all' to keep device focus)
-            if [ '$targets' = 'emulator' ] || [ '$targets' = 'x86_64' ]; then
+            if [ '$targets' = 'all' ] || [ '$targets' = 'emulator' ] || [ '$targets' = 'x86_64' ]; then
                 echo 'Building for x86_64 (emulator support)...'
                 cargo build --release --target x86_64-linux-android --features c-api
                 mkdir -p /output/x86_64
                 cp /workspace/target/x86_64-linux-android/release/libziplock_shared.so /output/x86_64/
             fi
 
-            if [ '$targets' = 'emulator' ] || [ '$targets' = 'x86' ]; then
+            if [ '$targets' = 'all' ] || [ '$targets' = 'emulator' ] || [ '$targets' = 'x86' ]; then
                 echo 'Building for x86 (older emulator support)...'
                 cargo build --release --target i686-linux-android --features c-api
                 mkdir -p /output/x86

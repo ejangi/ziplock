@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
 import com.ziplock.ffi.ZipLockNative
 
@@ -82,12 +83,228 @@ class RepositoryViewModel(private val context: Context) : ViewModel() {
                     throw IllegalArgumentException("Passphrase is required")
                 }
 
-                // Call FFI library to open the archive
+                // For content URIs, run diagnostics first
+                if (filePath.startsWith("content://")) {
+                    println("RepositoryViewModel: Detected content URI, running diagnostics...")
+                    val diagnostics = ZipLockNative.testContentUriAccess(filePath)
+                    println("RepositoryViewModel: Content URI diagnostics:\n$diagnostics")
+
+                    // Check SAF availability
+                    val safAvailable = ZipLockNative.isAndroidSafAvailable()
+                    if (!safAvailable) {
+                        throw Exception("Android Storage Access Framework is not available. Please restart the app and try again.")
+                    }
+
+                    println("RepositoryViewModel: SAF is available, proceeding with archive opening...")
+                }
+
+                // Call FFI library to open the archive with timeout
                 delay(500) // Small delay for better UX
 
-                println("RepositoryViewModel: Opening archive at path: $filePath")
-                val result = ZipLockNative.openArchive(filePath, passphrase)
+                // Convert content URI to usable file path for native library
+                val usableFilePath = if (filePath.startsWith("content://")) {
+                    val uri = android.net.Uri.parse(filePath)
+                    val fileName = uri.lastPathSegment ?: "archive.7z"
+                    com.ziplock.utils.FileUtils.getUsableFilePath(context, uri, fileName)
+                } else {
+                    filePath
+                }
+
+                println("RepositoryViewModel: Converting path '$filePath' to '$usableFilePath'")
+
+                // Verify file exists and is accessible before calling native library
+                val file = File(usableFilePath)
+                if (!file.exists()) {
+                    throw Exception("Archive file does not exist: $usableFilePath")
+                }
+                if (!file.canRead()) {
+                    throw Exception("Cannot read archive file (permission denied): $usableFilePath")
+                }
+                if (file.length() == 0L) {
+                    throw Exception("Archive file is empty: $usableFilePath")
+                }
+
+                println("RepositoryViewModel: File verification passed - size: ${file.length()} bytes")
+
+                // Additional file inspection
+                try {
+                    val fileBytes = file.readBytes()
+                    println("RepositoryViewModel: File header (first 16 bytes): ${fileBytes.take(16).joinToString(" ") { "%02x".format(it) }}")
+
+                    // Check if it's a valid 7z file (should start with "7z¼¯'")
+                    val expectedHeader = byteArrayOf(0x37, 0x7A, 0xBC.toByte(), 0xAF.toByte(), 0x27, 0x1C)
+                    val actualHeader = fileBytes.take(6).toByteArray()
+                    val isValid7z = actualHeader.contentEquals(expectedHeader)
+                    println("RepositoryViewModel: Is valid 7z header: $isValid7z")
+
+                    if (!isValid7z) {
+                        // Try copying to cache and see if that helps
+                        val cacheFile = File(context.cacheDir, "temp_archive_${System.currentTimeMillis()}.7z")
+                        file.copyTo(cacheFile, overwrite = true)
+                        println("RepositoryViewModel: Copied to cache: ${cacheFile.absolutePath} (${cacheFile.length()} bytes)")
+
+                        // Use the cached file instead
+                        val newUsableFilePath = cacheFile.absolutePath
+                        println("RepositoryViewModel: Using cached file path: $newUsableFilePath")
+                        println("RepositoryViewModel: Opening archive at path: $newUsableFilePath")
+
+                        // Set a reasonable timeout for archive opening (5 minutes for large files)
+                        val timeoutMs = 300_000L // 5 minutes
+                        val startTime = System.currentTimeMillis()
+
+                        val result = kotlinx.coroutines.withTimeoutOrNull(timeoutMs) {
+                            try {
+                                println("RepositoryViewModel: Calling ZipLockNative.openArchive with cached file...")
+                                ZipLockNative.openArchive(newUsableFilePath, passphrase)
+                            } catch (e: Exception) {
+                                println("RepositoryViewModel: Native library call failed with cached file: ${e.message}")
+                                e.printStackTrace()
+                                throw Exception("Native library error with cached file: ${e.message}", e)
+                            }
+                        }
+
+                        val elapsed = System.currentTimeMillis() - startTime
+                        println("RepositoryViewModel: Archive opening (cached) took ${elapsed}ms")
+
+                        if (result == null) {
+                            throw Exception("Archive opening timed out after ${timeoutMs / 1000} seconds. This may be due to a large file or network issues.")
+                        }
+
+                        println("RepositoryViewModel: Open archive result (cached) - success: ${result.success}, sessionId: ${result.sessionId}, error: ${result.errorMessage}")
+
+                        if (result.success) {
+                            _uiState.value = _uiState.value.copy(
+                                isLoading = false,
+                                successMessage = "Archive opened successfully",
+                                errorMessage = null
+                            )
+                        } else {
+                            _uiState.value = _uiState.value.copy(
+                                isLoading = false,
+                                errorMessage = result.errorMessage ?: "Failed to open archive with cached file"
+                            )
+                        }
+                        return@launch
+                    }
+                } catch (e: Exception) {
+                    println("RepositoryViewModel: File inspection failed: ${e.message}")
+                }
+
+                println("RepositoryViewModel: Opening archive at path: $usableFilePath")
+
+                // Set a reasonable timeout for archive opening (5 minutes for large files)
+                val timeoutMs = 300_000L // 5 minutes
+                val startTime = System.currentTimeMillis()
+
+                val result = kotlinx.coroutines.withTimeoutOrNull(timeoutMs) {
+                    try {
+                        // Additional validation before calling native library
+                        val file = File(usableFilePath)
+                        println("RepositoryViewModel: Pre-call validation:")
+                        println("  - File exists: ${file.exists()}")
+                        println("  - File readable: ${file.canRead()}")
+                        println("  - File size: ${file.length()} bytes")
+                        println("  - File absolute path: ${file.absolutePath}")
+                        println("  - Passphrase length: ${passphrase.length}")
+
+                        // Validate file path for native library compatibility
+                        val sanitizedPath = file.absolutePath
+                        println("  - Sanitized path: $sanitizedPath")
+
+                        // Check for problematic characters that might cause native library issues
+                        if (sanitizedPath.contains('\u0000') || sanitizedPath.contains('\n') || sanitizedPath.contains('\r')) {
+                            throw Exception("File path contains invalid characters that may cause native library issues")
+                        }
+
+                        // Ensure path is not too long (typical filesystem limit)
+                        if (sanitizedPath.length > 4096) {
+                            throw Exception("File path is too long for native library")
+                        }
+
+                        // Check if archive is already open
+                        val isOpen = ZipLockNative.isArchiveOpen()
+                        println("  - Archive already open: $isOpen")
+
+                        if (isOpen) {
+                            println("RepositoryViewModel: Closing existing archive before opening new one...")
+                            ZipLockNative.closeArchive()
+                        }
+
+                        // Detailed file analysis before opening
+                        println("RepositoryViewModel: Performing detailed file analysis...")
+                        try {
+                            val fileBytes = file.readBytes()
+                            println("  - Successfully read ${fileBytes.size} bytes from file")
+
+                            // Check 7z signature (should be "7z\xBC\xAF\x27\x1C")
+                            if (fileBytes.size >= 6) {
+                                val signature = fileBytes.take(6).map { String.format("%02X", it.toInt() and 0xFF) }.joinToString(" ")
+                                println("  - File signature: $signature")
+
+                                val expected = listOf(0x37, 0x7A, 0xBC, 0xAF, 0x27, 0x1C)
+                                val matches = fileBytes.take(6).zip(expected).all { (actual, expected) ->
+                                    (actual.toInt() and 0xFF) == expected
+                                }
+                                println("  - 7z signature valid: $matches")
+                            }
+
+                            // Check for null bytes in path (common cause of native crashes)
+                            val pathBytes = sanitizedPath.toByteArray(Charsets.UTF_8)
+                            val hasNullBytes = pathBytes.contains(0.toByte())
+                            println("  - Path has null bytes: $hasNullBytes")
+                            println("  - Path byte length: ${pathBytes.size}")
+
+                        } catch (e: Exception) {
+                            println("  - File analysis failed: ${e.message}")
+                        }
+
+                        println("RepositoryViewModel: Calling ZipLockNative.openArchive with sanitized path...")
+                        ZipLockNative.openArchive(sanitizedPath, passphrase)
+                    } catch (e: Exception) {
+                        println("RepositoryViewModel: Native library call failed: ${e.message}")
+                        e.printStackTrace()
+                        null
+                    }
+                }
+
+                val elapsed = System.currentTimeMillis() - startTime
+                println("RepositoryViewModel: Archive opening took ${elapsed}ms")
+
+                if (result == null) {
+                    throw Exception("Archive opening timed out after ${timeoutMs / 1000} seconds. This may be due to a large file or network issues.")
+                }
+
                 println("RepositoryViewModel: Open archive result - success: ${result.success}, sessionId: ${result.sessionId}, error: ${result.errorMessage}")
+
+                if (!result.success) {
+                    // Get detailed error information from native library
+                    val detailedError = ZipLockNative.getLastError()
+                    var errorMessage = detailedError ?: result.errorMessage ?: "Unknown error"
+
+                    // Provide more specific error messages for common content URI issues
+                    if (filePath.startsWith("content://")) {
+                        when {
+                            errorMessage.contains("Android SAF not available") -> {
+                                errorMessage = "Storage Access Framework error. Please restart the app and try again."
+                            }
+                            errorMessage.contains("Failed to open content URI") -> {
+                                errorMessage = "Cannot access the selected file. Please ensure you have permission and the file exists."
+                            }
+                            errorMessage.contains("Failed to create temporary file") -> {
+                                errorMessage = "Insufficient storage space or permission denied. Please free up space and try again."
+                            }
+                            errorMessage.contains("Invalid master password") || errorMessage.contains("CryptoError") -> {
+                                errorMessage = "Incorrect password. Please check your password and try again."
+                            }
+                            errorMessage.contains("timed out") -> {
+                                errorMessage = "The file is taking too long to open. This may be due to file size or network issues."
+                            }
+                        }
+                    }
+
+                    println("RepositoryViewModel: Detailed error: $errorMessage")
+                    throw Exception(errorMessage)
+                }
 
                 if (result.success) {
                     val sessionId = result.sessionId ?: generateSessionId()
@@ -100,9 +317,6 @@ class RepositoryViewModel(private val context: Context) : ViewModel() {
                     // Verify the archive is actually open
                     val isOpen = ZipLockNative.isArchiveOpen()
                     println("RepositoryViewModel: Archive open verification: $isOpen")
-                } else {
-                    println("RepositoryViewModel: Failed to open archive: ${result.errorMessage}")
-                    throw Exception(result.errorMessage ?: "Failed to open archive")
                 }
 
                 // Save the successfully opened archive path

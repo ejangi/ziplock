@@ -10,6 +10,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -23,6 +24,7 @@ import androidx.documentfile.provider.DocumentFile
 import com.ziplock.R
 import com.ziplock.ui.theme.*
 import com.ziplock.utils.FileUtils
+
 
 /**
  * Repository Selection Screen
@@ -38,20 +40,71 @@ import com.ziplock.utils.FileUtils
  */
 @Composable
 fun RepositorySelectionScreen(
-    onRepositorySelected: (String, String) -> Unit,
+    hybridRepositoryViewModel: com.ziplock.viewmodel.HybridRepositoryViewModel? = null,
+    repositoryViewModel: com.ziplock.viewmodel.RepositoryViewModel? = null,
+    onArchiveOpened: (String) -> Unit,
     onCreateNew: () -> Unit,
     modifier: Modifier = Modifier,
     initialFilePath: String? = null
 ) {
+    // Use hybrid view model by default, fallback to legacy if provided
+    val hybridVM = hybridRepositoryViewModel
+    val legacyVM = repositoryViewModel
+    require(hybridVM != null || legacyVM != null) { "Either hybridRepositoryViewModel or repositoryViewModel must be provided" }
+
+    // Handle different view model types
+    val isLoading = if (hybridVM != null) {
+        val hybridState by hybridVM.uiState.collectAsState()
+        hybridState.isLoading
+    } else {
+        val legacyState by legacyVM!!.uiState.collectAsState()
+        legacyState.isLoading
+    }
+
+    val errorMessage = if (hybridVM != null) {
+        val hybridState by hybridVM.uiState.collectAsState()
+        hybridState.errorMessage
+    } else {
+        val legacyState by legacyVM!!.uiState.collectAsState()
+        legacyState.errorMessage
+    }
+
     var selectedFilePath by remember { mutableStateOf<String?>(initialFilePath) }
+
+    // For hybrid VM, watch repository state for success
+    if (hybridVM != null) {
+        val repositoryState by hybridVM.repositoryState.collectAsState()
+        LaunchedEffect(repositoryState) {
+            val currentState = repositoryState
+            if (currentState is com.ziplock.viewmodel.HybridRepositoryViewModel.HybridRepositoryState.Open) {
+                onArchiveOpened(currentState.path)
+            }
+        }
+    }
+
+    // For legacy VM, watch UI state for success
+    if (legacyVM != null) {
+        val legacyState by legacyVM.uiState.collectAsState()
+        LaunchedEffect(legacyState.successMessage) {
+            if (legacyState.successMessage != null) {
+                selectedFilePath?.let { onArchiveOpened(it) }
+            }
+        }
+    }
     var selectedFileName by remember { mutableStateOf<String?>(
         initialFilePath?.let { path ->
             extractUserFriendlyFileName(path)
         }
     ) }
     var passphrase by remember { mutableStateOf("") }
-    var isLoading by remember { mutableStateOf(false) }
-    var errorMessage by remember { mutableStateOf<String?>(null) }
+    var localErrorMessage by remember { mutableStateOf<String?>(null) }
+
+    // Use repository view model state for loading and errors
+    LaunchedEffect(errorMessage) {
+        if (errorMessage != null) {
+            localErrorMessage = errorMessage
+        }
+    }
     var passphraseError by remember { mutableStateOf<String?>(null) }
 
     val context = LocalContext.current
@@ -67,7 +120,7 @@ fun RepositorySelectionScreen(
             selectedFilePath = it.toString()
 
             // Clear any previous errors when a new file is selected
-            errorMessage = null
+            localErrorMessage = null
         }
     }
 
@@ -133,11 +186,13 @@ fun RepositorySelectionScreen(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 // Error alert if present
-                errorMessage?.let { error ->
+                (errorMessage ?: localErrorMessage)?.let { error ->
                     ZipLockAlert(
                         level = AlertLevel.Error,
                         message = error,
-                        onDismiss = { errorMessage = null },
+                        onDismiss = {
+                            localErrorMessage = null
+                        },
                         modifier = Modifier.padding(bottom = ZipLockSpacing.Standard)
                     )
                 }
@@ -187,24 +242,30 @@ fun RepositorySelectionScreen(
                         onDone = {
                             if (passphrase.isNotBlank() && !isLoading && selectedFilePath != null) {
                                 val path = selectedFilePath!!
-                                isLoading = true
-                                errorMessage = null
+                                localErrorMessage = null
 
                                 try {
-                                    // Convert content URI to usable file path for native library
-                                    val usableFilePath = if (path.startsWith("content://")) {
-                                        val uri = android.net.Uri.parse(path)
-                                        val fileName = selectedFileName ?: "archive.7z"
-                                        FileUtils.getUsableFilePath(context, uri, fileName)
+                                    // Call appropriate view model method
+                                    if (hybridVM != null) {
+                                        // For hybrid system, pass original path (it will handle content URI conversion internally)
+                                        println("RepositorySelectionScreen: Opening with hybrid system: '$path'")
+                                        hybridVM.openRepository(path, passphrase)
                                     } else {
-                                        path
+                                        // For legacy system, convert content URI to usable file path
+                                        val usableFilePath = if (path.startsWith("content://")) {
+                                            val uri = android.net.Uri.parse(path)
+                                            val fileName = selectedFileName ?: "archive.7z"
+                                            FileUtils.getUsableFilePath(context, uri, fileName)
+                                        } else {
+                                            path
+                                        }
+                                        println("RepositorySelectionScreen: Converting path '$path' to '$usableFilePath' for legacy system")
+                                        legacyVM?.let { vm ->
+                                            vm.openRepository(usableFilePath, passphrase)
+                                        }
                                     }
-
-                                    println("RepositorySelectionScreen: Converting path '$path' to '$usableFilePath'")
-                                    onRepositorySelected(usableFilePath, passphrase)
                                 } catch (e: Exception) {
-                                    isLoading = false
-                                    errorMessage = when {
+                                    val errorMsg = when {
                                         e.message?.contains("authentication", ignoreCase = true) == true ->
                                             "Incorrect passphrase. Please check your password and try again."
                                         e.message?.contains("not found", ignoreCase = true) == true ->
@@ -213,7 +274,8 @@ fun RepositorySelectionScreen(
                                             "Permission denied. Please check file permissions."
                                         else -> "Failed to open archive. Please try again."
                                     }
-                                    passphraseError = errorMessage
+                                    localErrorMessage = errorMsg
+                                    passphraseError = errorMsg
                                 }
                             }
                         }
@@ -248,24 +310,30 @@ fun RepositorySelectionScreen(
                         text = "Open Archive",
                         onClick = {
                             selectedFilePath?.let { path ->
-                                isLoading = true
-                                errorMessage = null
+                                localErrorMessage = null
 
                                 try {
-                                    // Convert content URI to usable file path for native library
-                                    val usableFilePath = if (path.startsWith("content://")) {
-                                        val uri = android.net.Uri.parse(path)
-                                        val fileName = selectedFileName ?: "archive.7z"
-                                        FileUtils.getUsableFilePath(context, uri, fileName)
+                                    // Call appropriate view model method
+                                    if (hybridVM != null) {
+                                        // For hybrid system, pass original path (it will handle content URI conversion internally)
+                                        println("RepositorySelectionScreen: Opening with hybrid system: '$path'")
+                                        hybridVM.openRepository(path, passphrase)
                                     } else {
-                                        path
+                                        // For legacy system, convert content URI to usable file path
+                                        val usableFilePath = if (path.startsWith("content://")) {
+                                            val uri = android.net.Uri.parse(path)
+                                            val fileName = selectedFileName ?: "archive.7z"
+                                            FileUtils.getUsableFilePath(context, uri, fileName)
+                                        } else {
+                                            path
+                                        }
+                                        println("RepositorySelectionScreen: Converting path '$path' to '$usableFilePath' for legacy system")
+                                        legacyVM?.let { vm ->
+                                            vm.openRepository(usableFilePath, passphrase)
+                                        }
                                     }
-
-                                    println("RepositorySelectionScreen: Converting path '$path' to '$usableFilePath'")
-                                    onRepositorySelected(usableFilePath, passphrase)
                                 } catch (e: Exception) {
-                                    isLoading = false
-                                    errorMessage = when {
+                                    val errorMsg = when {
                                         e.message?.contains("authentication", ignoreCase = true) == true ->
                                             "Incorrect passphrase. Please check your password and try again."
                                         e.message?.contains("not found", ignoreCase = true) == true ->
@@ -274,6 +342,7 @@ fun RepositorySelectionScreen(
                                             "Permission denied. Please check file permissions."
                                         else -> "Failed to open archive. Please try again."
                                     }
+                                    localErrorMessage = errorMsg
                                 }
                             }
                         },
@@ -365,10 +434,13 @@ private fun extractUserFriendlyFileName(path: String): String {
 }
 
 @Preview(showBackground = true)
+@Preview
 @Composable
 fun RepositorySelectionScreenPreview() {
+    val context = LocalContext.current
     RepositorySelectionScreen(
-        onRepositorySelected = { _, _ -> },
+        repositoryViewModel = com.ziplock.viewmodel.RepositoryViewModel(context),
+        onArchiveOpened = { _ -> },
         onCreateNew = { }
     )
 }

@@ -303,6 +303,17 @@ impl CredentialRecord {
 }
 
 impl CredentialField {
+    /// Create a new field with the specified type and value
+    pub fn new(field_type: FieldType, value: String, sensitive: bool) -> Self {
+        Self {
+            field_type,
+            value,
+            sensitive,
+            label: None,
+            metadata: HashMap::new(),
+        }
+    }
+
     /// Create a new text field
     pub fn text<S: Into<String>>(value: S) -> Self {
         Self {
@@ -635,7 +646,7 @@ impl CommonTemplates {
                 field_type: FieldType::TextArea,
                 label: "Content".to_string(),
                 required: false,
-                sensitive: true,
+                sensitive: false,
                 default_value: None,
                 validation: None,
             }],

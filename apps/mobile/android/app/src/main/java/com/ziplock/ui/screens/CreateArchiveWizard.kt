@@ -31,7 +31,7 @@ import androidx.documentfile.provider.DocumentFile
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.ziplock.R
-import com.ziplock.ffi.PassphraseStrengthResult
+import com.ziplock.ffi.ZipLockNative
 import com.ziplock.ui.theme.*
 import com.ziplock.viewmodel.CreateArchiveViewModel
 import com.ziplock.viewmodel.CreateArchiveStep
@@ -60,7 +60,7 @@ fun CreateArchiveWizard(
     viewModel: CreateArchiveViewModel = viewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    val passphraseStrength by viewModel.passphraseStrength.collectAsStateWithLifecycle()
+    val passphraseStrength: ZipLockNative.PassphraseStrengthResult? by viewModel.passphraseStrength.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
     // File picker for destination directory
@@ -416,7 +416,7 @@ private fun ArchiveNameStep(
 private fun CreatePassphraseStep(
     passphrase: String,
     showPassphrase: Boolean,
-    passphraseStrength: PassphraseStrengthResult?,
+    passphraseStrength: ZipLockNative.PassphraseStrengthResult?,
     onPassphraseChange: (String) -> Unit,
     onToggleVisibility: () -> Unit,
     onNext: () -> Unit,
@@ -723,7 +723,7 @@ private fun WizardNavigationButtons(
 
 @Composable
 private fun PassphraseValidationDisplay(
-    passphraseStrength: PassphraseStrengthResult?
+    passphraseStrength: ZipLockNative.PassphraseStrengthResult?
 ) {
     Column {
         // Strength indicator
@@ -782,7 +782,7 @@ private fun PassphraseValidationDisplay(
 
         passphraseStrength?.let { strength ->
             // Show violations
-            strength.requirements.forEach { requirement ->
+            strength.requirements.forEach { requirement: String ->
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.padding(vertical = 2.dp)
@@ -804,7 +804,7 @@ private fun PassphraseValidationDisplay(
             }
 
             // Show satisfied requirements
-            strength.satisfied.forEach { satisfied ->
+            strength.satisfied.forEach { satisfaction: String ->
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.padding(vertical = 2.dp)
@@ -818,7 +818,7 @@ private fun PassphraseValidationDisplay(
                     Spacer(modifier = Modifier.width(ZipLockSpacing.Small))
 
                     Text(
-                        text = satisfied,
+                        text = satisfaction,
                         style = ZipLockTypography.Small,
                         color = ZipLockColors.SuccessGreen
                     )

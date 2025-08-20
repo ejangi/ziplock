@@ -601,13 +601,14 @@ impl AddCredentialView {
 
     /// Create a credential asynchronously
     async fn create_credential_async(
-        session_id: Option<String>,
+        _session_id: Option<String>,
         title: String,
         field_values: HashMap<String, String>,
         credential_type: String,
     ) -> Result<String, String> {
-        let mut client = ziplock_shared::ZipLockClient::new().map_err(|e| e.to_string())?;
-        client.connect().await.map_err(|e| e.to_string())?;
+        // Use hybrid client for unified architecture
+        let hybrid_client =
+            ziplock_shared::ZipLockHybridClient::new().map_err(|e| e.to_string())?;
 
         // Get the template to properly map field types and sensitivity
         let template = match credential_type.as_str() {
@@ -659,13 +660,19 @@ impl AddCredentialView {
             })
             .collect();
 
-        tracing::debug!("Calling IPC client to create credential");
+        tracing::debug!("Creating credential with hybrid client");
         tracing::debug!("Title: {}", title);
         tracing::debug!("Credential type: {}", credential_type);
         tracing::debug!("Fields: {:?}", fields);
 
-        client
-            .create_credential(session_id, title, credential_type, fields, Vec::new(), None)
+        // Create credential record using hybrid approach
+        let mut credential = ziplock_shared::models::CredentialRecord::new(title, credential_type);
+        credential.fields = fields;
+        credential.tags = Vec::new();
+        credential.notes = None;
+
+        hybrid_client
+            .add_credential(credential)
             .await
             .map_err(|e| e.to_string())
     }

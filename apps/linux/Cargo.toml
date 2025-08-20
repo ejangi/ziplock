@@ -16,7 +16,7 @@ path = "src/main.rs"
 
 [dependencies]
 # Workspace dependencies
-ziplock-shared = { path = "../../shared" }
+ziplock-shared = { path = "../../shared", features = ["c-api"] }
 tokio.workspace = true
 serde.workspace = true
 anyhow.workspace = true
@@ -55,6 +55,11 @@ rfd = { version = "0.12", optional = true }       # File dialog
 arboard = "3.4"
 keyring = "2.0"
 open = "5.0"
+
+# Logging dependencies
+tracing-appender = "0.2" # For file rotation and advanced logging
+atty = "0.2"             # For terminal detection (colored output)
+serde_yaml = "0.9"       # For YAML configuration file support
 
 # Linux-specific dependencies
 nix = "0.27"

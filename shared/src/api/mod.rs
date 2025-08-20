@@ -280,7 +280,6 @@ impl ApiError {
 mod tests {
     use super::*;
     use crate::archive::ArchiveConfig;
-    use tempfile::TempDir;
 
     #[tokio::test]
     async fn test_api_creation() {

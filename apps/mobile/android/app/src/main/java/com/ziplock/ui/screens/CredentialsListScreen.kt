@@ -17,16 +17,16 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.ziplock.ffi.Credential
+import com.ziplock.ffi.ZipLockNative
 import com.ziplock.ui.theme.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CredentialsListScreen(
-    credentials: List<Credential>,
+    credentials: List<ZipLockNative.Credential>,
     searchQuery: String,
     onSearchQueryChange: (String) -> Unit,
-    onCredentialClick: (Credential) -> Unit,
+    onCredentialClick: (ZipLockNative.Credential) -> Unit,
     onCloseArchive: () -> Unit,
     onAddCredential: () -> Unit,
     onRefresh: () -> Unit,
@@ -39,114 +39,131 @@ fun CredentialsListScreen(
         if (searchQuery.isBlank()) {
             credentials
         } else {
-            credentials.filter { credential ->
+            credentials.filter { credential: ZipLockNative.Credential ->
                 credential.title.contains(searchQuery, ignoreCase = true) ||
                 credential.credentialType.contains(searchQuery, ignoreCase = true) ||
                 credential.username.contains(searchQuery, ignoreCase = true) ||
                 credential.url.contains(searchQuery, ignoreCase = true) ||
-                credential.tags.any { tag -> tag.contains(searchQuery, ignoreCase = true) }
+                credential.tags.any { tag: String -> tag.contains(searchQuery, ignoreCase = true) }
             }
         }
     }
 
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .background(ZipLockColors.LightBackground)
-    ) {
-        // Header with close button
-        CredentialsListHeader(
-            onCloseArchive = onCloseArchive,
-            onRefresh = onRefresh,
-            hasCredentials = credentials.isNotEmpty(),
-            hasError = errorMessage != null,
-            modifier = Modifier.fillMaxWidth()
-        )
-
-        // Search bar (only show when there are credentials)
-        if (credentials.isNotEmpty()) {
-            CredentialsSearchBar(
-                searchQuery = searchQuery,
-                onSearchQueryChange = onSearchQueryChange,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = ZipLockSpacing.Standard)
-            )
-        }
-
-        Spacer(modifier = Modifier.height(ZipLockSpacing.Small))
-
-        // Error message
-        errorMessage?.let { error ->
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = ZipLockSpacing.Standard),
-                colors = CardDefaults.cardColors(containerColor = ZipLockColors.ErrorRed.copy(alpha = 0.1f)),
-                shape = RoundedCornerShape(ZipLockSpacing.BorderRadius)
+    Scaffold(
+        modifier = modifier,
+        floatingActionButton = {
+            FloatingActionButton(
+                onClick = onAddCredential,
+                containerColor = ZipLockColors.LogoPurple,
+                contentColor = ZipLockColors.White
             ) {
-                Row(
+                Icon(
+                    imageVector = ZipLockIcons.Plus,
+                    contentDescription = "Add Credential"
+                )
+            }
+        }
+    ) { paddingValues ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(ZipLockColors.LightBackground)
+                .padding(paddingValues)
+        ) {
+            // Header with close button
+            CredentialsListHeader(
+                onCloseArchive = onCloseArchive,
+                onRefresh = onRefresh,
+                hasCredentials = credentials.isNotEmpty(),
+                hasError = errorMessage != null,
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            // Search bar (only show when there are credentials)
+            if (credentials.isNotEmpty()) {
+                CredentialsSearchBar(
+                    searchQuery = searchQuery,
+                    onSearchQueryChange = onSearchQueryChange,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(ZipLockSpacing.Standard),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = ZipLockIcons.ErrorCircle,
-                        contentDescription = "Error",
-                        tint = ZipLockColors.ErrorRed,
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Spacer(modifier = Modifier.width(ZipLockSpacing.Small))
-                    Text(
-                        text = error,
-                        style = ZipLockTypography.Normal,
-                        color = ZipLockColors.ErrorRed
-                    )
-                }
+                        .padding(horizontal = ZipLockSpacing.Standard)
+                )
             }
-            Spacer(modifier = Modifier.height(ZipLockSpacing.Small))
-        }
 
-        // Credentials list
-        when {
-            isLoading -> {
-                CredentialsLoadingState(
-                    modifier = Modifier.fillMaxSize()
-                )
-            }
-            filteredCredentials.isEmpty() && searchQuery.isNotBlank() -> {
-                CredentialsEmptySearchState(
-                    searchQuery = searchQuery,
-                    modifier = Modifier.fillMaxSize()
-                )
-            }
-            credentials.isEmpty() -> {
-                CredentialsEmptyState(
-                    onAddCredential = onAddCredential,
-                    modifier = Modifier.fillMaxSize()
-                )
-            }
-            else -> {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(
-                        horizontal = ZipLockSpacing.Standard,
-                        vertical = ZipLockSpacing.Small
-                    ),
-                    verticalArrangement = Arrangement.spacedBy(ZipLockSpacing.Small)
+            Spacer(modifier = Modifier.height(ZipLockSpacing.Small))
+
+            // Error message
+            errorMessage?.let { error ->
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = ZipLockSpacing.Standard),
+                    colors = CardDefaults.cardColors(containerColor = ZipLockColors.ErrorRed.copy(alpha = 0.1f)),
+                    shape = RoundedCornerShape(ZipLockSpacing.BorderRadius)
                 ) {
-                    items(filteredCredentials) { credential ->
-                        CredentialListItem(
-                            credential = credential,
-                            onClick = { onCredentialClick(credential) },
-                            modifier = Modifier.fillMaxWidth()
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(ZipLockSpacing.Standard),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = ZipLockIcons.ErrorCircle,
+                            contentDescription = "Error",
+                            tint = ZipLockColors.ErrorRed,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(ZipLockSpacing.Small))
+                        Text(
+                            text = error,
+                            style = ZipLockTypography.Normal,
+                            color = ZipLockColors.ErrorRed
                         )
                     }
+                }
+                Spacer(modifier = Modifier.height(ZipLockSpacing.Small))
+            }
 
-                    // Add bottom padding for better scrolling experience
-                    item {
-                        Spacer(modifier = Modifier.height(ZipLockSpacing.ExtraLarge))
+            // Credentials list
+            when {
+                isLoading -> {
+                    CredentialsLoadingState(
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+                filteredCredentials.isEmpty() && searchQuery.isNotBlank() -> {
+                    CredentialsEmptySearchState(
+                        searchQuery = searchQuery,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+                credentials.isEmpty() -> {
+                    CredentialsEmptyState(
+                        onAddCredential = onAddCredential,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+                else -> {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(
+                            horizontal = ZipLockSpacing.Standard,
+                            vertical = ZipLockSpacing.Small
+                        ),
+                        verticalArrangement = Arrangement.spacedBy(ZipLockSpacing.Small)
+                    ) {
+                        items(filteredCredentials) { credential ->
+                            CredentialListItem(
+                                credential = credential,
+                                onClick = { onCredentialClick(credential) },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+
+                        // Add bottom padding for better scrolling experience and FAB clearance
+                        item {
+                            Spacer(modifier = Modifier.height(80.dp))
+                        }
                     }
                 }
             }
@@ -278,7 +295,7 @@ private fun CredentialsSearchBar(
 
 @Composable
 private fun CredentialListItem(
-    credential: Credential,
+    credential: ZipLockNative.Credential,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -350,7 +367,7 @@ private fun CredentialListItem(
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
-                        credential.tags.take(2).forEach { tag ->
+                        credential.tags.take(2).forEach { tag: String ->
                             Text(
                                 text = "#$tag",
                                 style = ZipLockTypography.Small.copy(fontSize = 10.sp),

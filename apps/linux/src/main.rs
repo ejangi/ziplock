@@ -9,6 +9,10 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 // Import removed - these types are used in the actual code through other paths
 
 mod config;
+#[cfg(feature = "examples")]
+mod examples;
+mod logging;
+mod platform;
 mod services;
 mod ui;
 
@@ -27,7 +31,6 @@ use ui::views::{
     OpenRepositoryMessage, OpenRepositoryView, RepositoryWizard, SettingsMessage, SettingsView,
     WizardMessage,
 };
-use ziplock_shared::ZipLockClient;
 
 /// Main application messages
 #[derive(Debug, Clone)]
@@ -133,8 +136,7 @@ pub enum AppState {
 pub struct ZipLockApp {
     state: AppState,
     config_manager: Option<ConfigManager>,
-    #[allow(dead_code)] // Future FFI client functionality
-    ffi_client: Option<ZipLockClient>,
+    hybrid_client: Option<ziplock_shared::ZipLockHybridClient>,
     theme: Theme,
     current_alert: Option<AlertMessage>,
     session_id: Option<String>,
@@ -160,7 +162,7 @@ impl Application for ZipLockApp {
         let app = Self {
             state: AppState::Loading,
             config_manager: None,
-            ffi_client: None,
+            hybrid_client: None,
             theme: create_ziplock_theme(),
             current_alert: None,
             session_id: None,
@@ -439,12 +441,21 @@ impl Application for ZipLockApp {
             Message::BackendConnected(result) => {
                 match result {
                     Ok(()) => {
-                        info!("Successfully connected to backend");
-                        // TODO: Load repository if configured
+                        info!("Successfully initialized hybrid client");
+                        // Initialize the hybrid client instance
+                        match ziplock_shared::ZipLockHybridClient::new() {
+                            Ok(client) => {
+                                self.hybrid_client = Some(client);
+                                info!("Hybrid client initialized successfully");
+                            }
+                            Err(error) => {
+                                warn!("Failed to initialize hybrid client: {}", error);
+                            }
+                        }
                     }
                     Err(error) => {
-                        warn!("Failed to connect to backend: {}", error);
-                        // Continue anyway, backend might not be needed for some operations
+                        warn!("Failed to initialize hybrid client: {}", error);
+                        // Continue anyway, some operations might still work
                     }
                 }
                 Command::none()
@@ -979,6 +990,10 @@ impl Application for ZipLockApp {
             Message::CloseArchive => {
                 info!("Archive close requested, returning to repository selection");
 
+                // Lock the credential store
+                let credential_store = services::get_credential_store();
+                credential_store.lock();
+
                 // Clear session and return to repository detection/selection
                 self.session_id = None;
                 self.auto_lock_enabled = false;
@@ -1442,28 +1457,42 @@ impl ZipLockApp {
     }
 
     async fn connect_backend_async() -> Result<(), String> {
-        let mut client = ZipLockClient::new().map_err(|e| e.to_string())?;
+        // Test hybrid client initialization to ensure it works
+        let _test_client = ziplock_shared::ZipLockHybridClient::new().map_err(|e| e.to_string())?;
 
-        client.connect().await.map_err(|e| e.to_string())?;
-        // Test the connection with a ping
-        client.ping().await.map_err(|e| e.to_string())?;
+        // Hybrid client is self-contained and doesn't need explicit connection
+        // The initialization already sets up the necessary FFI state
+        info!("Hybrid client initialization test successful");
         Ok(())
     }
 }
 
 fn main() -> iced::Result {
-    // Initialize logging
-    tracing_subscriber::registry()
-        .with(
-            tracing_subscriber::fmt::layer()
-                .with_target(false)
-                .with_thread_ids(false)
-                .with_level(true),
-        )
-        .with(tracing_subscriber::filter::LevelFilter::INFO)
-        .init();
+    // Initialize comprehensive logging system
+    if let Err(e) = logging::initialize_default_logging() {
+        eprintln!("Failed to initialize logging: {}", e);
+        // Fallback to basic console logging
+        tracing_subscriber::registry()
+            .with(
+                tracing_subscriber::fmt::layer()
+                    .with_target(false)
+                    .with_thread_ids(false)
+                    .with_level(true),
+            )
+            .with(tracing_subscriber::filter::LevelFilter::INFO)
+            .init();
+    }
 
     info!("Starting ZipLock Linux app");
+    info!("Application version: {}", env!("CARGO_PKG_VERSION"));
+    info!(
+        "Build mode: {}",
+        if cfg!(debug_assertions) {
+            "debug"
+        } else {
+            "release"
+        }
+    );
 
     // Configure application settings
     let settings = Settings {

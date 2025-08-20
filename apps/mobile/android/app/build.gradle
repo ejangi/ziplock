@@ -1,6 +1,7 @@
 plugins {
     id 'com.android.application'
     id 'org.jetbrains.kotlin.android'
+    id 'org.jetbrains.kotlin.plugin.serialization' version '1.9.10'
 }
 
 android {
@@ -20,6 +21,12 @@ android {
         }
     }
 
+    configurations.all {
+        resolutionStrategy {
+            force 'org.tukaani:xz:1.9'
+        }
+    }
+
     buildTypes {
         release {
             minifyEnabled false
@@ -35,6 +42,7 @@ android {
     }
     buildFeatures {
         compose true
+        buildConfig true
     }
     composeOptions {
         kotlinCompilerExtensionVersion '1.5.14'
@@ -44,6 +52,24 @@ android {
         main {
             jniLibs.srcDirs = ['src/main/jniLibs']
         }
+    }
+
+    // Temporarily disabled for Kotlin compilation focus
+    // externalNativeBuild {
+    //     cmake {
+    //         path file('src/main/cpp/CMakeLists.txt')
+    //         version '3.22.1'
+    //     }
+    // }
+
+    defaultConfig {
+        // Temporarily disabled for Kotlin compilation focus
+        // externalNativeBuild {
+        //     cmake {
+        //         cppFlags '-std=c++17'
+        //         abiFilters 'arm64-v8a', 'armeabi-v7a', 'x86_64', 'x86'
+        //     }
+        // }
     }
 
     ndkVersion "25.2.9519653"
@@ -102,6 +128,18 @@ dependencies {
 
     // JNA for native library integration
     implementation 'net.java.dev.jna:jna:5.13.0@aar'
+
+    // Apache Commons Compress for 7z archive operations (replaces sevenz_rust2)
+    implementation 'org.apache.commons:commons-compress:1.24.0'
+
+    // XZ Java library for LZMA/LZMA2 compression support in 7z files
+    implementation 'org.tukaani:xz:1.9'
+
+    // Kotlin serialization for JSON handling
+    implementation 'org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.0'
+
+    // Coroutines for async operations
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3'
 
     // Testing dependencies
     testImplementation 'junit:junit:4.13.2'

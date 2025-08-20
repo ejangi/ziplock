@@ -6,7 +6,7 @@ This document serves as the central index for all technical documentation in the
 
 **ALL TECHNICAL DOCUMENTATION MUST BE PLACED IN THE `docs/technical/` DIRECTORY.**
 
-ZipLock uses a unified FFI-based architecture where all platform implementations communicate directly with a shared core library. This approach provides consistent functionality across all platforms while eliminating the complexity of separate backend services.
+ZipLock uses a unified hybrid architecture with adaptive runtime strategy where all platform implementations communicate through a shared hybrid FFI layer that intelligently adapts to both platform capabilities and runtime contexts. This approach provides consistent functionality across all platforms with platform and runtime-specific optimizations: mobile platforms handle file operations externally, desktop platforms use integrated filesystem operations when safe, and async contexts automatically fallback to external file operations to prevent runtime conflicts.
 
 Do not place technical documentation in the root `docs/` directory or other locations. The `docs/technical/` directory is the designated location for all technical content to maintain organization and discoverability.
 
@@ -14,14 +14,10 @@ Do not place technical documentation in the root `docs/` directory or other loca
 
 - [Architecture Overview](architecture.md) - Complete system architecture and component relationships
 - [Design Guidelines](design.md) - UI/UX design principles and visual standards
-- [Repository Detection Implementation](technical/repository-detection-implementation.md) - Technical implementation details for repository detection
 - [Configuration Guide](technical/configuration.md) - Complete configuration reference with examples and profiles
-- [Cloud Storage Implementation](technical/cloud-storage-implementation.md) - Cloud storage file handling and conflict prevention for Android
-- [File Association](technical/file-association.md) - .7z file association and intent handling for Android
-- [Linux File Association](technical/linux-file-association.md) - .7z file association and "Open with..." integration for Linux
-
-- [Mobile Integration Guide](technical/mobile-integration.md) - Complete mobile platform integration documentation with examples
-- [Mobile Shared Implementation](technical/mobile-shared-implementation.md) - Shared library integration for mobile platforms
+- [Advanced Features Guide](technical/advanced-features.md) - Repository validation, cloud storage, repository detection, and persistent archive paths
+- [File Association Guide](technical/file-association.md) - Cross-platform .7z file association for Android and Linux
+- [FFI Integration Guide](technical/ffi-integration.md) - Comprehensive FFI layer documentation and platform integration patterns
 
 ## Security and Cryptography
 
@@ -44,20 +40,58 @@ Do not place technical documentation in the root `docs/` directory or other loca
 - Error handling and memory management
 - Session management within shared library
 
+## Adaptive Hybrid Architecture Overview
+
+ZipLock implements a unified hybrid architecture with adaptive runtime strategy that provides consistent functionality across all platforms and runtime contexts while optimizing for each environment's strengths:
+
+### Mobile Platforms (Android, iOS)
+- **Adaptive Hybrid FFI**: Handles data operations, validation, and cryptography in memory
+- **Platform Code**: Manages file operations, Storage Access Framework (Android), and UI
+- **Runtime Strategy**: Always uses external file operations mode
+- **Benefits**: Leverages platform-specific file APIs while maintaining data consistency
+
+### Desktop Platforms - Sync Context (Linux, macOS, Windows)
+- **Adaptive Hybrid FFI**: Handles both data operations AND filesystem operations
+- **Platform Code**: Provides native UI and integrates with hybrid client
+- **Runtime Strategy**: Creates own Tokio runtime for integrated operations
+- **Benefits**: Self-contained operations with optimal performance
+
+### Desktop Platforms - Async Context (Linux with iced, etc.)
+- **Adaptive Hybrid FFI**: Handles data operations, automatically detects async context
+- **Platform Code**: Handles file operations when FFI detects runtime conflicts
+- **Runtime Strategy**: Uses existing runtime or delegates to external file operations
+- **Benefits**: Prevents nested runtime panics while maintaining functionality
+
+## Runtime Strategy Detection
+
+The hybrid FFI layer automatically detects the calling context and adapts its execution strategy:
+
+1. **Standalone Context**: No existing async runtime detected → Creates own runtime for integrated operations
+2. **Async Context**: Existing async runtime detected → Uses external file operations to prevent conflicts
+3. **Mobile Context**: Platform detection → Always uses external file operations regardless of runtime
+
 ## Platform-Specific Implementation
 
-### All Platforms (Unified Architecture)
-- [Mobile Integration Guide](technical/mobile-integration.md) - Complete FFI integration examples for all platforms
-- [Android Development Guide](technical/android.md) - Comprehensive Android development, setup, and integration guide
-- Linux implementation (Rust + iced/GTK4) with direct FFI calls
-- Windows implementation (Rust + Tauri) with direct FFI calls
-- iOS implementation (Swift + SwiftUI) with C interop
-- Android implementation (Kotlin + Jetpack Compose) with JNI
-- macOS implementation (Swift + SwiftUI) with C interop
+### All Platforms (Unified Adaptive Hybrid Architecture)
+- [Android Development Guide](technical/android.md) - Comprehensive Android development, setup, mobile integration, debugging, and file association
+- [Android Hybrid Migration Guide](technical/android-hybrid-migration.md) - Adaptive hybrid architecture implementation and migration details
+- [FFI Integration Guide](technical/ffi-integration.md) - Cross-platform native library integration with runtime adaptation for iOS, Android, and desktop
+- Linux implementation (Rust + iced/GTK4) with adaptive hybrid FFI calls and runtime-safe operations
+- Windows implementation (Rust + Tauri) with adaptive hybrid FFI calls and runtime-safe operations
+- iOS implementation (Swift + SwiftUI) with adaptive hybrid FFI calls and external file operations
+- Android implementation (Kotlin + Jetpack Compose) with adaptive hybrid FFI calls and external file operations
+- macOS implementation (Swift + SwiftUI) with adaptive hybrid FFI calls and runtime-safe operations
+
+### Runtime Safety Features
+- **Automatic Runtime Detection**: FFI layer detects async/sync calling contexts
+- **Nested Runtime Prevention**: Prevents Tokio runtime panics in async environments
+- **Graceful Fallback**: Seamlessly switches to external file operations when needed
+- **Context Adaptation**: Single API adapts behavior based on calling environment
+- **Cross-Platform Consistency**: Same adaptive behavior across all platforms and contexts
 
 ## Development and Testing
 
-- [Build Guide](build.md) - Comprehensive build troubleshooting, containerized builds, and glibc compatibility
+- [Build Guide](technical/build.md) - Comprehensive build troubleshooting, containerized builds, and glibc compatibility
 - Build system configuration
 - Testing strategies and coverage requirements
 - Continuous integration setup
@@ -162,13 +196,20 @@ The ZipLock project includes comprehensive examples and integration patterns dis
   - Validation configuration examples
   - YAML migration from TOML
 
-### Client Integration Examples
-### Mobile Platform Examples
-- [Mobile Integration Guide](technical/mobile-integration.md) - iOS and Android integration examples
+### FFI Integration Examples
+- [FFI Integration Guide](technical/ffi-integration.md) - Cross-platform native library integration
   - Complete iOS Swift implementation with SwiftUI integration
-  - Complete Android Kotlin implementation with Jetpack Compose
-  - C FFI wrapper patterns
+  - Complete Android Kotlin/JNI implementation with Jetpack Compose
+  - C FFI wrapper patterns and common templates
   - Memory management and error handling
+  - Performance optimization and debugging
+
+### Advanced Implementation Examples
+- [Advanced Features Guide](technical/advanced-features.md) - Advanced system implementations
+  - Repository validation with auto-repair capabilities
+  - Cloud storage conflict detection and resolution
+  - Repository detection algorithms
+  - Persistent archive path management
 
 
 

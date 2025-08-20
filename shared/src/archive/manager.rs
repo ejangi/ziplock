@@ -4,6 +4,8 @@
 //! credential records. It provides a safe abstraction over the sevenz-rust2
 //! crate with proper file locking, backup management, and error handling.
 
+#[cfg(target_os = "android")]
+use super::android_saf::{is_content_uri, AndroidSafHandle};
 use super::cloud_storage::{CloudFileHandle, CloudStorageError};
 
 use crate::archive::validation::{RepositoryStats, ValidationIssue};
@@ -13,9 +15,10 @@ use crate::validation::validate_credential;
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use sevenz_rust2::{encoder_options, ArchiveWriter};
+use sevenz_rust2;
 use std::collections::HashMap;
 use std::fs;
+use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::SystemTime;
@@ -31,13 +34,26 @@ pub struct ArchiveManager {
     current_archive: Arc<RwLock<Option<OpenArchive>>>,
 }
 
+/// Source type for archive operations
+#[derive(Debug, Clone)]
+enum ArchiveSourceType {
+    /// Regular file path
+    FilePath,
+    /// Android content URI
+    #[cfg(target_os = "android")]
+    ContentUri(String),
+}
+
 /// Represents an open, decrypted archive
 #[derive(Debug)]
 struct OpenArchive {
     path: PathBuf,
     master_password: String,
     temp_dir: TempDir,
-    cloud_file_handle: CloudFileHandle,
+    cloud_file_handle: Option<CloudFileHandle>,
+    #[cfg(target_os = "android")]
+    android_saf_handle: Option<AndroidSafHandle>,
+    source_type: ArchiveSourceType,
     credentials: HashMap<String, CredentialRecord>,
     modified: bool,
     last_access: SystemTime,
@@ -47,17 +63,18 @@ impl OpenArchive {
     /// Validate file lock is still valid and check for conflicts
     fn validate_file_lock(&self) -> ArchiveResult<()> {
         // Check for cloud storage conflicts
-        self.cloud_file_handle
-            .verify_no_conflicts()
-            .map_err(|e| match e {
-                CloudStorageError::ContentModified => ArchiveError::Internal {
-                    message: "Archive was modified by external sync service. Please reload."
-                        .to_string(),
-                },
-                _ => ArchiveError::Internal {
-                    message: format!("Cloud file validation failed: {}", e),
-                },
-            })?;
+        if let Some(ref cloud_file_handle) = self.cloud_file_handle {
+            cloud_file_handle
+                .verify_no_conflicts()
+                .map_err(|e| match e {
+                    CloudStorageError::ContentModified => ArchiveError::Internal {
+                        message: "Archive file was modified externally. Please close and reopen the archive.".to_string(),
+                    },
+                    _ => ArchiveError::Internal {
+                        message: format!("File lock validation failed: {}", e),
+                    },
+                })?;
+        }
         Ok(())
     }
 
@@ -165,6 +182,71 @@ impl ArchiveManager {
             reason: format!("Failed to create credentials directory: {}", e),
         })?;
 
+        // Create a README file to ensure the archive has sufficient content
+        // This helps ensure the 7z archive meets minimum size requirements
+        let readme_content = format!(
+            "# ZipLock Archive\n\n\
+            This is a ZipLock encrypted archive created on {}.\n\
+            \n\
+            Version: {}\n\
+            Format: 7z with AES-256 encryption\n\
+            \n\
+            This archive contains encrypted password and credential data.\n\
+            Only authorized users with the master password can access the contents.\n\
+            \n\
+            For more information about ZipLock, visit: https://github.com/ziplock\n\
+            \n\
+            ## Structure\n\
+            - metadata.yml: Archive metadata and configuration\n\
+            - credentials/: Directory containing encrypted credential files\n\
+            \n\
+            ## Security Features\n\
+            - AES-256 encryption\n\
+            - PBKDF2 key derivation\n\
+            - Secure random salt generation\n\
+            - Tamper detection\n\
+            \n\
+            ## Archive Information\n\
+            This archive was created with ZipLock to ensure it has sufficient content\n\
+            for proper 7z format compatibility and extraction reliability.\n\
+            \n\
+            Even empty credential archives require this minimal structure to maintain\n\
+            compatibility with the 7z compression library and provide a consistent\n\
+            user experience across all platforms.\n\
+            \n\
+            The credentials directory will be populated as you add password entries\n\
+            to your secure archive.\n\
+            ",
+            metadata
+                .created_at
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs(),
+            metadata.version
+        );
+
+        let readme_path = temp_dir.path().join("README.md");
+        fs::write(&readme_path, readme_content).map_err(|e| ArchiveError::CreationFailed {
+            reason: format!("Failed to write README: {}", e),
+        })?;
+
+        // Create a placeholder file in the credentials directory to ensure it's included in the archive
+        // This helps ensure the archive has a proper directory structure even when empty
+        let placeholder_content = "# ZipLock Credentials Directory\n\n\
+            This directory will contain your encrypted credential files.\n\
+            This placeholder file ensures the directory structure is preserved\n\
+            in the 7z archive even when no credentials have been added yet.\n\
+            \n\
+            This file will be automatically managed by ZipLock and should not\n\
+            be modified manually.\n";
+
+        let placeholder_path = credentials_dir.join(".ziplock_placeholder");
+        fs::write(&placeholder_path, placeholder_content).map_err(|e| {
+            ArchiveError::CreationFailed {
+                reason: format!("Failed to write credentials placeholder: {}", e),
+            }
+        })?;
+
         // Create the encrypted archive
         self.create_encrypted_archive(temp_dir.path(), &path, &master_password)
             .await?;
@@ -175,7 +257,27 @@ impl ArchiveManager {
 
     /// Open an existing archive for operations
     pub async fn open_archive(&self, path: PathBuf, master_password: String) -> ArchiveResult<()> {
-        info!("Opening archive: {:?}", path);
+        #[cfg(target_os = "android")]
+        {
+            let path_str = path.to_string_lossy().to_string();
+            if is_content_uri(&path_str) {
+                return self
+                    .open_archive_from_content_uri(path_str, master_password)
+                    .await;
+            }
+        }
+
+        self.open_archive_from_file_path(path, master_password)
+            .await
+    }
+
+    /// Open an archive from a file path
+    async fn open_archive_from_file_path(
+        &self,
+        path: PathBuf,
+        master_password: String,
+    ) -> ArchiveResult<()> {
+        info!("Opening archive from file path: {:?}", path);
 
         // Check if archive exists
         if !path.exists() {
@@ -201,7 +303,7 @@ impl ArchiveManager {
                     path: path.to_string_lossy().to_string(),
                 },
                 _ => ArchiveError::Internal {
-                    message: format!("Failed to create cloud file handle: {}", e),
+                    message: format!("Failed to create file handle for {:?}: {}. This may indicate file permission issues, that the file is in use by another application, or that a stale lock file exists.", path, e),
                 },
             })?;
 
@@ -235,7 +337,10 @@ impl ArchiveManager {
             path: path.clone(),
             master_password,
             temp_dir,
-            cloud_file_handle,
+            cloud_file_handle: Some(cloud_file_handle),
+            #[cfg(target_os = "android")]
+            android_saf_handle: None,
+            source_type: ArchiveSourceType::FilePath,
             credentials,
             modified: false,
             last_access: SystemTime::now(),
@@ -248,6 +353,79 @@ impl ArchiveManager {
         }
 
         info!("Successfully opened archive: {:?}", path);
+        Ok(())
+    }
+
+    /// Open an archive from an Android content URI
+    #[cfg(target_os = "android")]
+    async fn open_archive_from_content_uri(
+        &self,
+        content_uri: String,
+        master_password: String,
+    ) -> ArchiveResult<()> {
+        info!("Opening archive from Android content URI: {}", content_uri);
+
+        // Check if an archive is already open
+        {
+            let current = self.current_archive.read().await;
+            if current.is_some() {
+                return Err(ArchiveError::Internal {
+                    message: "Another archive is already open".to_string(),
+                });
+            }
+        }
+
+        // Create Android SAF handle
+        let mut android_saf_handle =
+            AndroidSafHandle::new(&content_uri).map_err(|e| ArchiveError::OpenFailed {
+                reason: format!("Failed to open Android content URI: {}", e),
+            })?;
+
+        // Create temporary file copy for 7z operations
+        let temp_archive_path =
+            android_saf_handle
+                .create_temp_file_copy()
+                .map_err(|e| ArchiveError::OpenFailed {
+                    reason: format!("Failed to create temporary file copy: {}", e),
+                })?;
+
+        // Create temporary directory for extraction
+        let temp_dir = TempDir::new().map_err(|e| ArchiveError::OpenFailed {
+            reason: format!("Failed to create temporary directory: {}", e),
+        })?;
+
+        // Extract archive to temp directory
+        self.extract_archive(temp_archive_path, temp_dir.path(), &master_password)
+            .await?;
+
+        // Load credentials from extracted directory
+        let credentials = self
+            .load_credentials_from_directory(temp_dir.path())
+            .await?;
+
+        // Create OpenArchive instance
+        let open_archive = OpenArchive {
+            path: PathBuf::from(&content_uri), // Store the content URI as path for reference
+            master_password,
+            temp_dir,
+            cloud_file_handle: None,
+            android_saf_handle: Some(android_saf_handle),
+            source_type: ArchiveSourceType::ContentUri(content_uri.clone()),
+            credentials,
+            modified: false,
+            last_access: SystemTime::now(),
+        };
+
+        // Store the open archive
+        {
+            let mut current = self.current_archive.write().await;
+            *current = Some(open_archive);
+        }
+
+        info!(
+            "Successfully opened archive from content URI: {}",
+            content_uri
+        );
         Ok(())
     }
 
@@ -267,33 +445,44 @@ impl ArchiveManager {
                     .await?;
 
                 // Create new encrypted archive
-                self.create_encrypted_archive(
-                    archive.temp_dir.path(),
-                    archive.cloud_file_handle.local_path(),
-                    &archive.master_password,
-                )
-                .await?;
+                if let Some(ref cloud_handle) = archive.cloud_file_handle {
+                    self.create_encrypted_archive(
+                        archive.temp_dir.path(),
+                        cloud_handle.local_path(),
+                        &archive.master_password,
+                    )
+                    .await?;
 
-                // Mark for sync back and sync to cloud storage if needed
-                archive.cloud_file_handle.mark_modified();
-                if archive.cloud_file_handle.is_cloud_file() {
-                    info!(
-                        "Syncing final changes back to cloud storage: {:?}",
-                        archive.path
-                    );
-                    archive.cloud_file_handle.sync_back().map_err(|e| {
-                        warn!("Failed to sync final changes to cloud storage: {}", e);
-                        ArchiveError::Internal {
-                            message: format!("Failed to sync to cloud storage on close: {}", e),
+                    // Mark for sync back and sync to cloud storage if needed
+                    if let Some(ref mut cloud_handle) = archive.cloud_file_handle {
+                        cloud_handle.mark_modified();
+                        if cloud_handle.is_cloud_file() {
+                            info!(
+                                "Syncing final changes back to cloud storage: {:?}",
+                                archive.path
+                            );
+                            cloud_handle.sync_back().map_err(|e| {
+                                warn!("Failed to sync final changes to cloud storage: {}", e);
+                                ArchiveError::Internal {
+                                    message: format!(
+                                        "Failed to sync to cloud storage on close: {}",
+                                        e
+                                    ),
+                                }
+                            })?;
                         }
-                    })?;
+                    }
                 }
             }
 
             // Clean up old backups before closing (use local path for cloud files)
             if self.config.auto_backup {
-                let backup_path = if archive.cloud_file_handle.is_cloud_file() {
-                    archive.cloud_file_handle.local_path()
+                let backup_path = if let Some(ref cloud_handle) = archive.cloud_file_handle {
+                    if cloud_handle.is_cloud_file() {
+                        cloud_handle.local_path()
+                    } else {
+                        &archive.path
+                    }
                 } else {
                     &archive.path
                 };
@@ -468,32 +657,89 @@ impl ArchiveManager {
                 self.write_credentials_to_directory(archive.temp_dir.path(), &archive.credentials)
                     .await?;
 
-                // Create backup if enabled (use local working path for cloud files)
-                if self.config.auto_backup {
-                    self.create_backup(archive.cloud_file_handle.local_path())
-                        .await?;
-                }
+                match &archive.source_type {
+                    ArchiveSourceType::FilePath => {
+                        if let Some(ref mut cloud_file_handle) = archive.cloud_file_handle {
+                            // Create backup if enabled (use local working path for cloud files)
+                            if self.config.auto_backup {
+                                self.create_backup(cloud_file_handle.local_path()).await?;
+                            }
 
-                // Create new encrypted archive (save to local working path)
-                self.create_encrypted_archive(
-                    archive.temp_dir.path(),
-                    archive.cloud_file_handle.local_path(),
-                    &archive.master_password,
-                )
-                .await?;
+                            // Create new encrypted archive (save to local working path)
+                            self.create_encrypted_archive(
+                                archive.temp_dir.path(),
+                                cloud_file_handle.local_path(),
+                                &archive.master_password,
+                            )
+                            .await?;
 
-                // Mark that the file was modified for cloud storage sync back
-                archive.cloud_file_handle.mark_modified();
+                            // Mark that the file was modified for cloud storage sync back
+                            cloud_file_handle.mark_modified();
 
-                // For cloud files, sync back to original location
-                if archive.cloud_file_handle.is_cloud_file() {
-                    info!("Syncing changes back to cloud storage: {:?}", archive.path);
-                    archive
-                        .cloud_file_handle
-                        .sync_back()
-                        .map_err(|e| ArchiveError::Internal {
-                            message: format!("Failed to sync to cloud storage: {}", e),
-                        })?;
+                            // For cloud files, sync back to original location
+                            if cloud_file_handle.is_cloud_file() {
+                                info!("Syncing changes back to cloud storage: {:?}", archive.path);
+                                cloud_file_handle.sync_back().map_err(|e| {
+                                    ArchiveError::Internal {
+                                        message: format!("Failed to sync to cloud storage: {}", e),
+                                    }
+                                })?;
+                            }
+                        } else {
+                            // Direct file path without cloud handling
+                            if self.config.auto_backup {
+                                self.create_backup(&archive.path).await?;
+                            }
+
+                            self.create_encrypted_archive(
+                                archive.temp_dir.path(),
+                                &archive.path,
+                                &archive.master_password,
+                            )
+                            .await?;
+                        }
+                    }
+                    #[cfg(target_os = "android")]
+                    ArchiveSourceType::ContentUri(content_uri) => {
+                        if let Some(ref mut android_saf_handle) = archive.android_saf_handle {
+                            // Create temporary archive file
+                            let temp_archive_path = android_saf_handle
+                                .create_temp_file_copy()
+                                .map_err(|e| ArchiveError::Internal {
+                                    message: format!(
+                                        "Failed to create temporary archive file: {}",
+                                        e
+                                    ),
+                                })?;
+
+                            // Create backup if enabled
+                            if self.config.auto_backup {
+                                self.create_backup(temp_archive_path).await?;
+                            }
+
+                            // Create new encrypted archive
+                            self.create_encrypted_archive(
+                                archive.temp_dir.path(),
+                                temp_archive_path,
+                                &archive.master_password,
+                            )
+                            .await?;
+
+                            // Sync changes back to content URI
+                            info!(
+                                "Syncing changes back to Android content URI: {}",
+                                content_uri
+                            );
+                            android_saf_handle.sync_temp_file_back().map_err(|e| {
+                                ArchiveError::Internal {
+                                    message: format!(
+                                        "Failed to sync to Android content URI: {}",
+                                        e
+                                    ),
+                                }
+                            })?;
+                        }
+                    }
                 }
 
                 archive.modified = false;
@@ -774,34 +1020,21 @@ impl ArchiveManager {
             let config = compression_config.clone();
 
             move || -> Result<(), sevenz_rust2::Error> {
-                if config.solid {
-                    // Use solid compression for better compression ratio
-                    info!("Using solid compression with level {}", config.level);
-                    let mut writer = ArchiveWriter::create(&archive_path)?;
+                // Always use non-solid compression for better compatibility with small archives
+                // and more reliable extraction, especially on mobile platforms
+                info!(
+                    "Using non-solid compression for better compatibility (level {})",
+                    config.level
+                );
 
-                    // Configure compression methods with encryption and LZMA2
-                    let mut methods = Vec::new();
-                    methods.push(
-                        encoder_options::AesEncoderOptions::new(password.as_str().into()).into(),
-                    );
+                // Use the convenience function which creates more compatible archives
+                // This avoids potential issues with solid compression for minimal content
+                sevenz_rust2::compress_to_path_encrypted(
+                    &source_dir,
+                    &archive_path,
+                    password.as_str().into(),
+                )?;
 
-                    // Configure LZMA2 with dictionary size and multi-threading
-                    let lzma2_opts = encoder_options::LZMA2Options::from_level(config.level.into());
-                    methods.push(lzma2_opts.into());
-
-                    writer.set_content_methods(methods);
-
-                    writer.push_source_path(&source_dir, |_| true)?;
-                    writer.finish()?;
-                } else {
-                    // Use convenience function for faster random access
-                    info!("Using non-solid compression for better random access");
-                    sevenz_rust2::compress_to_path_encrypted(
-                        &source_dir,
-                        &archive_path,
-                        password.as_str().into(),
-                    )?;
-                }
                 Ok(())
             }
         })
@@ -840,33 +1073,118 @@ impl ArchiveManager {
         info!("Extracting archive: {:?}", archive_path);
         debug!("Destination directory: {:?}", destination);
 
+        // Validate archive file size before attempting extraction
+        let file_size = fs::metadata(archive_path)
+            .map_err(|e| ArchiveError::ExtractFailed {
+                reason: format!("Failed to get archive file metadata: {}", e),
+            })?
+            .len();
+
+        if file_size == 0 {
+            return Err(ArchiveError::ExtractFailed {
+                reason: "Archive file is empty (0 bytes)".to_string(),
+            });
+        }
+
+        if file_size < 32 {
+            return Err(ArchiveError::ExtractFailed {
+                reason: format!(
+                    "Archive file is too small ({} bytes) to be a valid 7z archive. Minimum expected size is 32 bytes for the signature header.",
+                    file_size
+                ),
+            });
+        }
+
+        // Enhanced validation for small archives
+        if file_size < 512 {
+            warn!(
+                "Archive file is very small ({} bytes), performing additional validation for: {:?}",
+                file_size, archive_path
+            );
+
+            // Validate 7z signature
+            if let Err(e) = self.validate_7z_signature(archive_path).await {
+                return Err(ArchiveError::ExtractFailed {
+                    reason: format!("Archive signature validation failed: {}", e),
+                });
+            }
+        }
+
+        info!("Archive file size validation passed: {} bytes", file_size);
+
         // Create destination directory
         fs::create_dir_all(destination).map_err(|e| ArchiveError::ExtractFailed {
             reason: format!("Failed to create destination directory: {}", e),
         })?;
 
-        // Use sevenz_rust's extraction function
-        let result = tokio::task::spawn_blocking({
-            let archive_path = archive_path.to_owned();
-            let destination = destination.to_owned();
-            let password = password.to_owned();
+        // Use sevenz_rust's extraction function with enhanced error handling and timeout
+        info!("Starting 7z extraction with enhanced error handling");
 
-            move || {
-                sevenz_rust2::decompress_file_with_password(
-                    &archive_path,
-                    &destination,
-                    password.as_str().into(),
-                )
-            }
-        })
-        .await;
+        let result = tokio::time::timeout(
+            std::time::Duration::from_secs(60), // 60 second timeout for extraction
+            tokio::task::spawn_blocking({
+                let archive_path = archive_path.to_owned();
+                let destination = destination.to_owned();
+                let password = password.to_owned();
+
+                move || {
+                    info!("Extraction task started for: {:?}", archive_path);
+
+                    // Get file info before extraction
+                    let file_size = std::fs::metadata(&archive_path).map(|m| m.len()).unwrap_or(0);
+                    info!("Attempting 7z extraction of {} byte archive: {:?}", file_size, archive_path);
+
+                    // Use simple panic catcher only for sevenz_rust2 library
+                    std::panic::catch_unwind(|| {
+                        info!("Calling sevenz_rust2::decompress_file_with_password");
+                        sevenz_rust2::decompress_file_with_password(
+                            &archive_path,
+                            &destination,
+                            password.as_str().into(),
+                        )
+                    })
+                    .map_err(|panic_info| {
+                        let panic_msg = if let Some(s) = panic_info.downcast_ref::<String>() {
+                            s.clone()
+                        } else if let Some(s) = panic_info.downcast_ref::<&str>() {
+                            s.to_string()
+                        } else {
+                            "Unknown panic in 7z library".to_string()
+                        };
+                        error!("7z extraction panicked: {}", panic_msg);
+                        sevenz_rust2::Error::from(std::io::Error::other(
+                            format!("7z library operation panicked: {}. Archive may be corrupted or use incompatible format.", panic_msg),
+                        ))
+                    })
+                    .and_then(|result| result)
+                }
+            })
+        ).await;
 
         match result {
-            Ok(Ok(())) => {
+            Ok(Ok(Ok(()))) => {
                 info!("Successfully extracted archive to: {:?}", destination);
+
+                // Verify extraction results
+                let extracted_files = fs::read_dir(destination)
+                    .map_err(|e| ArchiveError::ExtractFailed {
+                        reason: format!("Failed to read extracted directory: {}", e),
+                    })?
+                    .count();
+
+                if extracted_files == 0 {
+                    return Err(ArchiveError::ExtractFailed {
+                        reason: "Archive extracted successfully but no files were found in the destination. The archive may be empty or corrupted.".to_string(),
+                    });
+                }
+
+                info!(
+                    "Extraction verification passed: {} files extracted",
+                    extracted_files
+                );
                 Ok(())
             }
-            Ok(Err(e)) => {
+            Ok(Ok(Err(e))) => {
                 error!("Failed to extract 7z archive: {}", e);
 
                 // Check for password-related errors
@@ -875,23 +1193,73 @@ impl ArchiveManager {
                     || error_string.contains("range decoder first byte is 0")
                     || error_string.contains("Invalid password")
                     || error_string.contains("Wrong password")
+                    || error_string.contains("DataError")
                 {
                     Err(ArchiveError::CryptoError {
-                        reason: "Invalid master password".to_string(),
+                        reason: "Invalid master password or corrupted archive encryption"
+                            .to_string(),
+                    })
+                } else if error_string.contains("panicked") || error_string.contains("panic") {
+                    Err(ArchiveError::ExtractFailed {
+                        reason: format!(
+                            "Archive extraction failed due to internal error: {}. The archive may be corrupted, use an unsupported format, or be too minimal for the 7z library to handle properly.",
+                            e
+                        ),
                     })
                 } else {
                     Err(ArchiveError::ExtractFailed {
-                        reason: format!("Archive extraction failed: {}", e),
+                        reason: format!("Archive extraction failed: {}. This may indicate a corrupted archive or incompatible format.", e),
                     })
                 }
             }
-            Err(e) => {
+            Ok(Err(e)) => {
                 error!("Task execution failed: {}", e);
                 Err(ArchiveError::ExtractFailed {
-                    reason: format!("Task failed: {}", e),
+                    reason: format!("Extraction task failed: {}", e),
+                })
+            }
+            Err(_) => {
+                error!("Archive extraction timed out after 60 seconds");
+                Err(ArchiveError::ExtractFailed {
+                    reason:
+                        "Archive extraction timed out. The archive may be corrupted or too large."
+                            .to_string(),
                 })
             }
         }
+    }
+
+    /// Validate 7z archive signature to detect corruption early
+    async fn validate_7z_signature(&self, path: &Path) -> ArchiveResult<()> {
+        info!("Validating 7z signature for: {:?}", path);
+
+        let mut file = fs::File::open(path).map_err(|e| ArchiveError::ExtractFailed {
+            reason: format!("Failed to open archive for signature validation: {}", e),
+        })?;
+
+        let mut signature = [0u8; 6];
+        file.read_exact(&mut signature)
+            .map_err(|e| ArchiveError::ExtractFailed {
+                reason: format!("Failed to read archive signature: {}", e),
+            })?;
+
+        // 7z signature is: 0x37 0x7A 0xBC 0xAF 0x27 0x1C
+        let expected_signature = [0x37, 0x7A, 0xBC, 0xAF, 0x27, 0x1C];
+
+        info!("Read signature: {:02x?}", signature);
+        info!("Expected signature: {:02x?}", expected_signature);
+
+        if signature != expected_signature {
+            return Err(ArchiveError::ExtractFailed {
+                reason: format!(
+                    "Invalid 7z signature. Expected {:02x?}, got {:02x?}. The file may not be a valid 7z archive or may be corrupted.",
+                    expected_signature, signature
+                ),
+            });
+        }
+
+        info!("7z signature validation passed");
+        Ok(())
     }
 
     /// Validate archive file

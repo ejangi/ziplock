@@ -8,7 +8,12 @@
 
 use crate::api::{ApiSession, ZipLockApi};
 use crate::archive::ArchiveConfig;
+use crate::logging::{init_logging, is_debug_enabled, set_debug_enabled, LoggingConfig};
+
+#[cfg(target_os = "android")]
+use crate::archive::{is_android_saf_available, is_content_uri};
 use crate::models::CredentialRecord;
+
 use std::collections::HashMap;
 use std::ffi::{CStr, CString};
 use std::os::raw::{c_char, c_int, c_void};
@@ -113,17 +118,18 @@ struct FFIState {
 
 static mut FFI_STATE: Option<Mutex<FFIState>> = None;
 
-/// Get access to the global FFI state (for internal use by client module)
-pub unsafe fn get_ffi_state() -> Option<&'static Mutex<FFIState>> {
-    FFI_STATE.as_ref()
-}
-
 /// Initialize the ZipLock library
 #[no_mangle]
 pub extern "C" fn ziplock_init() -> c_int {
     unsafe {
         if FFI_STATE.is_some() {
             return ZipLockError::AlreadyInitialized as c_int;
+        }
+
+        // Initialize logging system first
+        if let Err(e) = init_logging() {
+            eprintln!("Failed to initialize logging: {}", e);
+            // Continue anyway, logging is not critical for core functionality
         }
 
         let runtime = match Runtime::new() {
@@ -145,6 +151,8 @@ pub extern "C" fn ziplock_init() -> c_int {
         };
 
         FFI_STATE = Some(Mutex::new(state));
+
+        crate::log_info!("ZipLock FFI library initialized successfully");
         ZipLockError::Success as c_int
     }
 }
@@ -213,6 +221,7 @@ pub extern "C" fn ziplock_archive_create(
     path: *const c_char,
     master_password: *const c_char,
 ) -> c_int {
+    crate::log_debug!("FFI: ziplock_archive_create called");
     if path.is_null() || master_password.is_null() {
         unsafe {
             set_last_error("Invalid parameter: path or password is null");
@@ -294,53 +303,379 @@ pub extern "C" fn ziplock_archive_open(
     path: *const c_char,
     master_password: *const c_char,
 ) -> c_int {
-    if path.is_null() || master_password.is_null() {
-        return ZipLockError::InvalidParameter as c_int;
+    crate::log_debug!("FFI: ziplock_archive_open called");
+
+    // Android emulator debugging (affects both x86_64 and ARM emulators)
+    #[cfg(target_os = "android")]
+    {
+        eprintln!("ANDROID DEBUG: Running on Android platform");
+        eprintln!("ANDROID DEBUG: Archive path: {:?}", path);
+        eprintln!("ANDROID DEBUG: sevenz_rust2 may have emulator compatibility issues");
+
+        if crate::platform::android::is_android_emulator() {
+            eprintln!("EMULATOR WARNING: Detected emulator environment");
+            eprintln!("EMULATOR WARNING: sevenz_rust2 library may crash in emulated environments");
+        }
     }
 
-    unsafe {
-        let state_mutex = match FFI_STATE.as_ref() {
-            Some(state) => state,
-            None => return ZipLockError::NotInitialized as c_int,
-        };
+    // Set up panic hook to prevent crashes
+    std::panic::set_hook(Box::new(|panic_info| {
+        eprintln!("FFI PANIC in ziplock_archive_open: {}", panic_info);
+        if let Some(location) = panic_info.location() {
+            eprintln!("Panic occurred at {}:{}", location.file(), location.line());
+        }
+        if let Some(payload) = panic_info.payload().downcast_ref::<&str>() {
+            eprintln!("Panic payload: {}", payload);
+        } else if let Some(payload) = panic_info.payload().downcast_ref::<String>() {
+            eprintln!("Panic payload: {}", payload);
+        }
+    }));
 
-        let state = match state_mutex.lock() {
-            Ok(state) => state,
-            Err(_) => return ZipLockError::InternalError as c_int,
-        };
+    // Use eprintln for debugging
+    eprintln!("FFI STEP 1: Entering ziplock_archive_open function");
 
-        let api = match state.api.as_ref() {
-            Some(api) => api,
-            None => return ZipLockError::NotInitialized as c_int,
-        };
+    // Wrap the entire function in a panic-catching block
+    let result = std::panic::catch_unwind(|| {
+        eprintln!("FFI STEP 2: Inside panic catch block");
 
-        let runtime = match state.runtime.as_ref() {
-            Some(rt) => rt,
-            None => return ZipLockError::InternalError as c_int,
-        };
+        if path.is_null() || master_password.is_null() {
+            eprintln!("FFI Error: Null pointer parameters");
+            return ZipLockError::InvalidParameter as c_int;
+        }
+        eprintln!("FFI STEP 3: Parameter validation passed");
 
-        let path_str = match CStr::from_ptr(path).to_str() {
-            Ok(s) => s,
-            Err(_) => return ZipLockError::InvalidParameter as c_int,
-        };
+        eprintln!("FFI Info: Starting archive open operation");
 
-        let password_str = match CStr::from_ptr(master_password).to_str() {
-            Ok(s) => s,
-            Err(_) => return ZipLockError::InvalidParameter as c_int,
-        };
+        unsafe {
+            eprintln!("FFI STEP 4: Entering unsafe block");
 
-        let path_buf = PathBuf::from(path_str);
+            let state_mutex = match FFI_STATE.as_ref() {
+                Some(state) => {
+                    eprintln!("FFI Info: FFI state found");
+                    state
+                }
+                None => {
+                    eprintln!("FFI Error: FFI not initialized");
+                    return ZipLockError::NotInitialized as c_int;
+                }
+            };
+            eprintln!("FFI STEP 5: Got FFI state mutex");
 
-        match runtime.block_on(api.open_archive(path_buf, password_str.to_string())) {
-            Ok(_) => ZipLockError::Success as c_int,
-            Err(_) => ZipLockError::InternalError as c_int,
+            let state = match state_mutex.lock() {
+                Ok(state) => {
+                    eprintln!("FFI Info: Successfully locked FFI state");
+                    state
+                }
+                Err(e) => {
+                    eprintln!("FFI Error: Failed to lock FFI state: {}", e);
+                    return ZipLockError::InternalError as c_int;
+                }
+            };
+            eprintln!("FFI STEP 6: Locked FFI state successfully");
+
+            let api = match state.api.as_ref() {
+                Some(api) => {
+                    eprintln!("FFI Info: API instance found");
+                    api
+                }
+                None => {
+                    eprintln!("FFI Error: API not initialized");
+                    return ZipLockError::NotInitialized as c_int;
+                }
+            };
+            eprintln!("FFI STEP 7: Got API instance");
+
+            let runtime = match state.runtime.as_ref() {
+                Some(rt) => {
+                    eprintln!("FFI Info: Runtime found");
+                    rt
+                }
+                None => {
+                    eprintln!("FFI Error: Runtime not initialized");
+                    return ZipLockError::InternalError as c_int;
+                }
+            };
+            eprintln!("FFI STEP 8: Got runtime instance");
+
+            let path_str = match CStr::from_ptr(path).to_str() {
+                Ok(s) => {
+                    eprintln!("FFI Info: Path parsed: {}", s);
+                    s
+                }
+                Err(e) => {
+                    eprintln!("FFI Error: Invalid path string: {}", e);
+                    return ZipLockError::InvalidParameter as c_int;
+                }
+            };
+            eprintln!("FFI STEP 9: Parsed path string");
+
+            let password_str = match CStr::from_ptr(master_password).to_str() {
+                Ok(s) => {
+                    eprintln!("FFI Info: Password parsed (length: {})", s.len());
+                    s
+                }
+                Err(e) => {
+                    eprintln!("FFI Error: Invalid password string: {}", e);
+                    return ZipLockError::InvalidParameter as c_int;
+                }
+            };
+            eprintln!("FFI STEP 10: Parsed password string");
+
+            let path_buf = PathBuf::from(path_str);
+            eprintln!("FFI STEP 11: Created PathBuf: {:?}", path_buf);
+
+            // Check if this is an Android content URI
+            #[cfg(target_os = "android")]
+            {
+                eprintln!("FFI STEP 12: Checking if content URI on Android");
+                if is_content_uri(path_str) {
+                    eprintln!("FFI Info: Detected content URI");
+                    // For content URIs, we need Android SAF to be initialized
+                    if !is_android_saf_available() {
+                        let error_msg = format!(
+                            "Android SAF not available for content URI: {}. Please ensure SAF callbacks are initialized.",
+                            path_str
+                        );
+                        eprintln!("FFI Error: {}", error_msg);
+                        set_last_error(&error_msg);
+                        return ZipLockError::InternalError as c_int;
+                    }
+                    eprintln!("FFI Info: Using Android SAF for content URI: {}", path_str);
+                } else {
+                    eprintln!("FFI Info: Using regular file path: {}", path_str);
+                }
+            }
+            eprintln!("FFI STEP 13: Content URI check completed");
+
+            // Pre-validation for file path archives
+            #[cfg(target_os = "android")]
+            if !is_content_uri(path_str) {
+                if let Ok(metadata) = std::fs::metadata(&path_buf) {
+                    let file_size = metadata.len();
+                    eprintln!("FFI Info: Archive file size: {} bytes", file_size);
+
+                    if file_size < 32 {
+                        let error_msg = format!(
+                            "Archive file is too small ({} bytes) to be valid 7z",
+                            file_size
+                        );
+                        eprintln!("FFI Error: {}", error_msg);
+                        set_last_error(&error_msg);
+                        return ZipLockError::ArchiveCorrupted as c_int;
+                    }
+
+                    if file_size < 512 {
+                        eprintln!(
+                            "FFI Warning: Archive file is small ({} bytes), may be newly created",
+                            file_size
+                        );
+                    }
+                } else {
+                    eprintln!("FFI Warning: Could not get file metadata for pre-validation");
+                }
+            }
+
+            eprintln!("FFI Info: About to call API open_archive - Critical section starts here");
+
+            // Android emulator safety check (all architectures)
+            #[cfg(target_os = "android")]
+            {
+                if crate::platform::android::is_android_emulator() {
+                    eprintln!("EMULATOR CRITICAL: Attempting archive open on Android emulator");
+                    eprintln!("EMULATOR CRITICAL: sevenz_rust2 library has known crashes in emulated environments");
+                    eprintln!(
+                        "EMULATOR CRITICAL: Archive size: {} bytes, Path: {}",
+                        std::fs::metadata(&path_buf).map(|m| m.len()).unwrap_or(0),
+                        path_str
+                    );
+                    eprintln!("EMULATOR CRITICAL: Consider testing on real device if crash occurs");
+                }
+
+                // Additional file validation for Android
+                if let Ok(metadata) = std::fs::metadata(&path_buf) {
+                    eprintln!(
+                        "ANDROID DEBUG: File size verification: {} bytes",
+                        metadata.len()
+                    );
+                    if metadata.len() < 1000 {
+                        eprintln!("ANDROID WARNING: Very small archive file - may trigger library edge cases");
+                    }
+                }
+            }
+
+            // Create the future first with extra debugging
+            let archive_open_future = {
+                eprintln!(
+                    "FFI STEP 14: Creating archive open future - About to call api.open_archive()"
+                );
+
+                eprintln!("FFI STEP 14.1: Creating archive open future");
+                api.open_archive(path_buf.clone(), password_str.to_string())
+            };
+            eprintln!("FFI STEP 15: Archive open future created successfully");
+
+            eprintln!("FFI Info: Archive open future created, setting up timeout");
+            let timeout_duration = std::time::Duration::from_secs(300); // 5 minute timeout
+
+            eprintln!("FFI STEP 16: About to block on archive opening with timeout");
+
+            // Final safety warning for Android emulators
+            #[cfg(target_os = "android")]
+            {
+                if crate::platform::android::is_android_emulator() {
+                    eprintln!("EMULATOR CRITICAL: Entering sevenz_rust2 library call zone");
+                    eprintln!(
+                        "EMULATOR CRITICAL: If SIGABRT occurs here, test on real Android device"
+                    );
+                    eprintln!(
+                        "EMULATOR CRITICAL: Known issue affects both x86_64 and ARM emulators"
+                    );
+                }
+
+                // Add timeout warning for small files
+                if std::fs::metadata(&path_buf).map(|m| m.len()).unwrap_or(0) < 2000 {
+                    eprintln!("ANDROID WARNING: Small archive file - using reduced timeout");
+                }
+            }
+
+            match runtime.block_on(tokio::time::timeout(timeout_duration, archive_open_future)) {
+                Ok(Ok(_)) => {
+                    eprintln!("FFI Success: Archive opened successfully: {}", path_str);
+                    #[cfg(target_os = "android")]
+                    {
+                        if crate::platform::android::is_android_emulator() {
+                            eprintln!("EMULATOR SUCCESS: Archive opened successfully on Android emulator!");
+                            eprintln!("EMULATOR SUCCESS: sevenz_rust2 library worked correctly in emulated environment");
+                        } else {
+                            eprintln!(
+                                "ANDROID SUCCESS: Archive opened successfully on real device"
+                            );
+                        }
+                    }
+                    ZipLockError::Success as c_int
+                }
+                Ok(Err(e)) => {
+                    let error_msg = format!("Failed to open archive {}: {}", path_str, e);
+                    eprintln!("FFI Error: {}", error_msg);
+
+                    // Enhanced error classification for better diagnostics
+                    let error_str = e.to_string();
+                    eprintln!("FFI Error Details: {}", error_str);
+
+                    if error_str.contains("signature validation failed")
+                        || error_str.contains("Invalid 7z signature")
+                    {
+                        eprintln!("FFI Error: Archive signature validation failed - file may not be a valid 7z archive");
+                        set_last_error("Archive file does not have a valid 7z signature. The file may be corrupted or not a 7z archive.");
+                        return ZipLockError::ArchiveCorrupted as c_int;
+                    }
+
+                    if error_str.contains("7z library operation panicked")
+                        || error_str.contains("panicked")
+                    {
+                        eprintln!("FFI Error: 7z library panicked during extraction - likely corrupted archive");
+                        set_last_error("Archive extraction failed due to internal library error. The archive may be corrupted or use an incompatible format.");
+                        return ZipLockError::ArchiveCorrupted as c_int;
+                    }
+
+                    if error_str.contains("too small") || error_str.contains("empty") {
+                        eprintln!("FFI Error: Archive is too small or empty");
+                        set_last_error(
+                            "Archive file is too small or empty to be a valid 7z archive.",
+                        );
+                        return ZipLockError::ArchiveCorrupted as c_int;
+                    }
+
+                    set_last_error(&error_msg);
+                    match e {
+                        crate::api::ApiError::Archive(archive_err) => match archive_err {
+                            crate::archive::ArchiveError::NotFound { .. } => {
+                                ZipLockError::ArchiveNotFound as c_int
+                            }
+                            crate::archive::ArchiveError::Corrupted { .. } => {
+                                ZipLockError::ArchiveCorrupted as c_int
+                            }
+                            crate::archive::ArchiveError::OpenFailed { .. } => {
+                                ZipLockError::InternalError as c_int
+                            }
+                            crate::archive::ArchiveError::ExtractFailed { .. } => {
+                                ZipLockError::ArchiveCorrupted as c_int
+                            }
+                            crate::archive::ArchiveError::CryptoError { .. } => {
+                                ZipLockError::InvalidPassword as c_int
+                            }
+                            _ => ZipLockError::InternalError as c_int,
+                        },
+                        crate::api::ApiError::InvalidCredentials => {
+                            ZipLockError::InvalidPassword as c_int
+                        }
+                        crate::api::ApiError::AuthenticationRequired => {
+                            ZipLockError::InvalidPassword as c_int
+                        }
+                        _ => ZipLockError::InternalError as c_int,
+                    }
+                }
+                Err(_) => {
+                    let error_msg = format!(
+                        "Archive opening timed out after {} seconds for {}",
+                        timeout_duration.as_secs(),
+                        path_str
+                    );
+                    eprintln!("FFI Error: {}", error_msg);
+                    set_last_error(&error_msg);
+                    ZipLockError::InternalError as c_int
+                }
+            }
+        }
+    });
+
+    eprintln!("FFI STEP 17: Panic catch block completed, handling result");
+
+    // Handle any panics that occurred
+    match result {
+        Ok(return_code) => {
+            eprintln!(
+                "FFI Info: Archive open completed with code: {}",
+                return_code
+            );
+            return_code
+        }
+        Err(panic_err) => {
+            let error_msg = if let Some(s) = panic_err.downcast_ref::<String>() {
+                format!("Archive opening panicked: {}", s)
+            } else if let Some(s) = panic_err.downcast_ref::<&str>() {
+                format!("Archive opening panicked: {}", s)
+            } else {
+                "Archive opening panicked with unknown error".to_string()
+            };
+            eprintln!("FFI PANIC CAUGHT: {}", error_msg);
+
+            #[cfg(target_os = "android")]
+            {
+                if crate::platform::android::is_android_emulator() {
+                    eprintln!("EMULATOR PANIC: sevenz_rust2 library crashed in Android emulator");
+                    eprintln!("EMULATOR PANIC: This affects both x86_64 and ARM emulators");
+                    eprintln!(
+                        "EMULATOR PANIC: SOLUTION: Test archive operations on real Android device"
+                    );
+                    eprintln!("EMULATOR PANIC: WORKAROUND: Use emulator only for UI testing, skip archive ops");
+                } else {
+                    eprintln!("ANDROID PANIC: Unexpected crash on real device - check archive file integrity");
+                }
+            }
+
+            unsafe {
+                set_last_error(&error_msg);
+            }
+            ZipLockError::InternalError as c_int
         }
     }
 }
 
-/// Close the current archive
+/// Close the currently open archive
 #[no_mangle]
 pub extern "C" fn ziplock_archive_close() -> c_int {
+    crate::log_debug!("FFI: ziplock_archive_close called");
     unsafe {
         let state_mutex = match FFI_STATE.as_ref() {
             Some(state) => state,
@@ -369,9 +704,10 @@ pub extern "C" fn ziplock_archive_close() -> c_int {
     }
 }
 
-/// Save the current archive
+/// Save the currently open archive
 #[no_mangle]
 pub extern "C" fn ziplock_archive_save() -> c_int {
+    crate::log_debug!("FFI: ziplock_archive_save called");
     unsafe {
         let state_mutex = match FFI_STATE.as_ref() {
             Some(state) => state,
@@ -483,7 +819,117 @@ pub extern "C" fn ziplock_credential_list_free(credentials: *mut CCredentialReco
     }
 }
 
-/// Free a C string allocated by the library
+/// Create a new credential with simple string parameters
+#[no_mangle]
+pub extern "C" fn ziplock_credential_create_simple(
+    title: *const c_char,
+    credential_type: *const c_char,
+    username: *const c_char,
+    password: *const c_char,
+    url: *const c_char,
+    notes: *const c_char,
+) -> c_int {
+    crate::log_debug!("FFI: ziplock_credential_create_simple called");
+
+    if title.is_null() || credential_type.is_null() {
+        crate::log_error!("FFI: Invalid parameters - title or credential_type is null");
+        unsafe {
+            set_last_error("Invalid parameters: title and credential_type cannot be null");
+        }
+        return ZipLockError::InvalidParameter as c_int;
+    }
+
+    unsafe {
+        let state_mutex = match FFI_STATE.as_ref() {
+            Some(state) => state,
+            None => return ZipLockError::NotInitialized as c_int,
+        };
+
+        let state = match state_mutex.lock() {
+            Ok(state) => state,
+            Err(_) => return ZipLockError::InternalError as c_int,
+        };
+
+        // Get the current API instance
+        let api = match state.api.as_ref() {
+            Some(api) => api,
+            None => {
+                set_last_error("API not initialized");
+                return ZipLockError::NotInitialized as c_int;
+            }
+        };
+
+        // Convert C strings to Rust strings
+        let title_str = match CStr::from_ptr(title).to_str() {
+            Ok(s) => s.to_string(),
+            Err(_) => {
+                set_last_error("Invalid UTF-8 in title");
+                return ZipLockError::InvalidParameter as c_int;
+            }
+        };
+
+        let credential_type_str = match CStr::from_ptr(credential_type).to_str() {
+            Ok(s) => s.to_string(),
+            Err(_) => {
+                set_last_error("Invalid UTF-8 in credential_type");
+                return ZipLockError::InvalidParameter as c_int;
+            }
+        };
+
+        // Create a basic credential record
+        let mut credential = CredentialRecord::new(title_str, credential_type_str);
+
+        // Set optional fields if provided
+        if !username.is_null() {
+            if let Ok(username_str) = CStr::from_ptr(username).to_str() {
+                credential.set_field(
+                    "username",
+                    crate::models::CredentialField::username(username_str),
+                );
+            }
+        }
+
+        if !password.is_null() {
+            if let Ok(password_str) = CStr::from_ptr(password).to_str() {
+                credential.set_field(
+                    "password",
+                    crate::models::CredentialField::password(password_str),
+                );
+            }
+        }
+
+        if !url.is_null() {
+            if let Ok(url_str) = CStr::from_ptr(url).to_str() {
+                credential.set_field("url", crate::models::CredentialField::url(url_str));
+            }
+        }
+
+        if !notes.is_null() {
+            if let Ok(notes_str) = CStr::from_ptr(notes).to_str() {
+                credential.notes = Some(notes_str.to_string());
+            }
+        }
+
+        // Create the credential using the API
+        let runtime = match state.runtime.as_ref() {
+            Some(rt) => rt,
+            None => {
+                set_last_error("Runtime not initialized");
+                return ZipLockError::NotInitialized as c_int;
+            }
+        };
+
+        match runtime.block_on(api.create_credential(credential)) {
+            Ok(_) => ZipLockError::Success as c_int,
+            Err(e) => {
+                set_last_error(&format!("Failed to create credential: {}", e));
+                ZipLockError::InternalError as c_int
+            }
+        }
+    }
+}
+
+/// Free a string allocated by the native library
 #[no_mangle]
 pub extern "C" fn ziplock_string_free(ptr: *mut c_char) {
     if !ptr.is_null() {
@@ -841,9 +1287,17 @@ pub extern "C" fn ziplock_template_free(template: *mut CCredentialTemplate) {
     }
 
     unsafe {
-        free_c_template(&mut *template);
+        // Free the template's memory
+        let _ = Box::from_raw(template);
     }
 }
+
+// Android SAF function re-exports
+#[cfg(target_os = "android")]
+pub use crate::archive::{
+    ziplock_android_saf_cleanup, ziplock_android_saf_init, ziplock_android_saf_is_available,
+    ziplock_android_saf_test,
+};
 
 /// Convert a Rust CredentialTemplate to C structure
 unsafe fn convert_template_to_c(
@@ -930,6 +1384,7 @@ unsafe fn convert_template_to_c(
                 }
             }
         }
+
         tags_ptr
     } else {
         ptr::null_mut()
@@ -1097,6 +1552,205 @@ unsafe fn free_c_field_template(c_field: &mut CFieldTemplate) {
     }
     if !c_field.validation_message.is_null() {
         let _ = CString::from_raw(c_field.validation_message);
+    }
+}
+
+// ============================================================================
+// Logging Control Functions
+// ============================================================================
+
+/// Enable or disable debug logging
+#[no_mangle]
+pub extern "C" fn ziplock_logging_set_debug_enabled(enabled: c_int) -> c_int {
+    let enabled_bool = enabled != 0;
+    println!(
+        "FFI: ziplock_logging_set_debug_enabled called with enabled={}",
+        enabled_bool
+    );
+
+    match set_debug_enabled(enabled_bool) {
+        Ok(()) => {
+            if enabled_bool {
+                crate::log_debug!("Debug logging has been enabled via FFI");
+                crate::log_info!("Debug logging is now active");
+            } else {
+                println!("FFI: Debug logging has been disabled");
+            }
+            println!("FFI: Debug logging state change successful");
+            ZipLockError::Success as c_int
+        }
+        Err(e) => {
+            let error_msg = format!("Failed to set debug logging: {}", e);
+            println!("FFI: Error setting debug logging: {}", error_msg);
+            unsafe {
+                set_last_error(&error_msg);
+            }
+            ZipLockError::InternalError as c_int
+        }
+    }
+}
+
+/// Check if debug logging is currently enabled
+#[no_mangle]
+pub extern "C" fn ziplock_logging_is_debug_enabled() -> c_int {
+    if is_debug_enabled() {
+        1
+    } else {
+        0
+    }
+}
+
+/// Set logging configuration with detailed options
+#[no_mangle]
+pub extern "C" fn ziplock_logging_configure(
+    debug_enabled: c_int,
+    include_timestamps: c_int,
+    include_thread_info: c_int,
+    max_line_length: c_int,
+) -> c_int {
+    let config = LoggingConfig {
+        debug_enabled: debug_enabled != 0,
+        level: if debug_enabled != 0 {
+            tracing::Level::DEBUG
+        } else {
+            tracing::Level::INFO
+        },
+        include_timestamps: include_timestamps != 0,
+        include_thread_info: include_thread_info != 0,
+        include_spans: debug_enabled != 0,
+        target_prefix: Some("ZipLock".to_string()),
+        max_line_length: if max_line_length > 0 {
+            Some(max_line_length as usize)
+        } else {
+            Some(1024)
+        },
+    };
+
+    crate::log_info!(
+        "Configuring logging: debug={}, timestamps={}, thread_info={}, max_length={}",
+        config.debug_enabled,
+        config.include_timestamps,
+        config.include_thread_info,
+        config.max_line_length.unwrap_or(0)
+    );
+
+    match crate::logging::configure_logging(config) {
+        Ok(()) => {
+            crate::log_debug!("Logging configuration updated successfully");
+            ZipLockError::Success as c_int
+        }
+        Err(e) => {
+            unsafe {
+                set_last_error(&format!("Failed to configure logging: {}", e));
+            }
+            ZipLockError::InternalError as c_int
+        }
+    }
+}
+
+/// Log a test message at different levels (for debugging the logging system)
+#[no_mangle]
+pub extern "C" fn ziplock_logging_test(message: *const c_char) -> c_int {
+    println!("FFI: ziplock_logging_test called");
+
+    if message.is_null() {
+        println!("FFI: Test message pointer is null");
+        unsafe {
+            set_last_error("Test message pointer is null");
+        }
+        return ZipLockError::InvalidParameter as c_int;
+    }
+
+    let c_str = unsafe { CStr::from_ptr(message) };
+    let message_str = match c_str.to_str() {
+        Ok(s) => s,
+        Err(_) => {
+            println!("FFI: Invalid UTF-8 in test message");
+            unsafe {
+                set_last_error("Invalid UTF-8 in test message");
+            }
+            return ZipLockError::InvalidParameter as c_int;
+        }
+    };
+
+    println!("FFI: Testing logging with message: {}", message_str);
+
+    crate::log_error!("TEST ERROR: {}", message_str);
+    crate::log_warn!("TEST WARN: {}", message_str);
+    crate::log_info!("TEST INFO: {}", message_str);
+    crate::log_debug!("TEST DEBUG: {}", message_str);
+
+    println!("FFI: All log levels tested");
+    crate::log_info!("Logging test completed with message: {}", message_str);
+
+    ZipLockError::Success as c_int
+}
+
+/// Check if running in Android emulator environment
+///
+/// This function exposes the centralized emulator detection to Android apps
+/// through the FFI interface.
+///
+/// # Returns
+///
+/// 1 if running in an Android emulator, 0 otherwise
+#[no_mangle]
+pub extern "C" fn ziplock_is_android_emulator() -> c_int {
+    if crate::platform::android::is_android_emulator() {
+        1
+    } else {
+        0
+    }
+}
+
+/// Get Android platform description
+///
+/// Returns a string describing the current Android platform environment.
+/// The caller is responsible for freeing the returned string.
+///
+/// # Returns
+///
+/// Pointer to a C string describing the platform, or null on error
+#[no_mangle]
+pub extern "C" fn ziplock_get_android_platform_description() -> *mut c_char {
+    let description = crate::platform::android::get_android_environment_description();
+
+    match CString::new(description) {
+        Ok(c_string) => c_string.into_raw(),
+        Err(_) => std::ptr::null_mut(),
+    }
+}
+
+/// Check if current platform has known archive operation issues
+///
+/// # Returns
+///
+/// 1 if the platform has known issues, 0 otherwise
+#[no_mangle]
+pub extern "C" fn ziplock_has_archive_compatibility_issues() -> c_int {
+    if crate::platform::has_archive_compatibility_issues() {
+        1
+    } else {
+        0
+    }
+}
+
+/// Get platform compatibility warning message
+///
+/// Returns a warning message if the current platform has compatibility issues,
+/// or null if no issues are known. The caller is responsible for freeing the returned string.
+///
+/// # Returns
+///
+/// Pointer to a C string with warning message, or null if no warning
+#[no_mangle]
+pub extern "C" fn ziplock_get_platform_compatibility_warning() -> *mut c_char {
+    match crate::platform::get_platform_compatibility_warning() {
+        Some(warning) => match CString::new(warning) {
+            Ok(c_string) => c_string.into_raw(),
+            Err(_) => std::ptr::null_mut(),
+        },
+        None => std::ptr::null_mut(),
     }
 }
 

@@ -1439,20 +1439,6 @@ impl SettingsView {
         }
     }
 
-    fn configs_are_equal(&self, config1: &FrontendConfig, config2: &FrontendConfig) -> bool {
-        config1.ui.font_size == config2.ui.font_size
-            && config1.ui.show_wizard_on_startup == config2.ui.show_wizard_on_startup
-            && config1.app.auto_lock_timeout == config2.app.auto_lock_timeout
-            && config1.app.clipboard_timeout == config2.app.clipboard_timeout
-            && config1.app.enable_backup == config2.app.enable_backup
-            && config1.app.show_password_strength == config2.app.show_password_strength
-            && config1.app.minimize_to_tray == config2.app.minimize_to_tray
-            && config1.app.start_minimized == config2.app.start_minimized
-            && config1.app.auto_check_updates == config2.app.auto_check_updates
-            && config1.repository.default_directory == config2.repository.default_directory
-            && config1.repository.auto_detect == config2.repository.auto_detect
-    }
-
     pub fn get_updated_config(&self) -> FrontendConfig {
         self.build_current_config()
     }

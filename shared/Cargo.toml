@@ -25,6 +25,11 @@ serde_yaml.workspace = true
 anyhow.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
+tracing-subscriber = { version = "0.3", features = [
+    "env-filter",
+    "fmt",
+    "time",
+] }
 tokio.workspace = true
 
 # Random number generation for passwords and IDs

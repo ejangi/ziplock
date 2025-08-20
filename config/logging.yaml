@@ -1,0 +1,360 @@
+# ZipLock Logging Configuration
+#
+# This file defines logging configurations for different environments.
+# The application will automatically select the appropriate configuration
+# based on the ZIPLOCK_ENV environment variable.
+
+# Default logging configuration (fallback)
+default:
+  console:
+    enabled: true
+    level: "INFO"
+    timestamps: true
+    colors: auto # auto, always, never
+    format: "compact" # compact, pretty, json
+
+  file:
+    enabled: true
+    level: "DEBUG"
+    directory: "~/.cache/ziplock/logs"
+    filename: "ziplock.log"
+    timestamps: true
+    format: "detailed" # compact, detailed, json
+
+  rotation:
+    enabled: true
+    max_file_size: "10MB"
+    max_files: 5
+    compress: true
+
+  features:
+    thread_ids: false
+    source_location: false
+    performance_tracking: false
+
+# Development environment configuration
+development:
+  console:
+    enabled: true
+    level: "DEBUG"
+    timestamps: true
+    colors: always
+    format: "pretty"
+
+  file:
+    enabled: true
+    level: "TRACE"
+    directory: "./target/debug/logs"
+    filename: "ziplock-dev.log"
+    timestamps: true
+    format: "detailed"
+
+  rotation:
+    enabled: true
+    max_file_size: "5MB"
+    max_files: 3
+    compress: false
+
+  features:
+    thread_ids: true
+    source_location: true
+    performance_tracking: true
+
+# Production environment configuration
+production:
+  console:
+    enabled: false # Systemd handles console output
+    level: "WARN"
+    timestamps: false
+    colors: never
+    format: "json"
+
+  file:
+    enabled: true
+    level: "INFO"
+    directory: "/var/log/ziplock"
+    filename: "ziplock.log"
+    timestamps: true
+    format: "json"
+
+  rotation:
+    enabled: true
+    max_file_size: "50MB"
+    max_files: 10
+    compress: true
+
+  features:
+    thread_ids: false
+    source_location: false
+    performance_tracking: false
+
+# Testing environment configuration
+testing:
+  console:
+    enabled: true
+    level: "DEBUG"
+    timestamps: true
+    colors: auto
+    format: "compact"
+
+  file:
+    enabled: true
+    level: "DEBUG"
+    directory: "./target/test-logs"
+    filename: "ziplock-test.log"
+    timestamps: true
+    format: "detailed"
+
+  rotation:
+    enabled: false # Tests should see all logs
+    max_file_size: "100MB"
+    max_files: 1
+    compress: false
+
+  features:
+    thread_ids: true
+    source_location: true
+    performance_tracking: true
+
+# Systemd service configuration
+systemd:
+  console:
+    enabled: false # Systemd journal handles this
+    level: "OFF"
+    timestamps: false
+    colors: never
+    format: "json"
+
+  file:
+    enabled: true
+    level: "INFO"
+    directory: "/var/log/ziplock"
+    filename: "ziplock.log"
+    timestamps: true
+    format: "json"
+
+  rotation:
+    enabled: true
+    max_file_size: "100MB"
+    max_files: 20
+    compress: true
+
+  features:
+    thread_ids: false
+    source_location: false
+    performance_tracking: false
+
+# Docker container configuration
+docker:
+  console:
+    enabled: true # Docker captures stdout/stderr
+    level: "INFO"
+    timestamps: false # Docker adds timestamps
+    colors: never
+    format: "json"
+
+  file:
+    enabled: false # Use volume mounts for persistent logging
+    level: "DEBUG"
+    directory: "/var/log/ziplock"
+    filename: "ziplock.log"
+    timestamps: true
+    format: "json"
+
+  rotation:
+    enabled: false # External log management
+    max_file_size: "10MB"
+    max_files: 1
+    compress: false
+
+  features:
+    thread_ids: false
+    source_location: false
+    performance_tracking: false
+
+# High-performance configuration (minimal logging overhead)
+performance:
+  console:
+    enabled: false
+    level: "ERROR"
+    timestamps: false
+    colors: never
+    format: "compact"
+
+  file:
+    enabled: true
+    level: "WARN"
+    directory: "/var/log/ziplock"
+    filename: "ziplock.log"
+    timestamps: false
+    format: "compact"
+
+  rotation:
+    enabled: true
+    max_file_size: "20MB"
+    max_files: 3
+    compress: true
+
+  features:
+    thread_ids: false
+    source_location: false
+    performance_tracking: false
+
+# Debug configuration (maximum verbosity)
+debug:
+  console:
+    enabled: true
+    level: "TRACE"
+    timestamps: true
+    colors: always
+    format: "pretty"
+
+  file:
+    enabled: true
+    level: "TRACE"
+    directory: "./debug-logs"
+    filename: "ziplock-debug.log"
+    timestamps: true
+    format: "detailed"
+
+  rotation:
+    enabled: false # Keep all debug information
+    max_file_size: "1GB"
+    max_files: 1
+    compress: false
+
+  features:
+    thread_ids: true
+    source_location: true
+    performance_tracking: true
+
+# Audit configuration (for security compliance)
+audit:
+  console:
+    enabled: false
+    level: "OFF"
+    timestamps: false
+    colors: never
+    format: "json"
+
+  file:
+    enabled: true
+    level: "INFO"
+    directory: "/var/log/ziplock/audit"
+    filename: "ziplock-audit.log"
+    timestamps: true
+    format: "json"
+
+  rotation:
+    enabled: true
+    max_file_size: "100MB"
+    max_files: 50 # Long retention for audit logs
+    compress: true
+
+  features:
+    thread_ids: false
+    source_location: true
+    performance_tracking: false
+
+# Configuration overrides
+# These settings can be overridden by environment variables:
+#
+# ZIPLOCK_LOG_CONSOLE_ENABLED=true/false
+# ZIPLOCK_LOG_CONSOLE_LEVEL=trace/debug/info/warn/error
+# ZIPLOCK_LOG_FILE_ENABLED=true/false
+# ZIPLOCK_LOG_FILE_LEVEL=trace/debug/info/warn/error
+# ZIPLOCK_LOG_FILE_DIRECTORY=/path/to/logs
+# ZIPLOCK_LOG_ROTATION_ENABLED=true/false
+# ZIPLOCK_LOG_ROTATION_MAX_SIZE=10MB/50MB/etc
+# ZIPLOCK_LOG_FEATURES_THREAD_IDS=true/false
+# ZIPLOCK_LOG_FEATURES_SOURCE_LOCATION=true/false
+
+# Filter configurations
+# Control which modules produce logs at different levels
+filters:
+  # Global filter (applies to all modules)
+  global: "info"
+
+  # Module-specific filters
+  modules:
+    # ZipLock core modules
+    "ziplock_shared": "debug"
+    "ziplock_shared::ffi": "info"
+    "ziplock_shared::crypto": "warn"
+    "ziplock_shared::archive": "info"
+    "ziplock_shared::validation": "debug"
+
+    # Linux app modules
+    "ziplock_linux": "debug"
+    "ziplock_linux::ui": "info"
+    "ziplock_linux::services": "debug"
+    "ziplock_linux::platform": "info"
+
+    # Third-party crates (reduce noise)
+    "iced": "warn"
+    "wgpu": "error"
+    "tokio": "info"
+    "hyper": "warn"
+    "rustls": "warn"
+
+# Log format templates
+# Custom formats for different output types
+formats:
+  compact: "%level %message"
+  detailed: "%timestamp [%level] %target: %message"
+  json: '{"timestamp":"%timestamp","level":"%level","target":"%target","message":"%message"}'
+  pretty: "%timestamp %highlight(%level) %cyan(%target): %message"
+  audit: '{"timestamp":"%timestamp","level":"%level","target":"%target","message":"%message","thread":"%thread","location":"%location"}'
+
+# Performance settings
+performance:
+  # Buffer size for async logging
+  async_buffer_size: 8192
+
+  # Maximum blocking time for log writes
+  max_blocking_time: "100ms"
+
+  # Whether to drop logs if buffer is full
+  drop_on_full_buffer: false
+
+  # Flush interval for buffered logs
+  flush_interval: "1s"
+
+# Security settings
+security:
+  # Sanitize sensitive information in logs
+  sanitize_sensitive_data: true
+
+  # List of patterns to redact from logs
+  redact_patterns:
+    - "password"
+    - "passphrase"
+    - "secret"
+    - "token"
+    - "key"
+    - "credential"
+
+  # Replacement text for redacted content
+  redaction_text: "[REDACTED]"
+
+  # Maximum log message length (prevents log bombing)
+  max_message_length: 4096
+
+# Health monitoring
+monitoring:
+  # Enable log health checks
+  enabled: true
+
+  # Check interval
+  check_interval: "5m"
+
+  # Alert thresholds
+  thresholds:
+    error_rate: 10 # errors per minute
+    disk_usage: "90%" # percentage of log directory disk usage
+    file_age: "24h" # maximum age before rotation warning
+
+  # Health check actions
+  actions:
+    rotate_on_disk_full: true
+    reduce_verbosity_on_high_error_rate: true

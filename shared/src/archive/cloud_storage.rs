@@ -220,6 +220,16 @@ impl Drop for CloudFileHandle {
 pub fn is_cloud_storage_path(path: &Path) -> bool {
     let path_str = path.to_string_lossy().to_lowercase();
 
+    // Exclude Android app internal directories first
+    if path_str.contains("/data/user/") && path_str.contains("/com.ziplock/") {
+        return false;
+    }
+
+    // Exclude other Android app internal cache directories
+    if path_str.contains("/data/data/") && path_str.contains("/cache/") {
+        return false;
+    }
+
     // Android cloud storage patterns
     path_str.contains("/android/data/com.google.android.apps.docs") ||  // Google Drive
     path_str.contains("/android/data/com.dropbox.android") ||           // Dropbox
@@ -364,6 +374,14 @@ mod tests {
         assert!(!is_cloud_storage_path(Path::new("/tmp/test.7z")));
         assert!(!is_cloud_storage_path(Path::new(
             "C:\\Users\\test\\Documents\\test.7z"
+        )));
+
+        // Should not detect Android app internal cache directories
+        assert!(!is_cloud_storage_path(Path::new(
+            "/data/user/0/com.ziplock/cache/archives/test.7z"
+        )));
+        assert!(!is_cloud_storage_path(Path::new(
+            "/data/data/com.ziplock/cache/test.7z"
         )));
     }
 

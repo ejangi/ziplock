@@ -1,16 +1,16 @@
-# ZipLock Android File Association
+# ZipLock File Association Guide
 
-This document provides comprehensive documentation for the .7z file association feature in the ZipLock Android app, enabling users to open password archives directly from file managers, email attachments, cloud storage apps, and other sources.
+This document provides comprehensive documentation for the .7z file association feature in ZipLock applications, enabling users to open password archives directly from file managers, email attachments, cloud storage apps, and other sources across Android and Linux platforms.
 
 ## Overview
 
-The ZipLock Android app automatically registers itself to handle .7z archive files through Android's intent filter system. When users encounter a .7z file anywhere on their device, ZipLock will appear as an option in the "Open with" dialog, providing seamless access to encrypted password archives.
+ZipLock automatically registers itself to handle .7z archive files through platform-specific mechanisms. When users encounter a .7z file, ZipLock appears as an option in the "Open with" dialog, providing seamless access to encrypted password archives.
 
-## Implementation Details
+## Android Implementation
 
 ### Intent Filter Registration
 
-The app registers multiple intent filters in `AndroidManifest.xml` to handle various .7z file scenarios:
+The Android app registers multiple intent filters in `AndroidManifest.xml` to handle various .7z file scenarios:
 
 ```xml
 <!-- Intent filter for .7z files with proper MIME type -->
@@ -32,306 +32,387 @@ The app registers multiple intent filters in `AndroidManifest.xml` to handle var
     <action android:name="android.intent.action.VIEW" />
     <category android:name="android.intent.category.DEFAULT" />
     <data android:scheme="file" />
-    <data android:pathPattern=".*[.]7z" />
+    <data android:pathPattern=".*\\.7z" />
 </intent-filter>
 
-<!-- Intent filter for .7z files from content providers -->
+<!-- Intent filter for content URIs -->
 <intent-filter>
     <action android:name="android.intent.action.VIEW" />
     <category android:name="android.intent.category.DEFAULT" />
     <data android:scheme="content" />
-    <data android:pathPattern=".*[.]7z" />
+    <data android:pathPattern=".*\\.7z" />
 </intent-filter>
 ```
 
-### Intent Processing Flow
+### Supported Android Sources
 
-1. **Intent Reception**: `SplashActivity` receives the `ACTION_VIEW` intent with file URI
-2. **URI Extraction**: File URI is extracted from the intent data with debug logging
-3. **Parameter Passing**: URI is passed to `MainActivity` via intent extras
-4. **Screen Navigation**: App navigates directly to repository selection with pre-filled file path
-5. **File Handling**: `RepositorySelectionScreen` processes the URI using `DocumentFile` APIs
+- **File Managers**: Files by Google, ES File Explorer, Solid Explorer, etc.
+- **Email Attachments**: Gmail, Outlook, Yahoo Mail, etc.
+- **Cloud Storage Apps**: Google Drive, Dropbox, OneDrive, Box
+- **Web Browsers**: Downloaded .7z files from Chrome, Firefox, etc.
+- **Messaging Apps**: WhatsApp, Telegram file sharing
+- **Document Viewers**: Any app that can display or share .7z files
 
-### Source Code Integration
+### Android User Experience Flow
 
-#### SplashActivity Enhancement
+1. User taps a .7z file in any supported app
+2. Android shows "Open with" dialog
+3. User selects ZipLock from the list
+4. ZipLock launches and automatically navigates to repository opening screen
+5. File path is stored for quick reopening
+6. Error handling for corrupted or inaccessible files
 
+### Android Implementation Details
+
+**MainActivity Intent Handling:**
 ```kotlin
-private fun navigateToMain() {
-    val intent = Intent(this, MainActivity::class.java)
-
-    // Check if this activity was launched with a .7z file intent
-    val incomingIntent = getIntent()
-
-    // Debug logging
-    Log.d("ZipLock", "SplashActivity - Intent action: ${incomingIntent?.action}")
-    Log.d("ZipLock", "SplashActivity - Intent data: ${incomingIntent?.data}")
+class MainActivity : ComponentActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        
+        // Handle incoming intent
+        handleIncomingIntent(intent)
+    }
     
-    if (incomingIntent?.action == Intent.ACTION_VIEW && incomingIntent.data != null) {
-        // Pass the file URI to MainActivity
-        intent.putExtra("file_uri", incomingIntent.data.toString())
-        intent.putExtra("opened_from_file", true)
-        Log.d("ZipLock", "SplashActivity - Passing file URI to MainActivity: ${incomingIntent.data}")
+    override fun onNewIntent(intent: Intent?) {
+        super.onNewIntent(intent)
+        intent?.let { handleIncomingIntent(it) }
     }
-
-    startActivity(intent)
-    finish()
+    
+    private fun handleIncomingIntent(intent: Intent) {
+        when (intent.action) {
+            Intent.ACTION_VIEW -> {
+                intent.data?.let { uri ->
+                    val filePath = FileUtils.getUsableFilePath(this, uri)
+                    if (filePath != null) {
+                        // Navigate to repository opening with the file
+                        navigateToRepositoryOpening(filePath)
+                    } else {
+                        showError("Unable to access the selected file")
+                    }
+                }
+            }
+        }
+    }
 }
 ```
 
-#### MainActivity Screen Navigation
-
+**File Utils Integration:**
 ```kotlin
-val initialScreen = when {
-    initialFileUri != null -> {
-        // File opened from external source
-        Screen.RepositorySelection(initialFileUri)
+object FileUtils {
+    fun getUsableFilePath(context: Context, uri: Uri): String? {
+        return when (uri.scheme) {
+            "file" -> uri.path
+            "content" -> handleContentUri(context, uri)
+            else -> null
+        }
     }
-    repositoryViewModel.hasValidLastArchive() -> {
-        // Auto-open last used archive
-        Screen.AutoOpenLastArchive
-    }
-    else -> {
-        // Normal app launch
-        Screen.RepositorySelection()
+    
+    private fun handleContentUri(context: Context, uri: Uri): String? {
+        // Handle Storage Access Framework URIs
+        // Copy to app cache if necessary for cloud storage
+        // Return usable file path for FFI operations
     }
 }
 ```
 
-## Supported File Sources
+## Linux Implementation
 
-### Local Storage
-- File managers (Files by Google, Samsung My Files, etc.)
-- Downloads folder and Documents folder
-- External SD cards and USB storage
-- Any local file system location
+### Desktop Entry Registration
 
-### Cloud Storage Services
-- Google Drive (`/Android/data/com.google.android.apps.docs/`)
-- Dropbox (`/Android/data/com.dropbox.android/`)
-- OneDrive (`/Android/data/com.microsoft.skydrive/`)
-- Box (`/Android/data/com.box.android/`)
-- Nextcloud (`/Android/data/com.nextcloud.client/`)
+The Linux app provides a desktop entry file at `apps/linux/resources/ziplock.desktop`:
 
-### Other Sources
-- Email attachments (Gmail, Outlook, etc.)
-- Web browser downloads
-- Shared files from other apps
-- Content URIs from Storage Access Framework
+```desktop
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=ZipLock
+GenericName=Password Manager
+Comment=A secure, portable password manager using encrypted 7z archives
+Icon=ziplock
+Exec=ziplock %f
+Terminal=false
+StartupNotify=true
+Categories=Utility;Security;Office;
+Keywords=password;manager;security;encryption;vault;
+MimeType=application/x-7z-compressed;
+StartupWMClass=ziplock
+```
 
-## Cloud Storage Integration
+**Key Elements:**
+- `MimeType=application/x-7z-compressed;` registers ZipLock as a .7z file handler
+- `Exec=ziplock %f` passes the file path as a command-line argument
+- `Categories` ensure proper placement in application menus
 
-The file association feature leverages the existing cloud storage implementation documented in [cloud-storage-implementation.md](cloud-storage-implementation.md):
+### MIME Type Definition
 
-- **Automatic Detection**: Recognizes cloud storage files and applies appropriate handling
-- **Copy-to-Local Strategy**: Creates safe working copies for cloud files
-- **Conflict Prevention**: Prevents sync conflicts with hash-based change detection
-- **Automatic Sync Back**: Changes are synced back to cloud storage after modifications
+Comprehensive MIME type definition at `apps/linux/resources/mime/packages/ziplock.xml`:
 
-## User Experience
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
+  <mime-type type="application/x-7z-compressed">
+    <comment>7z archive</comment>
+    <comment xml:lang="en">7z archive</comment>
+    <icon name="application-x-7z-compressed"/>
+    <glob-deleteall/>
+    <glob pattern="*.7z"/>
+    <magic priority="50">
+      <match value="7z\274\257\047\034" type="string" offset="0"/>
+    </magic>
+  </mime-type>
+</mime-info>
+```
 
-### File Opening Flow
+**Features:**
+- Proper MIME type definition for system recognition
+- Magic number detection for reliable file type identification
+- Glob pattern matching for .7z extension
+- Icon association for file managers
 
-1. **File Discovery**: User encounters a .7z file in any app or file manager
-2. **App Selection**: User taps the file and sees ZipLock in the "Open with" options
-3. **Direct Opening**: Selecting ZipLock launches directly to the repository selection screen
-4. **Pre-filled Path**: The selected .7z file is automatically pre-filled
-5. **Passphrase Entry**: User enters their passphrase to unlock the archive
-6. **Archive Access**: Archive opens successfully with full password manager functionality
+### Linux Installation Process
 
-### Visual Indicators
+**Package Installation:**
+```bash
+# Install desktop entry
+sudo cp apps/linux/resources/ziplock.desktop /usr/share/applications/
 
-- **Cloud Storage Warning**: "Cloud storage file detected. Working with local copy for safety."
-- **File Path Display**: Clear display of the selected file name and location
-- **Loading States**: "Opening..." feedback during archive processing
-- **Error Handling**: User-friendly error messages for common issues
+# Install MIME type definition
+sudo cp apps/linux/resources/mime/packages/ziplock.xml /usr/share/mime/packages/
 
-## Security Considerations
+# Update MIME database
+sudo update-mime-database /usr/share/mime
 
-### File Access Security
-- Uses Storage Access Framework (SAF) for secure file access
-- No broad storage permissions required
-- User explicitly grants access to specific files
-- Temporary access only during app session
+# Update desktop database
+sudo update-desktop-database /usr/share/applications
+```
 
-### Cloud Storage Safety
-- Working copies stored in app-private directories only
-- Automatic cleanup of temporary files
-- No sensitive data in shared system directories
-- Content hash verification prevents corruption
+**Development Installation:**
+```bash
+# Install for current user only
+cp apps/linux/resources/ziplock.desktop ~/.local/share/applications/
+cp apps/linux/resources/mime/packages/ziplock.xml ~/.local/share/mime/packages/
 
-### Privacy Protection
-- File URIs are not logged or stored persistently
-- Recent file history uses secure storage
-- Cloud detection warnings inform users of potential sync risks
+# Update user databases
+update-mime-database ~/.local/share/mime
+update-desktop-database ~/.local/share/applications
+```
 
-## Testing and Verification
+### Linux User Experience
 
-### Automated Verification
+1. User double-clicks a .7z file in file manager (Nautilus, Dolphin, Thunar, etc.)
+2. System checks registered applications for the MIME type
+3. ZipLock launches automatically or appears in "Open with" dialog
+4. Application receives file path as command-line argument
+5. Repository opening screen loads with the specified file
 
-The `scripts/dev/verify-file-association.sh` script automatically checks:
-- AndroidManifest.xml for required intent filters
-- Source code integration points
-- Test coverage implementation
+### Linux Command-Line Integration
 
-### Unit Test Coverage
+**Command-Line Handling:**
+```rust
+use std::env;
 
-`FileAssociationTest.kt` provides comprehensive testing for:
-- Intent filter functionality for various MIME types
-- URI extraction and parameter passing
-- Cloud storage path detection
-- File name extraction from different URI formats
-- Error handling for edge cases
+fn main() {
+    let args: Vec<String> = env::args().collect();
+    
+    if args.len() > 1 {
+        let file_path = &args[1];
+        if file_path.ends_with(".7z") {
+            // Open repository directly
+            open_repository_file(file_path);
+        }
+    } else {
+        // Launch normal application UI
+        launch_application();
+    }
+}
+```
 
-### Manual Testing Scenarios
+## Cross-Platform Considerations
 
-Test with files from various sources:
-- Local file manager integration
-- Cloud storage app integration  
-- Email attachment handling
-- Browser download integration
-- Cross-app file sharing
+### Security
+
+**Android Security:**
+- Permission handling for external storage access
+- Content URI validation to prevent path traversal
+- Secure handling of Storage Access Framework permissions
+- Malware protection through file type validation
+
+**Linux Security:**
+- File permission validation before opening
+- Path sanitization for command-line arguments
+- Integration with system security policies
+- Sandboxing considerations for Flatpak/Snap packages
+
+### File Handling Differences
+
+**Android Challenges:**
+- Storage Access Framework complexity
+- Content URIs vs. file paths
+- Cloud storage virtual files
+- Permission management
+- Background app restrictions
+
+**Linux Advantages:**
+- Direct file system access
+- Standard file paths
+- Mature MIME type system
+- Consistent desktop integration
+- Command-line flexibility
+
+### Cloud Storage Integration
+
+**Android Cloud Storage:**
+- Automatic detection of cloud storage providers
+- Copy-to-local strategy for safe operations
+- Storage Access Framework integration
+- Handling of virtual files and sync conflicts
+
+**Linux Cloud Storage:**
+- Local sync folder detection
+- Standard file system operations
+- Integration with cloud client applications
+- FUSE filesystem support
+
+## Testing and Validation
+
+### Android Testing
+
+**Manual Testing:**
+```bash
+# Test with file manager
+adb shell am start -a android.intent.action.VIEW -d "file:///storage/emulated/0/Download/test.7z"
+
+# Test with content URI
+adb shell am start -a android.intent.action.VIEW -d "content://com.android.externalstorage.documents/document/primary%3ADownload%2Ftest.7z"
+
+# Check intent filters
+adb shell dumpsys package com.ziplock | grep -A 10 "android.intent.action.VIEW"
+```
+
+**Automated Testing:**
+```kotlin
+@Test
+fun testFileAssociationIntent() {
+    val intent = Intent(Intent.ACTION_VIEW).apply {
+        data = Uri.parse("file:///path/to/test.7z")
+        addCategory(Intent.CATEGORY_DEFAULT)
+    }
+    
+    val activities = context.packageManager.queryIntentActivities(intent, 0)
+    assertTrue("ZipLock should handle .7z files", 
+               activities.any { it.activityInfo.packageName == "com.ziplock" })
+}
+```
+
+### Linux Testing
+
+**Manual Testing:**
+```bash
+# Test MIME type registration
+file --mime-type test.7z
+# Should return: application/x-7z-compressed
+
+# Test desktop association
+xdg-open test.7z
+# Should launch ZipLock
+
+# Check registered applications
+xdg-mime query default application/x-7z-compressed
+# Should include ziplock.desktop
+```
+
+**Package Testing:**
+```bash
+# Test desktop entry validation
+desktop-file-validate /usr/share/applications/ziplock.desktop
+
+# Test MIME type definition
+xmllint --schema /usr/share/mime/freedesktop.org.xml /usr/share/mime/packages/ziplock.xml
+```
 
 ## Troubleshooting
 
-### Quick Diagnosis Steps
+### Android Issues
 
-1. **Verify Installation**: Ensure ZipLock is installed and launches normally
-2. **Test File Recognition**: Ensure file has exact `.7z` extension (case-sensitive)
-3. **Check Intent Registration**: 
-   ```bash
-   adb shell dumpsys package com.ziplock | grep -A 30 "Activity.*SplashActivity"
-   ```
-
-### Common Issues and Solutions
-
-#### ZipLock Not Appearing in "Open With" Dialog
-
-**Solutions:**
-1. **Reinstall and Restart** (most common fix):
-   ```bash
-   adb uninstall com.ziplock
-   adb install app/build/outputs/apk/debug/app-debug.apk
-   adb reboot  # Critical step
-   ```
-
-2. **Clear System Caches**:
-   ```bash
-   adb shell pm clear com.android.packageinstaller
-   adb shell pm clear com.google.android.apps.nbu.files
-   ```
-
-3. **Test with Manual Intent**:
-   ```bash
-   adb shell am start -a android.intent.action.VIEW \
-     -d 'file:///sdcard/Download/test.7z' \
-     com.ziplock/.SplashActivity
-   ```
-
-#### File Extension Not Recognized
-
-- Verify file has exactly `.7z` extension
-- Test with both lowercase (`.7z`) and uppercase (`.7Z`) variants
-- Ensure file is actually a valid 7z archive
-
-#### Intent Filters Not Working
-
-1. **Check Registration**:
-   ```bash
-   adb shell dumpsys package com.ziplock | grep -c "android.intent.action.VIEW"
-   ```
-   Should return > 0
-
-2. **Monitor Logs**:
-   ```bash
-   adb logcat | grep -i ziplock
-   ```
-
-3. **Test Different MIME Types**:
-   ```bash
-   # Standard 7z MIME type
-   adb shell am start -a android.intent.action.VIEW \
-     -t 'application/x-7z-compressed' \
-     -d 'file:///sdcard/Download/test.7z' \
-     com.ziplock/.SplashActivity
-   ```
-
-### Advanced Debugging
-
-#### Check System Intent Resolution
+**File Association Not Working:**
 ```bash
-# Query system for .7z handlers
-adb shell pm query-activities -a android.intent.action.VIEW -d 'file:///test.7z'
+# Check if intent filters are registered
+adb shell dumpsys package com.ziplock | grep "android.intent.action.VIEW"
 
-# Check MIME type associations
-adb shell dumpsys package | grep -B 5 -A 5 "7z\|x-7z-compressed"
+# Verify MIME type handling
+adb shell am start -a android.intent.action.VIEW -t "application/x-7z-compressed" -d "file:///path/to/test.7z"
+
+# Check app permissions
+adb shell dumpsys package com.ziplock | grep -A 5 "permissions"
 ```
 
-#### Device-Specific Considerations
+**Content URI Issues:**
+```kotlin
+// Debug content URI resolution
+Log.d("FileAssociation", "Received URI: $uri")
+Log.d("FileAssociation", "Resolved path: ${FileUtils.getUsableFilePath(context, uri)}")
+```
 
-- **Samsung Devices**: Clear Samsung My Files cache, check default app settings
-- **Google Pixel**: Files by Google may need permissions reset
-- **Huawei/Honor**: Check App Management restrictions
-- **OnePlus/OPPO**: Verify background app permissions
+### Linux Issues
 
-## Development Tools
-
-### Quick Build and Test Script
-
-Use `scripts/dev/android-quick-test-build.sh` for rapid iteration:
+**MIME Type Not Recognized:**
 ```bash
-./scripts/dev/android-quick-test-build.sh
+# Reinstall MIME type definition
+sudo cp ziplock.xml /usr/share/mime/packages/
+sudo update-mime-database /usr/share/mime
+
+# Check MIME type database
+grep -r "7z" /usr/share/mime/
 ```
 
-This script:
-1. Builds a fresh debug APK
-2. Installs it to connected device
-3. Verifies intent filter registration
-4. Provides testing instructions
-
-### Debug Logging
-
-The app includes comprehensive debug logging in `SplashActivity`. Monitor with:
+**Desktop Entry Problems:**
 ```bash
-adb logcat | grep "ZipLock.*SplashActivity"
+# Validate desktop entry
+desktop-file-validate ziplock.desktop
+
+# Check for syntax errors
+cat ziplock.desktop | grep -E "^(Name|Exec|MimeType)"
+
+# Refresh desktop database
+sudo update-desktop-database /usr/share/applications
 ```
 
-Expected log output:
+**File Manager Integration:**
+```bash
+# Test with different file managers
+nautilus /path/to/test.7z      # GNOME
+dolphin /path/to/test.7z       # KDE
+thunar /path/to/test.7z        # XFCE
+
+# Check default application
+xdg-mime query default application/x-7z-compressed
 ```
-D/ZipLock: SplashActivity - Intent action: android.intent.action.VIEW
-D/ZipLock: SplashActivity - Intent data: file:///path/to/file.7z
-D/ZipLock: SplashActivity - Passing file URI to MainActivity
-```
 
-## Implementation Status
+## Best Practices
 
-**✅ COMPLETE AND VERIFIED**
+### Development
 
-The .7z file association feature is fully implemented with:
-- ✅ Comprehensive intent filters for all scenarios
-- ✅ Full cloud storage integration
-- ✅ Robust error handling and debugging
-- ✅ Extensive test coverage
-- ✅ Complete documentation and troubleshooting guides
+1. **Test Multiple Sources**: Verify file association works from various apps and sources
+2. **Handle Edge Cases**: Account for corrupted files, permission issues, and network failures
+3. **User Feedback**: Provide clear error messages for file access problems
+4. **Performance**: Optimize file handling for large archives and slow storage
+5. **Security**: Validate all file inputs and sanitize paths
 
-## Backwards Compatibility
+### Deployment
 
-- **100% backwards compatible** with existing functionality
-- Normal app launches work identically to before
-- Last opened archive feature unchanged
-- All existing user workflows preserved
+1. **Package Installation**: Ensure proper registration during package installation
+2. **User Education**: Document file association features in user guides
+3. **Compatibility**: Test with popular file managers and cloud storage apps
+4. **Updates**: Handle file association updates during app upgrades
+5. **Uninstallation**: Clean up registrations when app is removed
 
-## Future Enhancements
+### User Experience
 
-Potential improvements for future development:
-- Real-time sync monitoring for cloud files
-- Conflict resolution UI for detected conflicts
-- Provider-specific cloud service optimizations
-- Multi-device coordination mechanisms
-- Enhanced offline mode support
+1. **Seamless Integration**: File association should feel natural and fast
+2. **Error Handling**: Graceful degradation when files are inaccessible
+3. **Visual Feedback**: Clear indication when ZipLock is handling a file
+4. **Consistency**: Uniform behavior across different file sources
+5. **Documentation**: Clear instructions for users on how to use file associations
 
-## Related Documentation
-
-- [Android Development Guide](android.md) - Complete Android development setup
-- [Cloud Storage Implementation](cloud-storage-implementation.md) - Cloud file handling details
-- [Mobile Integration Guide](mobile-integration.md) - Cross-platform mobile development
+This comprehensive file association implementation ensures ZipLock integrates seamlessly with the operating system and provides users with convenient access to their password archives from any application that handles .7z files.

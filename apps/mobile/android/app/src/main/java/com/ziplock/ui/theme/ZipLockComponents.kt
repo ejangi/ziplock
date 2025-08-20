@@ -130,7 +130,14 @@ fun ZipLockTextInput(
         onValueChange = onValueChange,
         modifier = modifier
             .fillMaxWidth()
-            .heightIn(min = ZipLockDimensions.TextInputHeight),
+            .let { mod ->
+                if (singleLine) {
+                    mod.heightIn(min = ZipLockDimensions.TextInputHeight)
+                } else {
+                    // Multi-line text area with approximately 5 lines height
+                    mod.heightIn(min = 120.dp, max = 200.dp)
+                }
+            },
         enabled = enabled,
         placeholder = {
             Text(

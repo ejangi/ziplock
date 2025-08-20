@@ -13,6 +13,7 @@ use rfd::AsyncFileDialog;
 use std::path::PathBuf;
 use tracing::{debug, error, info, warn};
 
+use crate::platform::LinuxFileOperationsHandler;
 use crate::ui::theme::{utils, LIGHT_GRAY_TEXT, MEDIUM_GRAY, WARNING_YELLOW};
 use crate::ui::{button_styles, progress_bar_styles, theme};
 use ziplock_shared::{PassphraseValidator, ValidationUtils};
@@ -817,26 +818,40 @@ impl RepositoryWizard {
             );
         }
 
-        // Create FFI client and connect to backend
-        let mut client = ziplock_shared::ZipLockClient::new().map_err(|e| e.to_string())?;
+        info!("Creating repository: {}", repo_path.display());
 
-        // Connect to backend
-        client.connect().await.map_err(|e| {
-            error!("Failed to connect to backend: {}", e);
-            format!(
-                "Could not connect to ZipLock backend. Please ensure the backend daemon is running.\n\nError: {}",
-                e
-            )
-        })?;
+        // For now, bypass the hanging hybrid client and use direct external file operations
+        // This prevents the async runtime conflicts that cause hanging
+        info!("Using external file operations approach to avoid runtime conflicts");
 
-        // Create the repository via backend
-        client
-            .create_archive(repo_path.clone(), passphrase)
+        let mut file_handler = LinuxFileOperationsHandler::new();
+
+        // Create file operations JSON for archive creation
+        let file_operations = serde_json::json!({
+            "operations": [
+                {
+                    "type": "create_archive",
+                    "path": repo_path.to_string_lossy(),
+                    "password": passphrase,
+                    "format": "7z"
+                }
+            ]
+        })
+        .to_string();
+
+        // Execute the file operations
+        file_handler
+            .execute_file_operations(&file_operations)
             .await
             .map_err(|e| {
-                error!("Backend failed to create repository: {}", e);
-                format!("Failed to create repository: {}", e)
+                error!("Failed to execute file operations: {}", e);
+                format!("Failed to create repository via file operations: {}", e)
             })?;
+
+        // Log successful creation - avoid hybrid client initialization in async context
+        // to prevent FFI deadlocks
+
+        info!("Repository created successfully via external file operations");
 
         info!("Repository created successfully at {:?}", repo_path);
         Ok(())

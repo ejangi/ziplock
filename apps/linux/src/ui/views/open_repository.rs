@@ -8,7 +8,10 @@ use iced::widget::{button, column, container, row, scrollable, text, text_input,
 use iced::{Alignment, Command, Element, Length};
 use std::path::PathBuf;
 use tracing::{debug, error, info};
+use uuid::Uuid;
 
+use crate::platform::LinuxFileOperationsHandler;
+use crate::services::get_credential_store;
 use crate::ui::theme::{self, button_styles, container_styles, utils, MEDIUM_GRAY};
 
 /// Messages for the open repository view
@@ -510,19 +513,71 @@ impl OpenRepositoryView {
         archive_path: PathBuf,
         master_password: String,
     ) -> Result<String, String> {
-        // Connect to backend
-        let mut client = ziplock_shared::ZipLockClient::new().map_err(|e| e.to_string())?;
+        info!("Opening repository: {}", archive_path.display());
 
-        client.connect().await.map_err(|e| e.to_string())?;
+        // For now, bypass the hanging hybrid client and use direct external file operations
+        // This prevents the async runtime conflicts that cause hanging
+        info!("Using external file operations approach to avoid runtime conflicts");
 
-        // Create a session first (required for database operations)
-        let session_id = client.create_session().await.map_err(|e| e.to_string())?;
+        let mut file_handler = LinuxFileOperationsHandler::new();
 
-        // Attempt to open the archive
-        client
-            .open_archive(archive_path, master_password)
+        // Create file operations JSON for archive extraction
+        let file_operations = serde_json::json!({
+            "operations": [
+                {
+                    "type": "extract_archive",
+                    "path": archive_path.to_string_lossy(),
+                    "password": master_password,
+                    "format": "7z"
+                }
+            ]
+        })
+        .to_string();
+
+        // Execute the file operations
+        file_handler
+            .execute_file_operations(&file_operations)
             .await
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| {
+                error!("Failed to execute file operations: {}", e);
+                format!("Failed to open repository via file operations: {}", e)
+            })?;
+
+        // Get the extracted files
+        let extracted_files = file_handler.get_extracted_files().map_err(|e| {
+            error!("Failed to get extracted files: {}", e);
+            format!("Failed to get extracted files: {}", e)
+        })?;
+
+        info!(
+            "Successfully extracted {} files from archive",
+            extracted_files.len()
+        );
+
+        // Load extracted files into credential store
+        let credential_store = get_credential_store();
+
+        // Set the archive path for the credential store
+        credential_store.set_archive_path(Some(archive_path.to_string_lossy().to_string()));
+
+        // Load the extracted files into the credential store
+        match credential_store.load_from_extracted_files(extracted_files) {
+            Ok(credential_count) => {
+                info!(
+                    "Successfully loaded {} credentials into store",
+                    credential_count
+                );
+            }
+            Err(e) => {
+                error!("Failed to load credentials into store: {}", e);
+                return Err(format!("Failed to load credentials: {}", e));
+            }
+        }
+
+        info!("Repository opened successfully with credentials loaded");
+
+        // Generate a session ID for compatibility
+        let session_id = Uuid::new_v4().to_string();
 
         // Return the session ID for later use
         Ok(session_id)
