@@ -12,7 +12,7 @@ use std::collections::HashMap;
 
 use crate::ui::components::totp_field::TotpField;
 use crate::ui::theme::{button_styles, utils, ERROR_RED};
-use ziplock_shared::models::{CredentialTemplate, FieldType};
+use ziplock_shared::models::{CredentialTemplate, FieldTemplate, FieldType};
 
 /// Messages that can be sent from the credential form
 #[derive(Debug, Clone, PartialEq)]
@@ -709,7 +709,6 @@ impl CredentialForm {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ziplock_shared::models::{FieldTemplate, FieldType};
 
     #[test]
     fn test_totp_copy_message_flow() {
@@ -764,8 +763,8 @@ mod tests {
         };
 
         let template = CredentialTemplate {
-            name: "login".to_string(),
-            description: "Basic login credentials".to_string(),
+            name: "password_test".to_string(),
+            description: "Template for password field testing".to_string(),
             fields: vec![password_template],
             default_tags: vec![],
         };

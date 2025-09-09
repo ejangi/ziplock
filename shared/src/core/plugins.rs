@@ -393,32 +393,26 @@ impl PluginManager {
 
     /// Validate credential using all validation plugins
     pub fn validate_credential_with_plugins(&self, _credential: &CredentialRecord) -> Vec<String> {
-        let issues = Vec::new();
-
         // Simplified implementation - return empty for now
         // TODO: Implement proper plugin system with concrete types
 
-        issues
+        Vec::new()
     }
 
     /// Get available import formats from plugins
     pub fn get_import_formats(&self) -> Vec<String> {
-        let formats = Vec::new();
-
         // Simplified implementation - return empty for now
         // TODO: Implement proper plugin system with concrete types
 
-        formats
+        Vec::new()
     }
 
     /// Get available export formats from plugins
     pub fn get_export_formats(&self) -> Vec<String> {
-        let formats = Vec::new();
-
         // Simplified implementation - return empty for now
         // TODO: Implement proper plugin system with concrete types
 
-        formats
+        Vec::new()
     }
 
     /// Import credentials using appropriate plugin
@@ -475,6 +469,12 @@ pub mod builtin {
     /// Built-in template provider
     pub struct BuiltinTemplateProvider {
         metadata: PluginMetadata,
+    }
+
+    impl Default for BuiltinTemplateProvider {
+        fn default() -> Self {
+            Self::new()
+        }
     }
 
     impl BuiltinTemplateProvider {
@@ -543,6 +543,12 @@ pub mod builtin {
     /// Built-in field type provider
     pub struct BuiltinFieldTypeProvider {
         metadata: PluginMetadata,
+    }
+
+    impl Default for BuiltinFieldTypeProvider {
+        fn default() -> Self {
+            Self::new()
+        }
     }
 
     impl BuiltinFieldTypeProvider {

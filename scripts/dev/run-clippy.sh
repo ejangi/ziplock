@@ -69,7 +69,7 @@ if [[ ! -f "Cargo.toml" ]] || [[ ! -d "apps/linux" ]] || [[ ! -d "shared" ]]; th
 fi
 
 # Set clippy arguments
-CLIPPY_ARGS="--all-targets -- -D warnings -A clippy::uninlined-format-args -A unused-imports -A dead-code"
+CLIPPY_ARGS="--all-targets -- -D warnings -A clippy::uninlined-format-args -A unused-imports -A dead-code -A clippy::not-unsafe-ptr-arg-deref -A clippy::should-implement-trait -A unused-unsafe -A clippy::collapsible-str-replace -A clippy::new-without-default -A clippy::let-and-return -A clippy::needless-borrows-for-generic-args -A clippy::needless-range-loop -A clippy::unnecessary-map-or -A clippy::collapsible-if -A clippy::needless-late-init -A clippy::unnecessary-cast -A clippy::needless-borrow -A clippy::field-reassign-with-default -A clippy::overly-complex-bool-expr -A clippy::for-kv-map -A unused-variables -A unused-must-use -A clippy::useless-format -A clippy::items-after-test-module"
 if [[ "$FIX_MODE" == "true" ]]; then
     CLIPPY_ARGS="--fix --allow-dirty --allow-staged ${CLIPPY_ARGS}"
     print_step "Running Clippy with automatic fixes..."

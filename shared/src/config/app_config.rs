@@ -11,7 +11,7 @@ use std::path::PathBuf;
 ///
 /// Contains all user preferences and settings for desktop applications.
 /// Mobile applications may use individual components as needed.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(default)]
 pub struct AppConfig {
     /// User interface configuration
@@ -190,18 +190,6 @@ pub enum ViewMode {
     Compact,
     /// Tree view organized by folders
     Tree,
-}
-
-impl Default for AppConfig {
-    fn default() -> Self {
-        Self {
-            ui: UiConfig::default(),
-            security: SecurityConfig::default(),
-            behavior: AppBehaviorConfig::default(),
-            repository_settings: RepositoryManagementConfig::default(),
-            repositories: Vec::new(),
-        }
-    }
 }
 
 impl Default for AppBehaviorConfig {
