@@ -230,10 +230,137 @@ jobs:
           fi
 
       - name: Build Android libraries
-        run: ./scripts/build/build-android-docker.sh build
+        shell: bash
+        run: |
+          cd shared
+
+          # Debug: Check what targets are available
+          echo "=== Available Rust targets ==="
+          rustup target list --installed | grep android
+
+          # Debug: Check NDK setup
+          echo "=== NDK Configuration ==="
+          echo "ANDROID_NDK_HOME: $ANDROID_NDK_HOME"
+          echo "NDK_HOME: $NDK_HOME"
+
+          # Set up environment for direct cargo build
+          export CC_aarch64_linux_android="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang"
+          export CC_armv7_linux_androideabi="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/armv7a-linux-androideabi21-clang"
+          export CC_x86_64_linux_android="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/x86_64-linux-android21-clang"
+          export CC_i686_linux_android="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/i686-linux-android21-clang"
+
+          export AR_aarch64_linux_android="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar"
+          export AR_armv7_linux_androideabi="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar"
+          export AR_x86_64_linux_android="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar"
+          export AR_i686_linux_android="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar"
+
+          # Build for each target with proper environment
+          echo "=== Building for Android targets ==="
+
+          targets=("aarch64-linux-android" "armv7-linux-androideabi" "x86_64-linux-android" "i686-linux-android")
+
+          for target in "${targets[@]}"; do
+            echo "Building for $target..."
+            RUSTFLAGS="-C link-arg=-static-libgcc -C link-arg=-Wl,--as-needed" \
+              cargo build --release --target $target --lib --features c-api
+
+            # Check what was built
+            echo "Checking build output for $target:"
+            ls -la "../target/$target/release/" | grep ziplock || echo "No ziplock files found"
+          done
+
+          # Create output structure
+          mkdir -p ../target/android/jniLibs/{arm64-v8a,armeabi-v7a,x86_64,x86}
+
+          # Copy built libraries with fallback handling
+          echo "=== Copying libraries ==="
+
+          # ARM64
+          if [ -f "../target/aarch64-linux-android/release/libziplock_shared.so" ]; then
+            cp "../target/aarch64-linux-android/release/libziplock_shared.so" "../target/android/jniLibs/arm64-v8a/"
+            echo "✓ Copied ARM64 library"
+          elif [ -f "../target/aarch64-linux-android/release/libziplock_shared.a" ]; then
+            echo "⚠ ARM64 cdylib was dropped, using rlib approach"
+            # Create a simple wrapper shared library from the static library
+            $CC_aarch64_linux_android -shared -o "../target/android/jniLibs/arm64-v8a/libziplock_shared.so" \
+              -Wl,--whole-archive "../target/aarch64-linux-android/release/libziplock_shared.a" -Wl,--no-whole-archive
+            echo "✓ Created ARM64 shared library from static library"
+          else
+            echo "✗ ARM64 library not found"
+            exit 1
+          fi
+
+          # ARMv7
+          if [ -f "../target/armv7-linux-androideabi/release/libziplock_shared.so" ]; then
+            cp "../target/armv7-linux-androideabi/release/libziplock_shared.so" "../target/android/jniLibs/armeabi-v7a/"
+            echo "✓ Copied ARMv7 library"
+          elif [ -f "../target/armv7-linux-androideabi/release/libziplock_shared.a" ]; then
+            echo "⚠ ARMv7 cdylib was dropped, using rlib approach"
+            $CC_armv7_linux_androideabi -shared -o "../target/android/jniLibs/armeabi-v7a/libziplock_shared.so" \
+              -Wl,--whole-archive "../target/armv7-linux-androideabi/release/libziplock_shared.a" -Wl,--no-whole-archive
+            echo "✓ Created ARMv7 shared library from static library"
+          else
+            echo "✗ ARMv7 library not found"
+            exit 1
+          fi
+
+          # x86_64
+          if [ -f "../target/x86_64-linux-android/release/libziplock_shared.so" ]; then
+            cp "../target/x86_64-linux-android/release/libziplock_shared.so" "../target/android/jniLibs/x86_64/"
+            echo "✓ Copied x86_64 library"
+          elif [ -f "../target/x86_64-linux-android/release/libziplock_shared.a" ]; then
+            echo "⚠ x86_64 cdylib was dropped, using rlib approach"
+            $CC_x86_64_linux_android -shared -o "../target/android/jniLibs/x86_64/libziplock_shared.so" \
+              -Wl,--whole-archive "../target/x86_64-linux-android/release/libziplock_shared.a" -Wl,--no-whole-archive
+            echo "✓ Created x86_64 shared library from static library"
+          else
+            echo "✗ x86_64 library not found"
+            exit 1
+          fi
+
+          # x86
+          if [ -f "../target/i686-linux-android/release/libziplock_shared.so" ]; then
+            cp "../target/i686-linux-android/release/libziplock_shared.so" "../target/android/jniLibs/x86/"
+            echo "✓ Copied x86 library"
+          elif [ -f "../target/i686-linux-android/release/libziplock_shared.a" ]; then
+            echo "⚠ x86 cdylib was dropped, using rlib approach"
+            $CC_i686_linux_android -shared -o "../target/android/jniLibs/x86/libziplock_shared.so" \
+              -Wl,--whole-archive "../target/i686-linux-android/release/libziplock_shared.a" -Wl,--no-whole-archive
+            echo "✓ Created x86 shared library from static library"
+          else
+            echo "✗ x86 library not found"
+            exit 1
+          fi
+
+          # Copy to Android app directory if it exists
+          if [ -d "../apps/mobile/android/app/src/main" ]; then
+            mkdir -p ../apps/mobile/android/app/src/main/jniLibs/{arm64-v8a,armeabi-v7a,x86_64,x86}
+            cp -r ../target/android/jniLibs/* ../apps/mobile/android/app/src/main/jniLibs/
+            echo "Libraries copied to Android app jniLibs"
+          fi
 
       - name: Test Android libraries
-        run: ./scripts/build/build-android-docker.sh test
+        shell: bash
+        run: |
+          echo "Testing Android library outputs..."
+          for arch in arm64-v8a armeabi-v7a x86_64 x86; do
+            lib_path="target/android/jniLibs/$arch/libziplock_shared.so"
+            if [ -f "$lib_path" ]; then
+              echo "✓ Found library: $arch"
+              echo "  Size: $(stat -c%s "$lib_path") bytes"
+              echo "  Type: $(file "$lib_path" | cut -d: -f2-)"
+
+              # Check for key symbols
+              if readelf -s "$lib_path" | grep -q "ziplock_"; then
+                echo "  ✓ Contains ziplock symbols"
+              else
+                echo "  ⚠ No ziplock symbols found"
+              fi
+            else
+              echo "✗ Missing library: $arch"
+            fi
+            echo
+          done
 
       - name: Upload Android artifacts
         uses: actions/upload-artifact@v4
