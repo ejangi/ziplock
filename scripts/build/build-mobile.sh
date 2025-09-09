@@ -255,16 +255,43 @@ build_android() {
 
         # Build the library with Android-specific configuration
         log_info "Building with static libgcc to avoid libgcc_s.so.1 dependency"
-        RUSTFLAGS="$RUSTFLAGS -C target-feature=+crt-static" cargo build --target "$target" $BUILD_FLAGS --lib
+        log_info "Target: $target, Features: c-api, Build flags: $BUILD_FLAGS"
+
+        # Build and check output
+        if RUSTFLAGS="$RUSTFLAGS" cargo build --target "$target" $BUILD_FLAGS --lib --features c-api; then
+            log_success "Build completed for $target"
+        else
+            log_error "Build failed for $target"
+            return 1
+        fi
 
         # Copy the built library to the target/android directory
         android_lib_dir="$ANDROID_OUTPUT_DIR/jniLibs/$arch_dir"
         mkdir -p "$android_lib_dir"
 
+        # Determine the correct output directory and check what was built
         if [ "$PROFILE" = "release" ]; then
-            cp "$TARGET_DIR/$target/release/libziplock_shared.so" "$android_lib_dir/"
+            target_out_dir="$TARGET_DIR/$target/release"
         else
-            cp "$TARGET_DIR/$target/debug/libziplock_shared.so" "$android_lib_dir/"
+            target_out_dir="$TARGET_DIR/$target/debug"
+        fi
+
+        log_info "Checking build outputs in: $target_out_dir"
+        ls -la "$target_out_dir/" | grep ziplock || true
+
+        # Try to find and copy the library
+        if [ -f "$target_out_dir/libziplock_shared.so" ]; then
+            log_info "Found shared library (.so) for $target"
+            cp "$target_out_dir/libziplock_shared.so" "$android_lib_dir/"
+        elif [ -f "$target_out_dir/libziplock_shared.a" ]; then
+            log_error "Only static library (.a) was built for $target - cdylib crate type was dropped"
+            log_error "This indicates the Android toolchain doesn't support shared libraries for this target"
+            return 1
+        else
+            log_error "No library found for $target in $target_out_dir"
+            log_error "Available files:"
+            ls -la "$target_out_dir/" || true
+            return 1
         fi
 
         # Also copy to the legacy output directory for compatibility
