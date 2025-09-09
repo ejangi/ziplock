@@ -123,13 +123,12 @@ jobs:
 
       - name: Build Linux binaries
         run: |
-          cargo build --release --bin ziplock
-          cargo build --release --bin ziplock-cli
+          # Build the ziplock binary from the Linux app workspace member
+          cargo build --release --bin ziplock -p ziplock-linux
 
           # Create output directory structure
           mkdir -p target/artifacts/linux/binaries
           cp target/release/ziplock target/artifacts/linux/binaries/
-          cp target/release/ziplock-cli target/artifacts/linux/binaries/
 
           # Make binaries executable
           chmod +x target/artifacts/linux/binaries/*
@@ -188,20 +187,70 @@ jobs:
         run: |
           rustup default stable
           rustup update
+
+          # Install Android targets
+          rustup target add aarch64-linux-android
+          rustup target add armv7-linux-androideabi
+          rustup target add x86_64-linux-android
+          rustup target add i686-linux-android
+
+          # Install cargo-ndk for proper Android builds
+          cargo install cargo-ndk
+
           # Verify Android NDK is available
           if [ -n "$ANDROID_NDK_HOME" ]; then
             echo "Android NDK found at: $ANDROID_NDK_HOME"
+            export NDK_HOME="$ANDROID_NDK_HOME"
           elif [ -n "$NDK_HOME" ]; then
             export ANDROID_NDK_HOME="$NDK_HOME"
             echo "Android NDK found at: $ANDROID_NDK_HOME"
           else
             echo "Warning: Android NDK environment variables not set"
+            # Try to find NDK in common locations
+            for ndk_path in /opt/android-ndk* /usr/local/lib/android/sdk/ndk/*; do
+              if [ -d "$ndk_path" ]; then
+                export ANDROID_NDK_HOME="$ndk_path"
+                export NDK_HOME="$ndk_path"
+                echo "Found NDK at: $ANDROID_NDK_HOME"
+                break
+              fi
+            done
+          fi
+
+          # Verify NDK tools are available
+          if [ -n "$ANDROID_NDK_HOME" ]; then
+            echo "Verifying NDK tools..."
+            ls -la "$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/" | head -5
+
+            # Test cross-compilation tools
+            if [ -f "$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang" ]; then
+              echo "✓ Android cross-compilation tools found"
+            else
+              echo "✗ Android cross-compilation tools not found"
+            fi
           fi
 
       - name: Build Android libraries
         run: |
-          chmod +x scripts/build/build-mobile.sh
-          ./scripts/build/build-mobile.sh --platform android
+          cd shared
+          # Use cargo-ndk to build for all Android architectures with proper cdylib support
+          RUSTFLAGS="-C link-arg=-static-libgcc" cargo ndk -t arm64-v8a -t armeabi-v7a -t x86_64 -t x86 build --release --lib --features c-api
+
+          # Create output structure
+          mkdir -p ../target/android/jniLibs/{arm64-v8a,armeabi-v7a,x86_64,x86}
+
+          # Copy built libraries to expected locations
+          cp ../target/aarch64-linux-android/release/libziplock_shared.so ../target/android/jniLibs/arm64-v8a/
+          cp ../target/armv7-linux-androideabi/release/libziplock_shared.so ../target/android/jniLibs/armeabi-v7a/
+          cp ../target/x86_64-linux-android/release/libziplock_shared.so ../target/android/jniLibs/x86_64/
+          cp ../target/i686-linux-android/release/libziplock_shared.so ../target/android/jniLibs/x86/
+
+          # Copy to Android app directory if it exists
+          if [ -d "../apps/mobile/android/app/src/main" ]; then
+            mkdir -p ../apps/mobile/android/app/src/main/jniLibs/{arm64-v8a,armeabi-v7a,x86_64,x86}
+            cp -r ../target/android/jniLibs/* ../apps/mobile/android/app/src/main/jniLibs/
+            echo "Libraries copied to Android app jniLibs"
+          fi
 
       - name: Test Android libraries
         run: |
