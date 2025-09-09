@@ -1,0 +1,636 @@
+name: Unified Release Build
+
+on:
+  push:
+    branches: [main, develop]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+    paths:
+      - "shared/**"
+      - "desktop/**"
+      - "mobile/**"
+      - "scripts/build/**"
+      - ".github/docker/**"
+      - ".github/workflows/unified-release.yml"
+      - "Cargo.toml"
+      - "Cargo.lock"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  packages: write
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  # Test and build all components once
+  test-and-build:
+    name: Test and Build All Platforms
+    runs-on: ubuntu-22.04
+    outputs:
+      version: ${{ steps.version.outputs.VERSION }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+        continue-on-error: true
+        id: rust-install
+
+      - name: Manual Rust installation (fallback)
+        if: steps.rust-install.outcome == 'failure'
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y \
+            --default-toolchain stable \
+            --component rustfmt,clippy
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+          source $HOME/.cargo/env
+
+      - name: Setup Rust environment
+        run: |
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+          rustc --version
+          cargo --version
+
+      - name: Cache cargo dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-unified-cargo-${{ hashFiles('**/Cargo.lock') }}-${{ hashFiles('**/*.rs') }}
+          restore-keys: |
+            ${{ runner.os }}-unified-cargo-${{ hashFiles('**/Cargo.lock') }}-
+            ${{ runner.os }}-unified-cargo-
+
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            pkg-config \
+            libfontconfig1-dev \
+            libfreetype6-dev \
+            libx11-dev \
+            libxft-dev \
+            liblzma-dev \
+            libgtk-4-dev \
+            libadwaita-1-dev \
+            libatk1.0-dev \
+            libatk-bridge2.0-dev \
+            libgtk-3-dev \
+            libgdk-pixbuf-2.0-dev \
+            libglib2.0-dev \
+            libcairo2-dev \
+            libpango1.0-dev
+
+      - name: Verify GTK4 installation
+        run: |
+          pkg-config --exists gtk4 || {
+            echo "GTK4 not found, attempting alternative installation"
+            exit 1
+          }
+          pkg-config --modversion gtk4
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Run clippy
+        run: |
+          cargo clippy --workspace --all-targets --all-features -- \
+            -D warnings -W clippy::all
+
+      - name: Run tests
+        run: |
+          cargo test --workspace --all-features
+
+      - name: Build Linux binaries
+        run: |
+          cargo build --release --bin ziplock
+          cargo build --release --bin ziplock-cli
+
+          # Create output directory structure
+          mkdir -p target/artifacts/linux/binaries
+          cp target/release/ziplock target/artifacts/linux/binaries/
+          cp target/release/ziplock-cli target/artifacts/linux/binaries/
+
+          # Make binaries executable
+          chmod +x target/artifacts/linux/binaries/*
+
+      - name: Extract version
+        id: version
+        run: |
+          VERSION=$(grep '^version' Cargo.toml | head -1 | sed -n 's/.*"\(.*\)".*/\1/p')
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          echo "Detected version: $VERSION"
+
+      - name: Upload Linux build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-binaries
+          path: target/artifacts/linux/
+          retention-days: 30
+
+  # Security audit
+  security-audit:
+    name: Security Audit
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo-audit
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/cargo-audit
+          key: cargo-audit-${{ runner.os }}
+
+      - name: Install cargo-audit
+        run: |
+          if ! command -v cargo-audit &> /dev/null; then
+            cargo install cargo-audit
+          fi
+
+      - name: Run security audit
+        run: cargo audit
+
+  # Build Android libraries
+  build-android:
+    name: Build Android Libraries
+    runs-on: ubuntu-latest
+    container: ghcr.io/ejangi/ziplock/android-builder:latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build Android libraries
+        run: |
+          chmod +x scripts/build/build-android-docker.sh
+          ./scripts/build/build-android-docker.sh build
+
+      - name: Test Android libraries
+        run: |
+          chmod +x scripts/build/test-android-integration.sh
+          ./scripts/build/test-android-integration.sh
+
+      - name: Verify Android symbols
+        run: |
+          chmod +x scripts/build/verify-android-symbols.sh
+          ./scripts/build/verify-android-symbols.sh verify
+
+      - name: Upload Android artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-libraries
+          path: target/android/
+          retention-days: 30
+
+  # Package for Debian/Ubuntu
+  package-debian:
+    name: Create Debian Package
+    runs-on: ubuntu-22.04
+    needs: [test-and-build, security-audit]
+    container: ghcr.io/ejangi/ziplock/ubuntu-builder:latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download Linux binaries
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-binaries
+          path: target/artifacts/linux/
+
+      - name: Create Debian package
+        run: |
+          # Create package structure
+          VERSION="${{ needs.test-and-build.outputs.version }}"
+          PKG_DIR="target/debian-package"
+          INSTALL_DIR="$PKG_DIR/usr"
+
+          mkdir -p "$INSTALL_DIR"/{bin,share/{applications,icons/hicolor/scalable/apps,metainfo}}
+          mkdir -p "$PKG_DIR/DEBIAN"
+
+          # Copy binaries
+          cp target/artifacts/linux/binaries/* "$INSTALL_DIR/bin/"
+
+          # Copy desktop integration files if they exist
+          if [ -f "packaging/linux/ziplock.desktop" ]; then
+            cp packaging/linux/ziplock.desktop "$INSTALL_DIR/share/applications/"
+          fi
+
+          if [ -f "packaging/linux/ziplock.svg" ]; then
+            cp packaging/linux/ziplock.svg "$INSTALL_DIR/share/icons/hicolor/scalable/apps/"
+          fi
+
+          if [ -f "packaging/linux/ziplock.metainfo.xml" ]; then
+            cp packaging/linux/ziplock.metainfo.xml "$INSTALL_DIR/share/metainfo/"
+          fi
+
+          # Create control file
+          cat > "$PKG_DIR/DEBIAN/control" << EOF
+          Package: ziplock
+          Version: $VERSION
+          Section: utils
+          Priority: optional
+          Architecture: amd64
+          Depends: libgtk-4-1, libadwaita-1-0
+          Maintainer: ZipLock Team <contact@ziplock.dev>
+          Description: Secure archive manager with modern encryption
+           ZipLock is a secure archive manager that provides modern encryption
+           for your files and directories. It features a clean GTK4 interface
+           and strong cryptographic protection for your data.
+          EOF
+
+          # Create postinst script for desktop integration
+          cat > "$PKG_DIR/DEBIAN/postinst" << 'EOF'
+          #!/bin/bash
+          set -e
+          if [ "$1" = "configure" ]; then
+              # Update desktop database
+              if command -v update-desktop-database >/dev/null 2>&1; then
+                  update-desktop-database -q /usr/share/applications || true
+              fi
+
+              # Update icon cache
+              if command -v gtk-update-icon-cache >/dev/null 2>&1; then
+                  gtk-update-icon-cache -q /usr/share/icons/hicolor || true
+              fi
+          fi
+          EOF
+
+          chmod 755 "$PKG_DIR/DEBIAN/postinst"
+
+          # Build package
+          dpkg-deb --root-owner-group --build "$PKG_DIR" "target/ziplock_${VERSION}_amd64.deb"
+
+      - name: Test package installation
+        run: |
+          # Install the package
+          dpkg -i target/ziplock_*.deb || true
+          apt-get update && apt-get install -f -y
+
+          # Verify installation
+          which ziplock
+          which ziplock-cli
+          ziplock --version
+
+      - name: Upload Debian package
+        uses: actions/upload-artifact@v4
+        with:
+          name: debian-package
+          path: target/ziplock_*_amd64.deb
+          retention-days: 30
+
+  # Package for Arch Linux
+  package-arch:
+    name: Create Arch Linux Package
+    runs-on: ubuntu-22.04
+    needs: [test-and-build, security-audit]
+    container: ghcr.io/ejangi/ziplock/arch-builder:latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download Linux binaries
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-binaries
+          path: target/artifacts/linux/
+
+      - name: Create Arch package
+        run: |
+          VERSION="${{ needs.test-and-build.outputs.version }}"
+
+          # Create package directory
+          mkdir -p target/arch-package
+          cd target/arch-package
+
+          # Copy source
+          cp -r "$GITHUB_WORKSPACE" ziplock-src/
+
+          # Create PKGBUILD
+          cat > PKGBUILD << EOF
+          # Maintainer: ZipLock Team <contact@ziplock.dev>
+          pkgname=ziplock
+          pkgver=$VERSION
+          pkgrel=1
+          pkgdesc="Secure archive manager with modern encryption"
+          arch=('x86_64')
+          url="https://github.com/ejangi/ziplock"
+          license=('GPL3')
+          depends=('gtk4' 'libadwaita')
+          makedepends=('rust' 'cargo' 'pkg-config')
+          source=("\$pkgname-\$pkgver.tar.gz::https://github.com/ejangi/ziplock/archive/v\$pkgver.tar.gz")
+          sha256sums=('SKIP')
+
+          build() {
+              cd "\$pkgname-\$pkgver"
+              export CARGO_TARGET_DIR=target
+              cargo build --release --locked
+          }
+
+          check() {
+              cd "\$pkgname-\$pkgver"
+              cargo test --release --locked
+          }
+
+          package() {
+              cd "\$pkgname-\$pkgver"
+
+              # Install binaries
+              install -Dm755 target/release/ziplock "\$pkgdir/usr/bin/ziplock"
+              install -Dm755 target/release/ziplock-cli "\$pkgdir/usr/bin/ziplock-cli"
+
+              # Install desktop integration files if they exist
+              if [ -f packaging/linux/ziplock.desktop ]; then
+                  install -Dm644 packaging/linux/ziplock.desktop "\$pkgdir/usr/share/applications/ziplock.desktop"
+              fi
+
+              if [ -f packaging/linux/ziplock.svg ]; then
+                  install -Dm644 packaging/linux/ziplock.svg "\$pkgdir/usr/share/icons/hicolor/scalable/apps/ziplock.svg"
+              fi
+
+              if [ -f packaging/linux/ziplock.metainfo.xml ]; then
+                  install -Dm644 packaging/linux/ziplock.metainfo.xml "\$pkgdir/usr/share/metainfo/ziplock.metainfo.xml"
+              fi
+
+              # Install documentation
+              install -Dm644 README.md "\$pkgdir/usr/share/doc/ziplock/README.md"
+              install -Dm644 CHANGELOG.md "\$pkgdir/usr/share/doc/ziplock/CHANGELOG.md"
+          }
+          EOF
+
+          # Create install script for AUR
+          cat > ziplock.install << 'EOF'
+          post_install() {
+              update-desktop-database -q
+              gtk-update-icon-cache -q /usr/share/icons/hicolor
+          }
+
+          post_upgrade() {
+              post_install
+          }
+
+          post_remove() {
+              update-desktop-database -q
+              gtk-update-icon-cache -q /usr/share/icons/hicolor
+          }
+          EOF
+
+          # Create source archive for AUR
+          tar -czf "ziplock-${VERSION}.tar.gz" ziplock-src/
+
+          # Generate .SRCINFO for AUR
+          sudo -u builder makepkg --printsrcinfo > .SRCINFO
+
+      - name: Upload Arch package
+        uses: actions/upload-artifact@v4
+        with:
+          name: arch-package
+          path: |
+            target/arch-package/PKGBUILD
+            target/arch-package/.SRCINFO
+            target/arch-package/ziplock.install
+            target/arch-package/ziplock-*.tar.gz
+          retention-days: 30
+
+  # Performance benchmarks (only on main branch)
+  benchmark:
+    name: Performance Benchmarks
+    runs-on: ubuntu-22.04
+    needs: [test-and-build]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download Linux binaries
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-binaries
+          path: target/artifacts/linux/
+
+      - name: Run benchmarks
+        run: |
+          # Make binaries executable
+          chmod +x target/artifacts/linux/binaries/*
+
+          # Run basic performance tests
+          echo "# ZipLock Performance Benchmarks" > benchmark-results.md
+          echo "Generated: $(date -u)" >> benchmark-results.md
+          echo "Commit: ${{ github.sha }}" >> benchmark-results.md
+          echo "" >> benchmark-results.md
+
+          # Test basic functionality
+          ./target/artifacts/linux/binaries/ziplock --version >> benchmark-results.md
+          ./target/artifacts/linux/binaries/ziplock-cli --version >> benchmark-results.md
+
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results
+          path: benchmark-results.md
+          retention-days: 30
+
+  # Create unified release (only on tags)
+  release:
+    name: Create Unified Release
+    runs-on: ubuntu-22.04
+    needs: [test-and-build, build-android, package-debian, package-arch, security-audit]
+    if: startsWith(github.ref, 'refs/tags/v')
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
+
+      - name: Create unified release structure
+        run: |
+          VERSION="${{ needs.test-and-build.outputs.version }}"
+          RELEASE_DIR="unified-release"
+
+          # Create release directory structure
+          mkdir -p "$RELEASE_DIR"/{linux/{binaries,packages},android/{libraries,headers},docs}
+
+          # Copy Linux binaries
+          if [ -d "artifacts/linux-binaries" ]; then
+            cp -r artifacts/linux-binaries/* "$RELEASE_DIR/linux/"
+          fi
+
+          # Copy Linux packages
+          if [ -d "artifacts/debian-package" ]; then
+            cp artifacts/debian-package/*.deb "$RELEASE_DIR/linux/packages/" 2>/dev/null || true
+          fi
+
+          if [ -d "artifacts/arch-package" ]; then
+            mkdir -p "$RELEASE_DIR/linux/packages/arch"
+            cp artifacts/arch-package/* "$RELEASE_DIR/linux/packages/arch/" 2>/dev/null || true
+          fi
+
+          # Copy Android libraries
+          if [ -d "artifacts/android-libraries" ]; then
+            cp -r artifacts/android-libraries/* "$RELEASE_DIR/android/libraries/"
+
+            # Copy headers if they exist
+            if [ -f "artifacts/android-libraries/ziplock.h" ]; then
+              cp artifacts/android-libraries/ziplock.h "$RELEASE_DIR/android/headers/"
+            fi
+          fi
+
+          # Copy documentation
+          cp README.md "$RELEASE_DIR/docs/"
+          cp CHANGELOG.md "$RELEASE_DIR/docs/" 2>/dev/null || true
+          cp -r docs/ "$RELEASE_DIR/docs/technical/" 2>/dev/null || true
+
+          # Create release info
+          cat > "$RELEASE_DIR/release-info.json" << EOF
+          {
+            "version": "$VERSION",
+            "build_date": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "commit": "${{ github.sha }}",
+            "branch": "${{ github.ref_name }}",
+            "platforms": {
+              "linux": {
+                "architectures": ["x86_64"],
+                "formats": ["deb", "arch"]
+              },
+              "android": {
+                "architectures": ["arm64-v8a", "armeabi-v7a"],
+                "api_level": 21
+              }
+            }
+          }
+          EOF
+
+          # Create README for the release
+          cat > "$RELEASE_DIR/README.md" << EOF
+          # ZipLock v$VERSION - Unified Release
+
+          This is a unified release containing both Linux and Android builds of ZipLock.
+
+          ## Contents
+
+          ### Linux (x86_64)
+          - \`linux/binaries/\` - Compiled binaries for Linux
+          - \`linux/packages/ziplock_${VERSION}_amd64.deb\` - Debian/Ubuntu package
+          - \`linux/packages/arch/\` - Arch Linux package files (PKGBUILD, etc.)
+
+          ### Android
+          - \`android/libraries/\` - Native libraries for Android
+            - \`arm64-v8a/\` - ARM64 libraries (modern devices)
+            - \`armeabi-v7a/\` - ARMv7 libraries (older devices)
+          - \`android/headers/\` - C header files for integration
+
+          ### Documentation
+          - \`docs/\` - Complete project documentation
+
+          ## Installation
+
+          ### Linux
+          - **Debian/Ubuntu**: \`sudo dpkg -i linux/packages/ziplock_${VERSION}_amd64.deb\`
+          - **Arch Linux**: Use the PKGBUILD in \`linux/packages/arch/\`
+          - **Manual**: Copy binaries from \`linux/binaries/\` to your PATH
+
+          ### Android
+          See the technical documentation in \`docs/technical/android.md\` for integration instructions.
+
+          ## Build Information
+          - **Version**: $VERSION
+          - **Build Date**: $(date -u)
+          - **Commit**: ${{ github.sha }}
+          EOF
+
+          # Create compressed archive
+          tar -czf "ziplock-v${VERSION}-unified-release.tar.gz" "$RELEASE_DIR"
+
+      - name: Extract changelog for version
+        id: changelog
+        run: |
+          VERSION="${{ needs.test-and-build.outputs.version }}"
+          if [ -f CHANGELOG.md ]; then
+            # Extract changelog section for this version
+            sed -n "/## \[${VERSION}\]/,/## \[/p" CHANGELOG.md | sed '$d' > version_changelog.md
+            echo "CHANGELOG<<EOF" >> $GITHUB_OUTPUT
+            cat version_changelog.md >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+          else
+            echo "CHANGELOG=No changelog available for this release." >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: "ZipLock v${{ needs.test-and-build.outputs.version }}"
+          body: |
+            # ZipLock v${{ needs.test-and-build.outputs.version }} - Unified Release
+
+            This release includes builds for both Linux and Android platforms in a single unified package.
+
+            ## 📦 Release Contents
+
+            ### Linux Builds
+            - **Debian/Ubuntu Package**: Ready-to-install .deb package for x86_64
+            - **Arch Linux Package**: PKGBUILD and source files for Arch Linux/AUR
+            - **Standalone Binaries**: Direct executables for manual installation
+
+            ### Android Builds
+            - **Native Libraries**: ARM64 and ARMv7 libraries for Android integration
+            - **Headers**: C header files for FFI integration
+            - **Documentation**: Complete integration guide
+
+            ## 🚀 Quick Start
+
+            **Linux (Debian/Ubuntu):**
+            ```bash
+            wget https://github.com/ejangi/ziplock/releases/download/v${{ needs.test-and-build.outputs.version }}/ziplock_${{ needs.test-and-build.outputs.version }}_amd64.deb
+            sudo dpkg -i ziplock_${{ needs.test-and-build.outputs.version }}_amd64.deb
+            ```
+
+            **Linux (Arch):**
+            Download the arch package files and use makepkg, or install from AUR.
+
+            **Android:**
+            Download the unified release archive and follow the integration guide in the documentation.
+
+            ## 📋 Changelog
+
+            ${{ steps.changelog.outputs.CHANGELOG }}
+
+            ## 🔧 Technical Details
+
+            - **Build Date**: $(date -u)
+            - **Commit**: ${{ github.sha }}
+            - **Platforms**: Linux (x86_64), Android (ARM64/ARMv7)
+            - **Dependencies**: GTK4, libadwaita (Linux), API 21+ (Android)
+          draft: false
+          prerelease: ${{ contains(needs.test-and-build.outputs.version, '-') }}
+          files: |
+            ziplock-v${{ needs.test-and-build.outputs.version }}-unified-release.tar.gz
+            artifacts/debian-package/*.deb
+          generate_release_notes: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
