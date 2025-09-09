@@ -3,7 +3,7 @@ name: Unified Release Build
 on:
   push:
     branches: [main, develop]
-    tags: ['v*']
+    tags: ["v*"]
   pull_request:
     branches: [main]
     paths:
@@ -181,8 +181,8 @@ jobs:
 
       - name: Build Android libraries
         run: |
-          chmod +x scripts/build/build-android-docker.sh
-          ./scripts/build/build-android-docker.sh build
+          chmod +x scripts/build/build-mobile.sh
+          ./scripts/build/build-mobile.sh --platform android
 
       - name: Test Android libraries
         run: |
@@ -456,7 +456,14 @@ jobs:
   release:
     name: Create Unified Release
     runs-on: ubuntu-22.04
-    needs: [test-and-build, build-android, package-debian, package-arch, security-audit]
+    needs:
+      [
+        test-and-build,
+        build-android,
+        package-debian,
+        package-arch,
+        security-audit,
+      ]
     if: startsWith(github.ref, 'refs/tags/v')
 
     steps:
