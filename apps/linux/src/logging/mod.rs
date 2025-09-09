@@ -5,9 +5,11 @@
 //! environments with appropriate log levels and output destinations.
 
 use anyhow::{Context, Result};
+use is_terminal::IsTerminal;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
+use std::io;
 use std::path::{Path, PathBuf};
 use tracing::{info, warn};
 use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Layer};
@@ -233,7 +235,7 @@ pub fn initialize_logging(config: LoggingConfig) -> Result<()> {
             .with_thread_ids(config.include_thread_ids)
             .with_file(config.include_source_location)
             .with_line_number(config.include_source_location)
-            .with_ansi(atty::is(atty::Stream::Stdout))
+            .with_ansi(io::stdout().is_terminal())
             .with_writer(std::io::stdout)
             .with_filter(console_filter);
 

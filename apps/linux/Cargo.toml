@@ -42,7 +42,7 @@ gtk = { version = "0.9", package = "gtk4", optional = true, features = [
     "v4_6",
 ] }
 gdk4 = { version = "0.9", optional = true }
-glib = { version = "0.18", optional = true }
+glib = { version = "0.21", optional = true }
 
 # Additional application dependencies
 uuid.workspace = true
@@ -52,14 +52,14 @@ toml = "0.8"
 serde_json = "1.0"
 clap = { version = "4.4", features = ["derive"] }
 image = "0.24"
-rfd = { version = "0.12", optional = true }       # File dialog
+rfd = { version = "0.15", optional = true }       # File dialog
 arboard = "3.4"
-keyring = "2.0"
+keyring = "3.6"
 open = "5.0"
 
 # Logging dependencies
 tracing-appender = "0.2" # For file rotation and advanced logging
-atty = "0.2"             # For terminal detection (colored output)
+is-terminal = "0.4"      # For terminal detection (colored output)
 serde_yaml = "0.9"       # For YAML configuration file support
 
 # Linux-specific dependencies
