@@ -81,7 +81,7 @@ Run the test scripts to verify the fix:
 
 ## File Changes
 
-The fix was applied in `.github/workflows/linux-build.yml` in the "Create Arch package structure" step, specifically in the Docker command that updates the PKGBUILD file.
+The fix was applied in `.github/workflows/unified-release.yml` in the "Create Arch package" step, specifically in the Docker command that updates the PKGBUILD file.
 
 ## Alternative Approaches Considered
 

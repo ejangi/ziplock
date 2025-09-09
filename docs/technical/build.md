@@ -5,9 +5,18 @@ This document provides comprehensive instructions for building ZipLock on Linux 
 ## Table of Contents
 
 - [Quick Start](#quick-start)
+  - [Complete Release Build](#complete-release-build-recommended)
+  - [Platform-Specific Builds](#platform-specific-builds)
+  - [Quick Development Workflow](#quick-development-workflow)
 - [Prerequisites](#prerequisites)
 - [Build Process](#build-process)
+  - [Build Scripts Overview](#build-scripts-overview)
+  - [Core Build Scripts](#core-build-scripts)
+  - [Testing and Verification Scripts](#testing-and-verification-scripts)
+  - [Packaging Scripts](#packaging-scripts)
 - [Packaging](#packaging)
+  - [Unified Release System](#unified-release-system)
+  - [Arch Linux Automation](#arch-linux-automation)
 - [Installation and Testing](#installation-and-testing)
 - [Troubleshooting](#troubleshooting)
 - [CI/CD and GitHub Actions](#cicd-and-github-actions)
@@ -16,28 +25,56 @@ This document provides comprehensive instructions for building ZipLock on Linux 
 
 ## Quick Start
 
-For a standard development build:
+### Complete Release Build (Recommended)
+
+For a complete release with both Linux and Android artifacts:
 
 ```bash
 # Clone the repository
 git clone https://github.com/ejangi/ziplock.git
 cd ziplock
 
-# Make build scripts executable
-chmod +x scripts/build/build-linux.sh
-chmod +x scripts/build/package-deb.sh
+# Build complete release for all platforms
+./scripts/build/build-unified-release.sh
 
-# Build everything
-./scripts/build/build-linux.sh
-
-# Create Debian package
-./scripts/build/package-deb.sh
+# Or build with automatic PKGBUILD checksum updates
+./scripts/build/build-unified-release.sh --update-checksums
 ```
 
-This will create:
-- Binaries in `target/release/`
-- Installation structure in `target/install/`
-- Debian package in `target/ziplock_*.deb`
+This creates a structured release in `target/unified-release/` with:
+- Linux desktop application and packages (.deb)
+- Android native libraries (ARM64, ARMv7, x86_64, x86)
+- Arch Linux PKGBUILD (automatically versioned)
+- Complete documentation and integration guides
+- Compressed release archive: `ziplock-VERSION-unified-release.tar.gz`
+
+### Platform-Specific Builds
+
+For development or platform-specific builds:
+
+```bash
+# Linux desktop only
+./scripts/build/build-linux.sh
+
+# Android libraries only
+./scripts/build/build-android-docker.sh build
+
+# Mobile platforms (native build)
+./scripts/build/build-mobile.sh -p android
+```
+
+### Quick Development Workflow
+
+```bash
+# Fast Linux build (skip tests and packages)
+./scripts/build/build-unified-release.sh -p linux --skip-tests --skip-packages
+
+# Test Android libraries after build
+./scripts/build/test-android-integration.sh basic
+
+# Verify Android symbols
+./scripts/build/verify-android-symbols.sh verify
+```
 
 ## Prerequisites
 
@@ -160,9 +197,73 @@ export CARGO_TARGET_DIR="$(pwd)/target"
 
 # For release builds
 export PROFILE=release
+```
 
-# For debug builds
-export PROFILE=debug
+### Build Scripts Overview
+
+ZipLock provides a comprehensive set of build scripts located in `scripts/build/`:
+
+#### Core Build Scripts
+
+**`build-unified-release.sh`** - Primary release builder
+```bash
+./scripts/build/build-unified-release.sh                    # Complete release
+./scripts/build/build-unified-release.sh -p linux          # Linux only
+./scripts/build/build-unified-release.sh -p android        # Android only
+./scripts/build/build-unified-release.sh --update-checksums # Auto-update PKGBUILD
+./scripts/build/build-unified-release.sh --skip-tests      # Fast build
+```
+
+**`build-linux.sh`** - Linux desktop application
+```bash
+./scripts/build/build-linux.sh                             # Standard build
+PROFILE=debug ./scripts/build/build-linux.sh              # Debug build
+```
+
+**`build-android-docker.sh`** - Android containerized builds
+```bash
+./scripts/build/build-android-docker.sh build              # All architectures
+./scripts/build/build-android-docker.sh build arm64       # ARM64 only
+./scripts/build/build-android-docker.sh test              # Test libraries
+./scripts/build/build-android-docker.sh verify            # Verify environment
+./scripts/build/build-android-docker.sh shell             # Interactive shell
+```
+
+**`build-mobile.sh`** - Native mobile builds
+```bash
+./scripts/build/build-mobile.sh -p android                 # Android native
+./scripts/build/build-mobile.sh -p ios                     # iOS (macOS only)
+./scripts/build/build-mobile.sh -p all                     # All platforms
+```
+
+#### Testing and Verification Scripts
+
+**`test-android-integration.sh`** - Android library testing
+```bash
+./scripts/build/test-android-integration.sh basic         # Basic functionality
+./scripts/build/test-android-integration.sh performance   # Performance tests
+./scripts/build/test-android-integration.sh security      # Security analysis
+./scripts/build/test-android-integration.sh all          # Complete suite
+```
+
+**`verify-android-symbols.sh`** - Symbol verification
+```bash
+./scripts/build/verify-android-symbols.sh verify          # Basic verification
+./scripts/build/verify-android-symbols.sh analyze         # Detailed analysis
+./scripts/build/verify-android-symbols.sh export          # Export symbols
+./scripts/build/verify-android-symbols.sh all            # Full verification
+```
+
+#### Packaging Scripts
+
+**`package-deb.sh`** - Debian package creation
+```bash
+./scripts/build/package-deb.sh                            # Create .deb package
+```
+
+**`package-arch.sh`** - Arch Linux package creation
+```bash
+./scripts/build/package-arch.sh                           # Create Arch package
 ```
 
 ### Building Components
@@ -964,43 +1065,66 @@ The project includes optimized GitHub Actions workflows for:
 - **Release Automation**: Automatic releases when tags are pushed
 - **Container Image Management**: Pre-built images for consistent environments
 
-### Optimized GitHub Actions Workflow
+### Unified GitHub Actions Workflow
 
 #### Build Strategy
 
-The workflow uses an efficient artifact-sharing approach with pre-built containers:
+The unified workflow consolidates Linux and Android builds with an efficient artifact-sharing approach:
 
 **Test and Build Job (`test-and-build`):**
-1. **Single Build**: Compiles all binaries once using cached dependencies
-2. **Testing**: Runs formatter, clippy, and test suite on stable Rust only
+1. **Single Build**: Compiles Linux binaries once using cached dependencies
+2. **Testing**: Runs formatter, clippy, and test suite on stable Rust
 3. **Artifact Upload**: Shares compiled binaries with packaging jobs
 
+**Android Build Job (`build-android`):**
+1. **Container Build**: Uses pre-built Android builder container
+2. **Cross-Compilation**: Builds ARM64 and ARMv7 libraries
+3. **Testing**: Validates symbols and integration
+
 **Debian Packaging (`package-debian`):**
-1. **Artifact Download**: Reuses pre-compiled binaries
+1. **Artifact Download**: Reuses pre-compiled Linux binaries
 2. **Container Packaging**: Uses pre-built Ubuntu container image
 3. **Package Creation**: Creates .deb package without rebuilding
 4. **Installation Test**: Validates package in clean environment
 
 **Arch Packaging (`package-arch`):**
-1. **Artifact Download**: Reuses pre-compiled binaries  
+1. **Artifact Download**: Reuses pre-compiled Linux binaries  
 2. **Container Packaging**: Uses pre-built Arch container image
 3. **Source Package**: Creates source archive and PKGBUILD for AUR
 
-**Key Optimizations:**
-- **50% faster**: Removed redundant beta Rust testing
-- **60% fewer builds**: Build once, package multiple times
-- **Consistent environments**: Pre-built container images
-- **Better caching**: Optimized cargo and dependency caching
-- **Parallel packaging**: Debian and Arch jobs run simultaneously
+**Unified Release (`release`):**
+1. **All Platforms**: Combines Linux and Android artifacts
+2. **Single Archive**: Creates unified release package
+3. **GitHub Release**: Publishes all artifacts together
+
+**Key Benefits:**
+- **Unified Releases**: Single release with all platforms
+- **Efficient Builds**: Build once, package multiple times
+- **Consistent Environments**: Pre-built container images
+- **Better Caching**: Optimized cargo and dependency caching
+- **Parallel Processing**: All packaging jobs run simultaneously
+
+#### Workflow Structure
+
+The unified workflow consists of these jobs:
+
+1. **test-and-build**: Builds and tests Linux binaries, runs security audit
+2. **build-android**: Cross-compiles Android libraries using container
+3. **package-debian**: Creates .deb package for Ubuntu/Debian
+4. **package-arch**: Creates PKGBUILD and source files for Arch Linux
+5. **benchmark**: Runs performance tests (main branch only)
+6. **release**: Creates unified release with all artifacts (tags only)
 
 #### Workflow Artifacts
 
-The optimized workflow produces focused artifacts:
+The unified workflow produces comprehensive artifacts:
 
-- **compiled-binaries**: Shared binaries used by all packaging jobs
+- **linux-binaries**: Compiled Linux binaries shared by packaging jobs
+- **android-libraries**: Native Android libraries for all architectures
 - **debian-package**: Ready-to-install .deb package
 - **arch-package**: Source archive and PKGBUILD for AUR
 - **benchmark-results**: Performance metrics (on main branch)
+- **unified-release**: Complete release archive with all platforms
 
 #### Container Images
 
@@ -1113,7 +1237,7 @@ jobs:
    ```
 
 **Files Modified**:
-- `.github/workflows/linux-build.yml` - Fixed pipe operations in container execution
+- `.github/workflows/unified-release.yml` - Fixed pipe operations in container execution
 - `scripts/build/build-linux.sh` - Fixed version extraction using `sed -n` instead of `head`
 
 This fix maintains all security and compatibility features while preventing pipeline failures from SIGPIPE errors.
@@ -1264,13 +1388,19 @@ git push
 git tag v1.0.0
 git push origin v1.0.0
 
-# This will trigger:
-# 1. Full test suite
-# 2. Security audit
-# 3. Multi-architecture builds
-# 4. Package creation
-# 5. GitHub release with assets
+# This will trigger the unified workflow which:
+# 1. Runs full test suite and security audit
+# 2. Builds Linux binaries and Android libraries
+# 3. Creates Debian and Arch packages
+# 4. Generates unified release archive
+# 5. Creates GitHub release with all platform assets
 ```
+
+The unified release includes:
+- Linux packages (.deb for Ubuntu/Debian, PKGBUILD for Arch)
+- Android libraries (ARM64, ARMv7 architectures)
+- Complete documentation and integration guides
+- Single downloadable archive: `ziplock-vX.Y.Z-unified-release.tar.gz`
 
 ### Local Testing of CI
 
