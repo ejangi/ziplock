@@ -1,9 +1,11 @@
 #!/bin/bash
+set -euo pipefail
 
-# Android Symbol Verification Script
-# Verifies that Android libraries contain the expected FFI symbols
+# ZipLock Android Symbol Verification Script
+# Verifies that Android native libraries contain the expected symbols and are properly built
 
-set -e
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 # Colors for output
 RED='\033[0;31m'
@@ -12,397 +14,584 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
-print_status() { echo -e "${BLUE}[INFO]${NC} $1"; }
-print_success() { echo -e "${GREEN}[SUCCESS]${NC} $1"; }
-print_warning() { echo -e "${YELLOW}[WARNING]${NC} $1"; }
-print_error() { echo -e "${RED}[ERROR]${NC} $1"; }
-
 # Configuration
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(dirname "$(dirname "$SCRIPT_DIR")")"
-OUTPUT_DIR="$PROJECT_ROOT/target/android"
+ANDROID_LIBS_DIR="$PROJECT_ROOT/target/android"
+OUTPUT_DIR="$PROJECT_ROOT/target/symbol-verification"
 
-# Expected FFI symbols
-EXPECTED_SYMBOLS=(
-    # Core library functions
-    "ziplock_init"
-    "ziplock_shutdown"
-    "ziplock_get_version"
-    "ziplock_get_last_error"
+# Logging functions
+log_info() {
+    echo -e "${BLUE}[INFO]${NC} $1"
+}
 
-    # Session management
-    "ziplock_session_create"
+log_success() {
+    echo -e "${GREEN}[SUCCESS]${NC} $1"
+}
 
-    # Archive management
-    "ziplock_archive_create"
-    "ziplock_archive_open"
-    "ziplock_archive_close"
-    "ziplock_archive_save"
-    "ziplock_is_archive_open"
+log_warning() {
+    echo -e "${YELLOW}[WARNING]${NC} $1"
+}
 
-    # Credential management
-    "ziplock_credential_list"
-    "ziplock_credential_list_free"
+log_error() {
+    echo -e "${RED}[ERROR]${NC} $1"
+}
 
-    # Memory management
-    "ziplock_string_free"
-)
+# Show usage
+show_usage() {
+    cat << EOF
+Usage: $0 <command> [options]
 
-# Optional symbols (may not be present in all builds)
-OPTIONAL_SYMBOLS=(
-    # Debug/testing functions
-    "ziplock_test_echo"
-    "ziplock_debug_logging"
+Verify Android native library symbols and build quality.
 
-    # Extended API functions
-    "ziplock_credential_new"
-    "ziplock_credential_from_template"
-    "ziplock_credential_add_field"
-    "ziplock_credential_get_field"
-    "ziplock_credential_remove_field"
-    "ziplock_credential_validate"
+COMMANDS:
+    verify         Verify all libraries have expected symbols
+    analyze        Detailed symbol analysis
+    export         Export symbol information
+    compare        Compare symbols between architectures
+    all            Run all verification steps
 
-    # Password utilities
-    "ziplock_password_generate"
-    "ziplock_password_validate"
+OPTIONS:
+    -v, --verbose    Enable verbose output
+    -o, --output     Output directory (default: target/symbol-verification)
+    --strict         Fail on any warnings
 
-    # Validation functions
-    "ziplock_email_validate"
-    "ziplock_url_validate"
+EXAMPLES:
+    $0 verify                   # Basic symbol verification
+    $0 analyze -v               # Detailed analysis with verbose output
+    $0 export                   # Export symbol tables
+    $0 all --strict             # Complete verification with strict checking
 
-    # TOTP functions
-    "ziplock_totp_generate"
+EOF
+}
 
-    # Credit card utilities
-    "ziplock_credit_card_format"
-)
+# Check dependencies
+check_dependencies() {
+    local missing_tools=()
 
-# Check if symbol extraction tools are available
-check_tools() {
-    print_status "Checking symbol extraction tools..."
+    for tool in readelf nm objdump strings file; do
+        if ! command -v "$tool" &> /dev/null; then
+            missing_tools+=("$tool")
+        fi
+    done
 
-    local tools_available=0
-
-    if command -v nm >/dev/null 2>&1; then
-        print_success "✓ nm available"
-        tools_available=1
+    if [ ${#missing_tools[@]} -ne 0 ]; then
+        log_error "Missing required tools: ${missing_tools[*]}"
+        log_info "Install with: sudo apt-get install binutils file"
+        exit 1
     fi
+}
 
-    if command -v objdump >/dev/null 2>&1; then
-        print_success "✓ objdump available"
-        tools_available=1
-    fi
-
-    if command -v readelf >/dev/null 2>&1; then
-        print_success "✓ readelf available"
-        tools_available=1
-    fi
-
-    if [ $tools_available -eq 0 ]; then
-        print_error "No symbol extraction tools available (nm, objdump, readelf)"
-        print_error "Please install binutils package"
+# Initialize environment
+init_environment() {
+    if [ ! -d "$ANDROID_LIBS_DIR" ]; then
+        log_error "Android libraries not found at $ANDROID_LIBS_DIR"
+        log_info "Run './scripts/build/build-android-docker.sh build' first"
         exit 1
     fi
 
-    return 0
+    mkdir -p "$OUTPUT_DIR"
 }
 
-# Extract symbols from a library using available tools
-extract_symbols() {
-    local lib_path="$1"
+# Expected symbols for ZipLock FFI
+EXPECTED_SYMBOLS=(
+    "ziplock_create_repository"
+    "ziplock_open_repository"
+    "ziplock_save_repository"
+    "ziplock_close_repository"
+    "ziplock_add_credential"
+    "ziplock_get_credential"
+    "ziplock_list_credentials"
+    "ziplock_delete_credential"
+    "ziplock_free_string"
+    "ziplock_free_credential_list"
+)
 
-    if command -v nm >/dev/null 2>&1; then
-        # Use nm (preferred)
-        nm -D "$lib_path" 2>/dev/null | grep -E "ziplock_" | cut -d' ' -f3 | sort
-    elif command -v objdump >/dev/null 2>&1; then
-        # Use objdump as fallback
-        objdump -T "$lib_path" 2>/dev/null | grep -E "ziplock_" | awk '{print $NF}' | sort
-    elif command -v readelf >/dev/null 2>&1; then
-        # Use readelf as last resort
-        readelf -Ws "$lib_path" 2>/dev/null | grep -E "ziplock_" | awk '{print $8}' | sort
-    else
-        print_error "No symbol extraction tool available"
-        return 1
-    fi
-}
+# Verify basic symbols
+verify_symbols() {
+    log_info "Verifying Android library symbols..."
 
-# Verify symbols in a single library
-verify_library_symbols() {
-    local lib_path="$1"
-    local arch="$2"
+    local verification_report="$OUTPUT_DIR/symbol-verification.txt"
+    local failed_checks=0
+    local total_checks=0
 
-    print_status "Verifying symbols in $arch library..."
+    echo "=== ZipLock Android Symbol Verification ===" > "$verification_report"
+    echo "Timestamp: $(date)" >> "$verification_report"
+    echo >> "$verification_report"
 
-    if [ ! -f "$lib_path" ]; then
-        print_error "Library not found: $lib_path"
-        return 1
-    fi
+    local architectures=("arm64-v8a" "armeabi-v7a" "x86_64" "x86")
 
-    # Extract symbols
-    local symbols
-    symbols=$(extract_symbols "$lib_path")
+    for arch in "${architectures[@]}"; do
+        local lib_path="$ANDROID_LIBS_DIR/jniLibs/$arch/libziplock_shared.so"
 
-    if [ -z "$symbols" ]; then
-        print_error "No ziplock symbols found in $arch library"
-        return 1
-    fi
+        echo "=== $arch ===" >> "$verification_report"
 
-    # Check required symbols
-    local missing_required=()
-    local found_required=()
-
-    for symbol in "${EXPECTED_SYMBOLS[@]}"; do
-        if echo "$symbols" | grep -q "^$symbol$"; then
-            found_required+=("$symbol")
-        else
-            missing_required+=("$symbol")
+        if [ ! -f "$lib_path" ]; then
+            echo "✗ Library file not found" >> "$verification_report"
+            log_warning "Library not found for $arch"
+            ((failed_checks++))
+            ((total_checks++))
+            echo >> "$verification_report"
+            continue
         fi
-    done
 
-    # Check optional symbols
-    local found_optional=()
+        echo "✓ Library file exists" >> "$verification_report"
+        ((total_checks++))
 
-    for symbol in "${OPTIONAL_SYMBOLS[@]}"; do
-        if echo "$symbols" | grep -q "^$symbol$"; then
-            found_optional+=("$symbol")
-        fi
-    done
+        # Get all symbols
+        local all_symbols
+        all_symbols=$(readelf -s "$lib_path" 2>/dev/null | grep -E "FUNC|OBJECT" | grep -v "UND" || true)
 
-    # Report results
-    echo "  Required symbols: ${#found_required[@]}/${#EXPECTED_SYMBOLS[@]} found"
-    echo "  Optional symbols: ${#found_optional[@]}/${#OPTIONAL_SYMBOLS[@]} found"
-    echo "  Total ziplock symbols: $(echo "$symbols" | wc -l)"
+        # Check for expected symbols
+        local found_symbols=0
+        echo >> "$verification_report"
+        echo "Expected ZipLock symbols:" >> "$verification_report"
 
-    # Show missing required symbols
-    if [ ${#missing_required[@]} -gt 0 ]; then
-        print_error "  Missing required symbols in $arch:"
-        for symbol in "${missing_required[@]}"; do
-            echo "    ✗ $symbol"
-        done
-        return 1
-    else
-        print_success "  ✓ All required symbols found in $arch"
-    fi
-
-    # Show found optional symbols (informational)
-    if [ ${#found_optional[@]} -gt 0 ]; then
-        echo "  Found optional symbols:"
-        for symbol in "${found_optional[@]}"; do
-            echo "    + $symbol"
-        done
-    fi
-
-    return 0
-}
-
-# Verify symbols across all architectures
-verify_all_symbols() {
-    print_status "Verifying symbols in all Android libraries..."
-    echo ""
-
-    local failed_archs=()
-    local successful_archs=()
-
-    for arch in arm64-v8a armeabi-v7a; do
-        local lib_path="$OUTPUT_DIR/$arch/libziplock_shared.so"
-
-        if [ -f "$lib_path" ]; then
-            if verify_library_symbols "$lib_path" "$arch"; then
-                successful_archs+=("$arch")
+        for symbol in "${EXPECTED_SYMBOLS[@]}"; do
+            ((total_checks++))
+            if echo "$all_symbols" | grep -q "$symbol"; then
+                echo "  ✓ $symbol" >> "$verification_report"
+                ((found_symbols++))
             else
-                failed_archs+=("$arch")
+                echo "  ✗ $symbol (MISSING)" >> "$verification_report"
+                ((failed_checks++))
             fi
-            echo ""
+        done
+
+        echo >> "$verification_report"
+        echo "Symbol summary: $found_symbols/${#EXPECTED_SYMBOLS[@]} expected symbols found" >> "$verification_report"
+
+        # Check for basic C library symbols
+        echo >> "$verification_report"
+        echo "Essential dependencies:" >> "$verification_report"
+
+        local essential_deps=("malloc" "free" "strlen" "memcpy")
+        for dep in "${essential_deps[@]}"; do
+            ((total_checks++))
+            if readelf -s "$lib_path" 2>/dev/null | grep -q "$dep"; then
+                echo "  ✓ $dep available" >> "$verification_report"
+            else
+                echo "  ⚠ $dep not found" >> "$verification_report"
+                log_warning "$dep symbol not found in $arch"
+            fi
+        done
+
+        # Check symbol visibility
+        echo >> "$verification_report"
+        echo "Symbol visibility:" >> "$verification_report"
+
+        local global_symbols
+        global_symbols=$(readelf -s "$lib_path" 2>/dev/null | grep " GLOBAL " | wc -l)
+        local local_symbols
+        local_symbols=$(readelf -s "$lib_path" 2>/dev/null | grep " LOCAL " | wc -l)
+
+        echo "  Global symbols: $global_symbols" >> "$verification_report"
+        echo "  Local symbols: $local_symbols" >> "$verification_report"
+
+        if [ "$global_symbols" -gt 0 ] && [ "$global_symbols" -lt 1000 ]; then
+            echo "  ✓ Reasonable number of global symbols" >> "$verification_report"
         else
-            print_warning "Library not found for $arch, skipping..."
-            echo ""
+            echo "  ⚠ Unusual number of global symbols" >> "$verification_report"
         fi
+
+        echo >> "$verification_report"
     done
 
     # Summary
-    echo "Symbol Verification Summary:"
-    echo "============================"
+    echo "=== Verification Summary ===" >> "$verification_report"
+    echo "Total checks: $total_checks" >> "$verification_report"
+    echo "Failed checks: $failed_checks" >> "$verification_report"
+    echo "Success rate: $(( (total_checks - failed_checks) * 100 / total_checks ))%" >> "$verification_report"
 
-    if [ ${#successful_archs[@]} -gt 0 ]; then
-        echo ""
-        echo "✅ Successful architectures:"
-        for arch in "${successful_archs[@]}"; do
-            echo "  ✓ $arch"
-        done
+    if [ "$failed_checks" -eq 0 ]; then
+        log_success "All symbol verification checks passed"
+    else
+        log_warning "$failed_checks out of $total_checks checks failed"
     fi
 
-    if [ ${#failed_archs[@]} -gt 0 ]; then
-        echo ""
-        echo "❌ Failed architectures:"
-        for arch in "${failed_archs[@]}"; do
-            echo "  ✗ $arch"
-        done
-        echo ""
-        print_error "Some architectures have missing symbols"
-        return 1
-    fi
-
-    echo ""
-    print_success "All libraries contain required symbols!"
-    return 0
+    log_info "Verification report saved to: $verification_report"
+    return $failed_checks
 }
 
-# Compare symbols across architectures
-compare_symbols_across_archs() {
-    print_status "Comparing symbols across architectures..."
+# Detailed symbol analysis
+analyze_symbols() {
+    log_info "Performing detailed symbol analysis..."
 
-    local reference_arch="arm64-v8a"
-    local reference_lib="$OUTPUT_DIR/$reference_arch/libziplock_shared.so"
+    local analysis_report="$OUTPUT_DIR/symbol-analysis.txt"
 
-    if [ ! -f "$reference_lib" ]; then
-        print_warning "Reference library not found ($reference_arch), skipping comparison"
-        return 0
-    fi
+    echo "=== ZipLock Android Detailed Symbol Analysis ===" > "$analysis_report"
+    echo "Timestamp: $(date)" >> "$analysis_report"
+    echo >> "$analysis_report"
 
-    local reference_symbols
-    reference_symbols=$(extract_symbols "$reference_lib")
+    local architectures=("arm64-v8a" "armeabi-v7a" "x86_64" "x86")
 
-    echo "Using $reference_arch as reference ($(echo "$reference_symbols" | wc -l) symbols)"
-    echo ""
+    for arch in "${architectures[@]}"; do
+        local lib_path="$ANDROID_LIBS_DIR/jniLibs/$arch/libziplock_shared.so"
 
-    for arch in armeabi-v7a; do
-        local lib_path="$OUTPUT_DIR/$arch/libziplock_shared.so"
+        if [ ! -f "$lib_path" ]; then
+            continue
+        fi
 
+        echo "=== $arch Analysis ===" >> "$analysis_report"
+
+        # File information
+        echo "File Information:" >> "$analysis_report"
+        file "$lib_path" | sed 's/^/  /' >> "$analysis_report"
+        echo "  Size: $(stat -c%s "$lib_path") bytes" >> "$analysis_report"
+        echo >> "$analysis_report"
+
+        # ELF header information
+        echo "ELF Header:" >> "$analysis_report"
+        readelf -h "$lib_path" 2>/dev/null | sed 's/^/  /' >> "$analysis_report"
+        echo >> "$analysis_report"
+
+        # Section information
+        echo "Sections:" >> "$analysis_report"
+        readelf -S "$lib_path" 2>/dev/null | grep -E "\.(text|data|rodata|bss)" | sed 's/^/  /' >> "$analysis_report"
+        echo >> "$analysis_report"
+
+        # Dynamic dependencies
+        echo "Dynamic Dependencies:" >> "$analysis_report"
+        readelf -d "$lib_path" 2>/dev/null | grep "NEEDED" | sed 's/^/  /' >> "$analysis_report"
+        echo >> "$analysis_report"
+
+        # Symbol statistics
+        echo "Symbol Statistics:" >> "$analysis_report"
+
+        local total_symbols
+        total_symbols=$(readelf -s "$lib_path" 2>/dev/null | wc -l)
+        echo "  Total symbol table entries: $total_symbols" >> "$analysis_report"
+
+        local defined_symbols
+        defined_symbols=$(readelf -s "$lib_path" 2>/dev/null | grep -v "UND" | grep -c "FUNC\|OBJECT" || echo 0)
+        echo "  Defined symbols: $defined_symbols" >> "$analysis_report"
+
+        local undefined_symbols
+        undefined_symbols=$(readelf -s "$lib_path" 2>/dev/null | grep -c "UND" || echo 0)
+        echo "  Undefined symbols: $undefined_symbols" >> "$analysis_report"
+
+        # ZipLock specific symbols
+        echo >> "$analysis_report"
+        echo "ZipLock Symbols:" >> "$analysis_report"
+        readelf -s "$lib_path" 2>/dev/null | grep "ziplock_" | sed 's/^/  /' >> "$analysis_report" || echo "  No ziplock symbols found" >> "$analysis_report"
+
+        # Exported functions
+        echo >> "$analysis_report"
+        echo "Exported Functions (sample):" >> "$analysis_report"
+        readelf -s "$lib_path" 2>/dev/null | grep " FUNC " | grep " GLOBAL " | head -10 | sed 's/^/  /' >> "$analysis_report"
+
+        # String analysis
+        echo >> "$analysis_report"
+        echo "String Constants (sample):" >> "$analysis_report"
+        strings "$lib_path" 2>/dev/null | grep -E "(error|warning|debug|ziplock)" | head -5 | sed 's/^/  /' >> "$analysis_report" || echo "  No relevant strings found" >> "$analysis_report"
+
+        echo >> "$analysis_report"
+    done
+
+    log_success "Detailed symbol analysis completed"
+    log_info "Analysis report saved to: $analysis_report"
+}
+
+# Export symbol information
+export_symbols() {
+    log_info "Exporting symbol information..."
+
+    local export_dir="$OUTPUT_DIR/exports"
+    mkdir -p "$export_dir"
+
+    local architectures=("arm64-v8a" "armeabi-v7a" "x86_64" "x86")
+
+    for arch in "${architectures[@]}"; do
+        local lib_path="$ANDROID_LIBS_DIR/jniLibs/$arch/libziplock_shared.so"
+
+        if [ ! -f "$lib_path" ]; then
+            continue
+        fi
+
+        log_info "Exporting symbols for $arch..."
+
+        # Export symbol table
+        readelf -s "$lib_path" > "$export_dir/${arch}-symbols.txt" 2>/dev/null || true
+
+        # Export dynamic symbols
+        readelf -s --dyn-syms "$lib_path" > "$export_dir/${arch}-dynamic-symbols.txt" 2>/dev/null || true
+
+        # Export strings
+        strings "$lib_path" > "$export_dir/${arch}-strings.txt" 2>/dev/null || true
+
+        # Export disassembly of text section (first 100 lines)
+        objdump -d "$lib_path" 2>/dev/null | head -100 > "$export_dir/${arch}-disasm-sample.txt" || true
+
+        # Create symbol summary
+        local summary_file="$export_dir/${arch}-summary.txt"
+        echo "=== $arch Symbol Summary ===" > "$summary_file"
+        echo "Generated: $(date)" >> "$summary_file"
+        echo >> "$summary_file"
+
+        echo "Library: $lib_path" >> "$summary_file"
+        echo "Size: $(stat -c%s "$lib_path") bytes" >> "$summary_file"
+        echo >> "$summary_file"
+
+        echo "Symbol Counts:" >> "$summary_file"
+        echo "  Total: $(readelf -s "$lib_path" 2>/dev/null | wc -l)" >> "$summary_file"
+        echo "  Functions: $(readelf -s "$lib_path" 2>/dev/null | grep -c " FUNC " || echo 0)" >> "$summary_file"
+        echo "  Objects: $(readelf -s "$lib_path" 2>/dev/null | grep -c " OBJECT " || echo 0)" >> "$summary_file"
+        echo "  Global: $(readelf -s "$lib_path" 2>/dev/null | grep -c " GLOBAL " || echo 0)" >> "$summary_file"
+        echo "  Local: $(readelf -s "$lib_path" 2>/dev/null | grep -c " LOCAL " || echo 0)" >> "$summary_file"
+        echo >> "$summary_file"
+
+        echo "ZipLock Functions:" >> "$summary_file"
+        readelf -s "$lib_path" 2>/dev/null | grep "ziplock_" | awk '{print "  " $8}' >> "$summary_file" || echo "  None found" >> "$summary_file"
+    done
+
+    log_success "Symbol information exported to: $export_dir"
+}
+
+# Compare symbols between architectures
+compare_symbols() {
+    log_info "Comparing symbols between architectures..."
+
+    local comparison_report="$OUTPUT_DIR/symbol-comparison.txt"
+
+    echo "=== ZipLock Android Symbol Comparison ===" > "$comparison_report"
+    echo "Timestamp: $(date)" >> "$comparison_report"
+    echo >> "$comparison_report"
+
+    local architectures=("arm64-v8a" "armeabi-v7a" "x86_64" "x86")
+    local arch_files=()
+
+    # Check which libraries exist
+    for arch in "${architectures[@]}"; do
+        local lib_path="$ANDROID_LIBS_DIR/jniLibs/$arch/libziplock_shared.so"
         if [ -f "$lib_path" ]; then
-            local arch_symbols
-            arch_symbols=$(extract_symbols "$lib_path")
-
-            echo "Comparing $arch with $reference_arch:"
-
-            # Find differences
-            local missing_in_arch
-            local extra_in_arch
-
-            missing_in_arch=$(comm -23 <(echo "$reference_symbols") <(echo "$arch_symbols"))
-            extra_in_arch=$(comm -13 <(echo "$reference_symbols") <(echo "$arch_symbols"))
-
-            if [ -z "$missing_in_arch" ] && [ -z "$extra_in_arch" ]; then
-                print_success "  ✓ Identical symbol sets"
-            else
-                if [ -n "$missing_in_arch" ]; then
-                    print_warning "  Missing in $arch:"
-                    echo "$missing_in_arch" | sed 's/^/    - /'
-                fi
-
-                if [ -n "$extra_in_arch" ]; then
-                    print_warning "  Extra in $arch:"
-                    echo "$extra_in_arch" | sed 's/^/    + /'
-                fi
-            fi
-            echo ""
+            arch_files+=("$arch:$lib_path")
         fi
     done
-}
 
-# Show detailed symbol information
-show_symbol_details() {
-    local arch="${1:-arm64-v8a}"
-    local lib_path="$OUTPUT_DIR/$arch/libziplock_shared.so"
-
-    print_status "Showing detailed symbol information for $arch..."
-
-    if [ ! -f "$lib_path" ]; then
-        print_error "Library not found: $lib_path"
-        return 1
+    if [ ${#arch_files[@]} -lt 2 ]; then
+        echo "Insufficient libraries for comparison (need at least 2)" >> "$comparison_report"
+        log_warning "Need at least 2 libraries for comparison"
+        return
     fi
 
-    local symbols
-    symbols=$(extract_symbols "$lib_path")
+    # Compare ZipLock symbols across architectures
+    echo "ZipLock Symbol Consistency Check:" >> "$comparison_report"
+    echo >> "$comparison_report"
 
-    echo ""
-    echo "All ziplock symbols in $arch:"
-    echo "=============================="
-    echo "$symbols" | sed 's/^/  /'
+    # Create temporary files for each architecture's ziplock symbols
+    local temp_dir
+    temp_dir=$(mktemp -d)
 
-    echo ""
-    echo "Symbol categories:"
-    echo "=================="
+    for entry in "${arch_files[@]}"; do
+        local arch="${entry%%:*}"
+        local lib_path="${entry##*:}"
 
-    # Categorize symbols
-    echo "Core functions:"
-    echo "$symbols" | grep -E "(init|shutdown|version|error)" | sed 's/^/  /'
+        readelf -s "$lib_path" 2>/dev/null | grep "ziplock_" | awk '{print $8}' | sort > "$temp_dir/${arch}.symbols"
+    done
 
-    echo ""
-    echo "Archive functions:"
-    echo "$symbols" | grep -E "archive" | sed 's/^/  /'
+    # Compare first two architectures as baseline
+    local base_arch="${arch_files[0]%%:*}"
+    local base_symbols="$temp_dir/${base_arch}.symbols"
 
-    echo ""
-    echo "Credential functions:"
-    echo "$symbols" | grep -E "credential" | sed 's/^/  /'
+    echo "Using $base_arch as baseline" >> "$comparison_report"
+    echo >> "$comparison_report"
 
-    echo ""
-    echo "Utility functions:"
-    echo "$symbols" | grep -E "(password|email|url|totp|credit)" | sed 's/^/  /'
+    for entry in "${arch_files[@]:1}"; do
+        local arch="${entry%%:*}"
+        local arch_symbols="$temp_dir/${arch}.symbols"
 
-    echo ""
-    echo "Memory management:"
-    echo "$symbols" | grep -E "(free|string)" | sed 's/^/  /'
+        echo "Comparing $base_arch vs $arch:" >> "$comparison_report"
 
-    echo ""
-    echo "Other functions:"
-    echo "$symbols" | grep -vE "(init|shutdown|version|error|archive|credential|password|email|url|totp|credit|free|string)" | sed 's/^/  /'
+        # Find common symbols
+        local common_symbols
+        common_symbols=$(comm -12 "$base_symbols" "$arch_symbols" | wc -l)
+        echo "  Common symbols: $common_symbols" >> "$comparison_report"
+
+        # Find symbols only in base
+        local base_only
+        base_only=$(comm -23 "$base_symbols" "$arch_symbols")
+        if [ -n "$base_only" ]; then
+            echo "  Only in $base_arch:" >> "$comparison_report"
+            echo "$base_only" | sed 's/^/    /' >> "$comparison_report"
+        fi
+
+        # Find symbols only in current arch
+        local arch_only
+        arch_only=$(comm -13 "$base_symbols" "$arch_symbols")
+        if [ -n "$arch_only" ]; then
+            echo "  Only in $arch:" >> "$comparison_report"
+            echo "$arch_only" | sed 's/^/    /' >> "$comparison_report"
+        fi
+
+        if [ -z "$base_only" ] && [ -z "$arch_only" ]; then
+            echo "  ✓ Perfect symbol match" >> "$comparison_report"
+        fi
+
+        echo >> "$comparison_report"
+    done
+
+    # Compare library sizes
+    echo "Library Size Comparison:" >> "$comparison_report"
+    echo "| Architecture | Size (bytes) | Size (MB) |" >> "$comparison_report"
+    echo "|--------------|--------------|-----------|" >> "$comparison_report"
+
+    for entry in "${arch_files[@]}"; do
+        local arch="${entry%%:*}"
+        local lib_path="${entry##*:}"
+
+        local size_bytes
+        size_bytes=$(stat -c%s "$lib_path")
+        local size_mb
+        size_mb=$(echo "scale=2; $size_bytes / 1024 / 1024" | bc -l)
+
+        echo "| $arch | $size_bytes | ${size_mb} MB |" >> "$comparison_report"
+    done
+
+    # Cleanup
+    rm -rf "$temp_dir"
+
+    log_success "Symbol comparison completed"
+    log_info "Comparison report saved to: $comparison_report"
 }
 
-# Usage
-usage() {
-    echo "Usage: $0 [COMMAND] [OPTIONS]"
-    echo ""
-    echo "Commands:"
-    echo "  verify         Verify symbols in all libraries (default)"
-    echo "  compare        Compare symbols across architectures"
-    echo "  details [ARCH] Show detailed symbol information"
-    echo "  help           Show this help message"
-    echo ""
-    echo "Options for details:"
-    echo "  ARCH           Architecture (arm64-v8a, armeabi-v7a, x86_64, x86)"
-    echo ""
-    echo "Examples:"
-    echo "  $0                     # Verify all libraries"
-    echo "  $0 verify              # Verify all libraries"
-    echo "  $0 compare             # Compare symbols across architectures"
-    echo "  $0 details             # Show details for arm64-v8a"
-    echo "  $0 details armeabi-v7a # Show details for ARMv7"
+# Run all verification steps
+run_all_verification() {
+    log_info "Running complete symbol verification..."
+
+    local start_time
+    start_time=$(date +%s)
+
+    verify_symbols
+    local verify_result=$?
+
+    analyze_symbols
+    export_symbols
+    compare_symbols
+
+    local end_time
+    end_time=$(date +%s)
+    local duration=$((end_time - start_time))
+
+    # Create master report
+    local master_report="$OUTPUT_DIR/verification-summary.txt"
+
+    echo "=== ZipLock Android Symbol Verification Summary ===" > "$master_report"
+    echo "Timestamp: $(date)" >> "$master_report"
+    echo "Duration: ${duration}s" >> "$master_report"
+    echo >> "$master_report"
+
+    echo "Verification Steps:" >> "$master_report"
+    echo "- Symbol verification: $([ $verify_result -eq 0 ] && echo "✓ PASSED" || echo "✗ FAILED")" >> "$master_report"
+    echo "- Symbol analysis: $([ -f "$OUTPUT_DIR/symbol-analysis.txt" ] && echo "✓ Completed" || echo "✗ Failed")" >> "$master_report"
+    echo "- Symbol export: $([ -d "$OUTPUT_DIR/exports" ] && echo "✓ Completed" || echo "✗ Failed")" >> "$master_report"
+    echo "- Symbol comparison: $([ -f "$OUTPUT_DIR/symbol-comparison.txt" ] && echo "✓ Completed" || echo "✗ Failed")" >> "$master_report"
+    echo >> "$master_report"
+
+    echo "Output Files:" >> "$master_report"
+    find "$OUTPUT_DIR" -name "*.txt" -type f | sort | while read -r file; do
+        echo "- $(realpath --relative-to="$PROJECT_ROOT" "$file")" >> "$master_report"
+    done
+
+    if [ -d "$OUTPUT_DIR/exports" ]; then
+        echo >> "$master_report"
+        echo "Exported Files:" >> "$master_report"
+        find "$OUTPUT_DIR/exports" -type f | sort | while read -r file; do
+            echo "- $(realpath --relative-to="$PROJECT_ROOT" "$file")" >> "$master_report"
+        done
+    fi
+
+    log_success "Complete verification finished in ${duration}s"
+    log_info "Master summary: $master_report"
+
+    return $verify_result
 }
 
 # Main function
 main() {
-    local command="${1:-verify}"
+    local command=""
+    local verbose=false
+    local strict=false
 
-    # Check if build output exists
-    if [ ! -d "$OUTPUT_DIR" ]; then
-        print_error "Build output directory not found: $OUTPUT_DIR"
-        print_error "Please run the build first: ./scripts/build/build-android-docker.sh build"
+    # Parse arguments
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            -v|--verbose)
+                verbose=true
+                shift
+                ;;
+            -o|--output)
+                OUTPUT_DIR="$2"
+                shift 2
+                ;;
+            --strict)
+                strict=true
+                shift
+                ;;
+            -h|--help)
+                show_usage
+                exit 0
+                ;;
+            *)
+                if [ -z "$command" ]; then
+                    command="$1"
+                else
+                    log_error "Unknown option: $1"
+                    show_usage
+                    exit 1
+                fi
+                shift
+                ;;
+        esac
+    done
+
+    if [ -z "$command" ]; then
+        log_error "Command is required"
+        show_usage
         exit 1
     fi
 
+    # Set verbose output
+    if [ "$verbose" = true ]; then
+        set -x
+    fi
+
+    # Check dependencies and initialize
+    check_dependencies
+    init_environment
+
+    # Run requested command
+    local exit_code=0
+
     case "$command" in
         "verify")
-            check_tools
-            verify_all_symbols
+            verify_symbols || exit_code=$?
+            ;;
+        "analyze")
+            analyze_symbols
+            ;;
+        "export")
+            export_symbols
             ;;
         "compare")
-            check_tools
-            compare_symbols_across_archs
+            compare_symbols
             ;;
-        "details")
-            check_tools
-            show_symbol_details "$2"
-            ;;
-        "help"|"-h"|"--help")
-            usage
+        "all")
+            run_all_verification || exit_code=$?
             ;;
         *)
-            print_error "Unknown command: $command"
-            echo ""
-            usage
+            log_error "Invalid command: $command"
+            show_usage
             exit 1
             ;;
     esac
+
+    # Handle strict mode
+    if [ "$strict" = true ] && [ $exit_code -ne 0 ]; then
+        log_error "Verification failed in strict mode"
+        exit $exit_code
+    fi
+
+    log_info "Results available in: $OUTPUT_DIR"
+    exit $exit_code
 }
 
+# Run main function
 main "$@"

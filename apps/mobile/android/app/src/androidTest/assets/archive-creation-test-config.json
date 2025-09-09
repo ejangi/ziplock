@@ -1,0 +1,265 @@
+{
+  "testConfiguration": {
+    "version": "1.0",
+    "description": "Configuration file for Archive Creation Flow Tests",
+    "lastUpdated": "2024-12-19"
+  },
+  "testParameters": {
+    "timeouts": {
+      "archiveCreationTimeoutMs": 30000,
+      "encryptionValidationTimeoutMs": 10000,
+      "ffiOperationTimeoutMs": 5000,
+      "fileOperationTimeoutMs": 15000
+    },
+    "performance": {
+      "maxArchiveCreationTimeMs": 30000,
+      "maxMemoryUsageMB": 50,
+      "largeArchiveCredentialCount": 50,
+      "concurrentOperationCount": 3
+    },
+    "validation": {
+      "enableEncryptionValidation": true,
+      "enablePerformanceMonitoring": true,
+      "enableMemoryLeakDetection": true,
+      "strictModeEnabled": false
+    }
+  },
+  "testPasswords": {
+    "weak": [
+      "123",
+      "abc",
+      "password",
+      "qwerty",
+      "12345678"
+    ],
+    "medium": [
+      "TestPass123",
+      "MyPassword456",
+      "SimplePass789"
+    ],
+    "strong": [
+      "StrongTestPassword123!@#",
+      "SecureP@ssw0rd456!",
+      "MyStr0ng!P@ssw0rd"
+    ],
+    "veryStrong": [
+      "VeryStr0ng!P@ssw0rd#With$Special%Chars&123",
+      "Ultra$ecure!P@ssw0rd#2024&Test*",
+      "Maximum!Strength$P@ssw0rd#789&Special*"
+    ]
+  },
+  "testArchives": {
+    "small": {
+      "name": "small_test_archive.7z",
+      "credentialCount": 3,
+      "expectedMaxSizeBytes": 5000
+    },
+    "medium": {
+      "name": "medium_test_archive.7z",
+      "credentialCount": 15,
+      "expectedMaxSizeBytes": 25000
+    },
+    "large": {
+      "name": "large_test_archive.7z",
+      "credentialCount": 50,
+      "expectedMaxSizeBytes": 100000
+    }
+  },
+  "sampleCredentials": {
+    "website": {
+      "type": "website",
+      "title": "Google Account",
+      "fields": {
+        "url": "https://accounts.google.com",
+        "username": "user@gmail.com",
+        "password": "GooglePass123!",
+        "notes": "Primary email account",
+        "totp_secret": "JBSWY3DPEHPK3PXP"
+      },
+      "tags": ["google", "email", "primary"]
+    },
+    "email": {
+      "type": "email",
+      "title": "Corporate Email",
+      "fields": {
+        "email": "john.doe@company.com",
+        "password": "CorpEmail456!",
+        "server": "imap.company.com",
+        "port": "993",
+        "encryption": "SSL/TLS"
+      },
+      "tags": ["work", "email", "corporate"]
+    },
+    "financial": {
+      "type": "financial",
+      "title": "Chase Bank",
+      "fields": {
+        "institution": "Chase Bank",
+        "username": "johndoe123",
+        "password": "BankSecure789!",
+        "account_number": "****1234",
+        "routing_number": "021000021",
+        "notes": "Primary checking account"
+      },
+      "tags": ["bank", "financial", "primary"]
+    },
+    "software": {
+      "type": "software",
+      "title": "GitHub",
+      "fields": {
+        "platform": "GitHub",
+        "username": "developer123",
+        "password": "DevSecure456!",
+        "api_key": "ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+        "ssh_key": "ssh-rsa AAAAB3NzaC1yc2E...",
+        "notes": "Development account"
+      },
+      "tags": ["development", "github", "api"]
+    },
+    "identity": {
+      "type": "identity",
+      "title": "Driver License",
+      "fields": {
+        "document_type": "Driver License",
+        "document_number": "D123456789",
+        "full_name": "John Doe",
+        "date_of_birth": "1985-06-15",
+        "expiry_date": "2028-06-15",
+        "issuing_state": "California"
+      },
+      "tags": ["identity", "government", "license"]
+    },
+    "note": {
+      "type": "note",
+      "title": "Important Note",
+      "fields": {
+        "content": "This is a test note for validation purposes. It contains some longer text to test the handling of text-based credentials."
+      },
+      "tags": ["note", "test", "text"]
+    },
+    "wifi": {
+      "type": "wifi",
+      "title": "Home WiFi",
+      "fields": {
+        "ssid": "MyHomeNetwork",
+        "password": "WiFiPass123!",
+        "security": "WPA2",
+        "notes": "Main home network"
+      },
+      "tags": ["wifi", "home", "network"]
+    },
+    "server": {
+      "type": "server",
+      "title": "Production Server",
+      "fields": {
+        "hostname": "prod.company.com",
+        "username": "admin",
+        "password": "ServerPass456!",
+        "port": "22",
+        "protocol": "SSH",
+        "notes": "Production web server"
+      },
+      "tags": ["server", "production", "ssh"]
+    }
+  },
+  "errorScenarios": {
+    "invalidDestinations": [
+      "invalid://path/to/nowhere",
+      "file:///nonexistent/path/test.7z",
+      "content://invalid/uri/path"
+    ],
+    "problematicArchiveNames": [
+      "",
+      "a",
+      "toolongarchivename".repeat(50) + ".7z",
+      "archive\nwith\nnewlines.7z",
+      "archive with spaces and special chars @#$%.7z"
+    ],
+    "edgeCasePasswords": [
+      "",
+      " ",
+      "\n\t\r",
+      "a".repeat(1000),
+      "🔒🗝️🛡️🔐",
+      "Mixed\nLine\nBreaks\nPass"
+    ]
+  },
+  "fieldTypeMapping": {
+    "password": ["password", "pass", "pwd", "secret", "key", "token"],
+    "email": ["email", "e-mail", "mail"],
+    "url": ["url", "website", "site", "link"],
+    "phone": ["phone", "telephone", "mobile", "cell"],
+    "number": ["number", "num", "account", "routing"],
+    "text": ["notes", "description", "comment", "title", "name"]
+  },
+  "sensitiveFields": [
+    "password",
+    "secret",
+    "key",
+    "token",
+    "api_key",
+    "ssh_key",
+    "totp_secret",
+    "account_number",
+    "routing_number",
+    "pin",
+    "ssn",
+    "credit_card"
+  ],
+  "archiveFormatValidation": {
+    "requiredFiles": [
+      "metadata.yml"
+    ],
+    "requiredMetadataFields": [
+      "version",
+      "format",
+      "created_at",
+      "last_modified",
+      "credential_count",
+      "structure_version",
+      "generator"
+    ],
+    "credentialFilePattern": "^credentials/[a-f0-9-]+/record\\.yml$",
+    "attachmentFilePattern": "^credentials/[a-f0-9-]+/attachments/.+$"
+  },
+  "encryptionValidation": {
+    "supportedAlgorithms": ["AES-256"],
+    "compressionFormats": ["LZMA2"],
+    "archiveFormat": "7z",
+    "testDecryptionAttempts": 3,
+    "wrongPasswordSamples": [
+      "wrongpassword",
+      "incorrect123",
+      "badpass456"
+    ]
+  },
+  "memoryManagement": {
+    "maxHeapSizeMB": 128,
+    "gcTriggerThresholdMB": 50,
+    "memoryLeakDetectionCycles": 5,
+    "cleanupDelayMs": 100
+  },
+  "concurrencyTesting": {
+    "maxConcurrentOperations": 5,
+    "operationTimeoutMs": 45000,
+    "retryAttempts": 2,
+    "backoffDelayMs": 1000
+  },
+  "platformCompatibility": {
+    "targetAndroidVersions": [21, 23, 26, 28, 30, 31, 33, 34],
+    "architectures": ["arm64-v8a", "armeabi-v7a", "x86", "x86_64"],
+    "crossPlatformValidation": {
+      "linuxCompatible": true,
+      "windowsCompatible": true,
+      "macosCompatible": true
+    }
+  },
+  "debugging": {
+    "enableVerboseLogging": false,
+    "logFFICalls": false,
+    "logFileOperations": false,
+    "logMemoryUsage": false,
+    "saveIntermediateFiles": false,
+    "debugOutputDirectory": "/sdcard/Android/data/com.ziplock/cache/debug"
+  }
+}

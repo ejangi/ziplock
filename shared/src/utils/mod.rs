@@ -1,678 +1,209 @@
-//! Shared utilities for ZipLock
+//! Utility modules for ZipLock
 //!
-//! This module provides common utility functions used throughout the
-//! ZipLock application for string manipulation, data processing,
-//! and other helper operations.
+//! This module provides various utility functions and helpers used throughout
+//! the ZipLock shared library, including TOTP generation, YAML serialization,
+//! validation, and search functionality.
 
-use rand::Rng;
-use std::collections::HashMap;
-use std::time::{SystemTime, UNIX_EPOCH};
-
+pub mod backup;
+pub mod encryption;
+pub mod password;
+pub mod search;
 pub mod totp;
+pub mod validation;
+pub mod yaml;
 
-/// String utilities
-pub struct StringUtils;
+// Re-export commonly used items for convenience
+pub use backup::{
+    BackupData, BackupManager, BackupMetadata, BackupStats, ExportFormat, ExportOptions,
+    MigrationManager,
+};
+pub use encryption::{
+    CredentialCrypto, EncryptedData, EncryptionError, EncryptionResult, EncryptionUtils,
+    SecureMemory, SecureString,
+};
+pub use password::{
+    PasswordAnalysis, PasswordAnalyzer, PasswordGenerator, PasswordOptions, PasswordStrength,
+    PasswordUtils,
+};
+pub use search::{CredentialSearchEngine, SearchQuery, SearchResult};
+pub use totp::{format_totp_secret, generate_totp, validate_totp_secret};
+pub use validation::{validate_credential, validate_field, ValidationResult};
+pub use yaml::{
+    deserialize_credential, deserialize_file_map, serialize_credential, serialize_file_map,
+};
 
-impl StringUtils {
-    /// Normalize whitespace in a string (trim and collapse multiple spaces)
-    pub fn normalize_whitespace(input: &str) -> String {
-        input.split_whitespace().collect::<Vec<&str>>().join(" ")
-    }
-
-    /// Check if a string contains only printable ASCII characters
-    pub fn is_printable_ascii(input: &str) -> bool {
-        input.chars().all(|c| c.is_ascii() && !c.is_control())
-    }
-
-    /// Truncate a string to a maximum length, adding ellipsis if needed
-    pub fn truncate(input: &str, max_length: usize) -> String {
-        if input.len() <= max_length {
-            input.to_string()
-        } else if max_length <= 3 {
+/// Utility functions for working with strings
+pub mod string_utils {
+    /// Truncate a string to a maximum length with ellipsis
+    pub fn truncate_with_ellipsis(s: &str, max_len: usize) -> String {
+        if s.len() <= max_len {
+            s.to_string()
+        } else if max_len <= 3 {
             "...".to_string()
         } else {
-            format!("{}...", &input[..max_length - 3])
+            format!("{}...", &s[..max_len - 3])
         }
     }
 
-    /// Convert a string to a safe filename
-    pub fn to_safe_filename(input: &str) -> String {
-        let mut result = String::new();
-
-        for c in input.chars() {
-            match c {
-                'a'..='z' | 'A'..='Z' | '0'..='9' | '-' | '_' => result.push(c),
-                ' ' => result.push('_'),
-                _ => result.push('_'),
-            }
-        }
-
-        // Ensure it doesn't start with a dot or dash
-        if result.starts_with('.') || result.starts_with('-') {
-            result.insert(0, '_');
-        }
-
-        // Limit length
-        if result.len() > 255 {
-            result.truncate(255);
-        }
-
-        result
+    /// Sanitize a string by removing control characters
+    pub fn sanitize_string(s: &str) -> String {
+        s.chars()
+            .filter(|c| !c.is_control() || *c == '\t' || *c == '\n')
+            .collect()
     }
 
-    /// Check if a string looks like a URL
-    pub fn looks_like_url(input: &str) -> bool {
-        input.starts_with("http://")
-            || input.starts_with("https://")
-            || input.starts_with("ftp://")
-            || input.contains("://")
+    /// Check if a string is likely to be a URL
+    pub fn looks_like_url(s: &str) -> bool {
+        s.starts_with("http://") || s.starts_with("https://") || s.starts_with("ftp://")
     }
 
-    /// Check if a string looks like an email address
-    pub fn looks_like_email(input: &str) -> bool {
-        input.contains('@')
-            && input.len() > 3
-            && !input.starts_with('@')
-            && !input.ends_with('@')
-            && input.matches('@').count() == 1
-    }
-
-    /// Convert machine-friendly names (like "credit_card") to human-readable display names (like "Credit Card")
-    pub fn to_display_name(input: &str) -> String {
-        input
-            .split('_')
-            .map(|word| {
-                let mut chars = word.chars();
-                match chars.next() {
-                    None => String::new(),
-                    Some(first) => {
-                        first.to_uppercase().collect::<String>() + &chars.as_str().to_lowercase()
-                    }
-                }
-            })
-            .collect::<Vec<String>>()
-            .join(" ")
-    }
-}
-
-/// Time utilities
-pub struct TimeUtils;
-
-impl TimeUtils {
-    /// Get current Unix timestamp
-    pub fn current_timestamp() -> u64 {
-        SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs()
-    }
-
-    /// Convert SystemTime to Unix timestamp
-    pub fn system_time_to_timestamp(time: SystemTime) -> u64 {
-        time.duration_since(UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs()
-    }
-
-    /// Convert Unix timestamp to SystemTime
-    pub fn timestamp_to_system_time(timestamp: u64) -> SystemTime {
-        UNIX_EPOCH + std::time::Duration::from_secs(timestamp)
-    }
-
-    /// Format a SystemTime as ISO 8601 string (UTC)
-    pub fn format_iso8601(time: SystemTime) -> String {
-        let timestamp = Self::system_time_to_timestamp(time);
-        let datetime = chrono::DateTime::<chrono::Utc>::from_timestamp(timestamp as i64, 0);
-
-        match datetime {
-            Some(dt) => dt.format("%Y-%m-%dT%H:%M:%SZ").to_string(),
-            None => "1970-01-01T00:00:00Z".to_string(),
-        }
-    }
-
-    /// Parse ISO 8601 string to SystemTime
-    pub fn parse_iso8601(iso_string: &str) -> Option<SystemTime> {
-        chrono::DateTime::parse_from_rfc3339(iso_string)
-            .ok()
-            .map(|dt| UNIX_EPOCH + std::time::Duration::from_secs(dt.timestamp() as u64))
-    }
-}
-
-/// Collection utilities
-pub struct CollectionUtils;
-
-impl CollectionUtils {
-    /// Merge two HashMaps, with values from the second map taking precedence
-    pub fn merge_hashmaps<K, V>(mut first: HashMap<K, V>, second: HashMap<K, V>) -> HashMap<K, V>
-    where
-        K: std::hash::Hash + Eq,
-    {
-        for (key, value) in second {
-            first.insert(key, value);
-        }
-        first
-    }
-
-    /// Remove duplicates from a vector while preserving order
-    pub fn dedup_preserve_order<T>(mut vec: Vec<T>) -> Vec<T>
-    where
-        T: PartialEq + Clone,
-    {
-        let mut seen = Vec::new();
-        vec.retain(|item| {
-            if seen.contains(item) {
-                false
+    /// Extract domain from URL
+    pub fn extract_domain(url: &str) -> Option<String> {
+        if let Some(start) = url.find("://") {
+            let after_protocol = &url[start + 3..];
+            if let Some(end) = after_protocol.find('/') {
+                Some(after_protocol[..end].to_string())
+            } else if let Some(end) = after_protocol.find(':') {
+                Some(after_protocol[..end].to_string())
             } else {
-                seen.push(item.clone());
-                true
+                Some(after_protocol.to_string())
             }
-        });
-        vec
+        } else {
+            None
+        }
     }
 
-    /// Group items by a key function
-    pub fn group_by<T, K, F>(items: Vec<T>, key_fn: F) -> HashMap<K, Vec<T>>
-    where
-        K: std::hash::Hash + Eq,
-        F: Fn(&T) -> K,
-    {
-        let mut groups = HashMap::new();
+    #[cfg(test)]
+    mod tests {
+        use super::*;
 
-        for item in items {
-            let key = key_fn(&item);
-            groups.entry(key).or_insert_with(Vec::new).push(item);
+        #[test]
+        fn test_truncate_with_ellipsis() {
+            assert_eq!(truncate_with_ellipsis("hello", 10), "hello");
+            assert_eq!(truncate_with_ellipsis("hello world", 8), "hello...");
+            assert_eq!(truncate_with_ellipsis("hi", 2), "hi");
+            assert_eq!(truncate_with_ellipsis("hello", 3), "...");
         }
 
-        groups
-    }
-}
-
-/// Data validation utilities
-pub struct ValidationUtils;
-
-impl ValidationUtils {
-    /// Check if a string is a valid UUID v4
-    pub fn is_valid_uuid_v4(uuid: &str) -> bool {
-        if uuid.len() != 36 {
-            return false;
+        #[test]
+        fn test_sanitize_string() {
+            assert_eq!(sanitize_string("hello\x00world"), "helloworld");
+            assert_eq!(sanitize_string("hello\tworld"), "hello\tworld");
+            assert_eq!(sanitize_string("hello\nworld"), "hello\nworld");
         }
 
-        let parts: Vec<&str> = uuid.split('-').collect();
-        if parts.len() != 5 {
-            return false;
+        #[test]
+        fn test_looks_like_url() {
+            assert!(looks_like_url("https://example.com"));
+            assert!(looks_like_url("http://localhost"));
+            assert!(looks_like_url("ftp://files.example.com"));
+            assert!(!looks_like_url("example.com"));
+            assert!(!looks_like_url("not a url"));
         }
 
-        if parts[0].len() != 8
-            || parts[1].len() != 4
-            || parts[2].len() != 4
-            || parts[3].len() != 4
-            || parts[4].len() != 12
-        {
-            return false;
-        }
-
-        // Check that all characters are hex digits
-        uuid.chars()
-            .filter(|&c| c != '-')
-            .all(|c| c.is_ascii_hexdigit())
-    }
-
-    /// Validate password strength (returns score 0-100)
-    pub fn password_strength_score(password: &str) -> u8 {
-        if password.is_empty() {
-            return 0;
-        }
-
-        let mut score = 0u8;
-        let length = password.len();
-
-        // Length scoring
-        score += match length {
-            0..=7 => 0,
-            8..=11 => 20,
-            12..=15 => 40,
-            16..=19 => 60,
-            _ => 80,
-        };
-
-        // Character variety
-        let has_lowercase = password.chars().any(|c| c.is_ascii_lowercase());
-        let has_uppercase = password.chars().any(|c| c.is_ascii_uppercase());
-        let has_digits = password.chars().any(|c| c.is_ascii_digit());
-        let has_special = password.chars().any(|c| !c.is_alphanumeric());
-
-        let variety_count = [has_lowercase, has_uppercase, has_digits, has_special]
-            .iter()
-            .filter(|&&x| x)
-            .count();
-
-        score += match variety_count {
-            0..=1 => 0,
-            2 => 5,
-            3 => 10,
-            4 => 20,
-            _ => 20,
-        };
-
-        // Bonus for no repeated characters
-        let unique_chars: std::collections::HashSet<char> = password.chars().collect();
-        if unique_chars.len() == password.len() {
-            score = score.saturating_add(10);
-        }
-
-        score.min(100)
-    }
-
-    /// Check if an email address has a valid format (basic check)
-    pub fn is_valid_email_format(email: &str) -> bool {
-        if email.is_empty() || email.len() > 254 {
-            return false;
-        }
-
-        let parts: Vec<&str> = email.split('@').collect();
-        if parts.len() != 2 {
-            return false;
-        }
-
-        let local = parts[0];
-        let domain = parts[1];
-
-        // Basic local part validation
-        if local.is_empty() || local.len() > 64 {
-            return false;
-        }
-
-        // Basic domain validation
-        if domain.is_empty() || domain.len() > 253 || !domain.contains('.') {
-            return false;
-        }
-
-        // Check for valid characters (simplified)
-        local
-            .chars()
-            .all(|c| c.is_alphanumeric() || ".-_+".contains(c))
-            && domain
-                .chars()
-                .all(|c| c.is_alphanumeric() || ".-".contains(c))
-    }
-}
-
-/// Encoding utilities
-pub struct EncodingUtils;
-
-impl EncodingUtils {
-    /// Encode bytes as hex string
-    pub fn encode_hex(bytes: &[u8]) -> String {
-        bytes.iter().map(|b| format!("{b:02x}")).collect()
-    }
-
-    /// Decode hex string to bytes
-    pub fn decode_hex(hex: &str) -> Option<Vec<u8>> {
-        if !hex.len().is_multiple_of(2) {
-            return None;
-        }
-
-        let mut bytes = Vec::new();
-        for chunk in hex.as_bytes().chunks(2) {
-            let chunk_str = std::str::from_utf8(chunk).ok()?;
-            let byte = u8::from_str_radix(chunk_str, 16).ok()?;
-            bytes.push(byte);
-        }
-
-        Some(bytes)
-    }
-
-    /// Simple base64 encode (using standard library)
-    pub fn encode_base64(bytes: &[u8]) -> String {
-        use base64::Engine;
-        base64::engine::general_purpose::STANDARD.encode(bytes)
-    }
-
-    /// Simple base64 decode (using standard library)
-    pub fn decode_base64(encoded: &str) -> Option<Vec<u8>> {
-        use base64::Engine;
-        base64::engine::general_purpose::STANDARD
-            .decode(encoded)
-            .ok()
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_string_utils() {
-        assert_eq!(
-            StringUtils::normalize_whitespace("  hello    world  "),
-            "hello world"
-        );
-
-        assert!(StringUtils::is_printable_ascii("Hello123!"));
-        assert!(!StringUtils::is_printable_ascii("Hello\x00World"));
-
-        assert_eq!(StringUtils::truncate("Hello World", 5), "He...");
-        assert_eq!(StringUtils::truncate("Hi", 5), "Hi");
-
-        assert_eq!(
-            StringUtils::to_safe_filename("My File!.txt"),
-            "My_File__txt"
-        );
-
-        assert!(StringUtils::looks_like_url("https://example.com"));
-        assert!(!StringUtils::looks_like_url("not a url"));
-
-        assert!(StringUtils::looks_like_email("test@example.com"));
-        assert!(!StringUtils::looks_like_email("not an email"));
-
-        // Test display name conversion for current credential types
-        assert_eq!(StringUtils::to_display_name("credit_card"), "Credit Card");
-        assert_eq!(StringUtils::to_display_name("secure_note"), "Secure Note");
-        assert_eq!(StringUtils::to_display_name("login"), "Login");
-
-        // Test display name conversion for future credential types from specification
-        assert_eq!(
-            StringUtils::to_display_name("api_credentials"),
-            "Api Credentials"
-        );
-        assert_eq!(StringUtils::to_display_name("ssh_key"), "Ssh Key");
-        assert_eq!(StringUtils::to_display_name("bank_account"), "Bank Account");
-        assert_eq!(
-            StringUtils::to_display_name("crypto_wallet"),
-            "Crypto Wallet"
-        );
-        assert_eq!(
-            StringUtils::to_display_name("software_license"),
-            "Software License"
-        );
-
-        // Test edge cases
-        assert_eq!(StringUtils::to_display_name("single"), "Single");
-        assert_eq!(StringUtils::to_display_name(""), "");
-        assert_eq!(
-            StringUtils::to_display_name("word_with_many_underscores"),
-            "Word With Many Underscores"
-        );
-    }
-
-    #[test]
-    fn test_time_utils() {
-        let now = SystemTime::now();
-        let timestamp = TimeUtils::system_time_to_timestamp(now);
-        let back = TimeUtils::timestamp_to_system_time(timestamp);
-
-        // Should be very close (within a second)
-        assert!(now.duration_since(back).unwrap_or_default().as_secs() <= 1);
-
-        let iso = TimeUtils::format_iso8601(now);
-        assert!(iso.ends_with('Z'));
-        assert!(iso.len() >= 19); // YYYY-MM-DDTHH:MM:SSZ
-    }
-
-    #[test]
-    fn test_collection_utils() {
-        let mut map1 = HashMap::new();
-        map1.insert("a", 1);
-        map1.insert("b", 2);
-
-        let mut map2 = HashMap::new();
-        map2.insert("b", 3);
-        map2.insert("c", 4);
-
-        let merged = CollectionUtils::merge_hashmaps(map1, map2);
-        assert_eq!(merged.get("a"), Some(&1));
-        assert_eq!(merged.get("b"), Some(&3)); // Second map wins
-        assert_eq!(merged.get("c"), Some(&4));
-
-        let vec = vec![1, 2, 2, 3, 1, 4];
-        let deduped = CollectionUtils::dedup_preserve_order(vec);
-        assert_eq!(deduped, vec![1, 2, 3, 4]);
-    }
-
-    #[test]
-    fn test_validation_utils() {
-        assert!(ValidationUtils::is_valid_uuid_v4(
-            "550e8400-e29b-41d4-a716-446655440000"
-        ));
-        assert!(!ValidationUtils::is_valid_uuid_v4("not-a-uuid"));
-
-        assert_eq!(ValidationUtils::password_strength_score("weak"), 10);
-        assert_eq!(
-            ValidationUtils::password_strength_score("SuperSecure123!"),
-            60
-        );
-
-        assert!(ValidationUtils::is_valid_email_format("test@example.com"));
-        assert!(!ValidationUtils::is_valid_email_format("invalid"));
-    }
-
-    #[test]
-    fn test_encoding_utils() {
-        let bytes = b"Hello World";
-        let hex = EncodingUtils::encode_hex(bytes);
-        let decoded = EncodingUtils::decode_hex(&hex).unwrap();
-        assert_eq!(bytes, decoded.as_slice());
-
-        let base64 = EncodingUtils::encode_base64(bytes);
-        let decoded = EncodingUtils::decode_base64(&base64).unwrap();
-        assert_eq!(bytes, decoded.as_slice());
-    }
-}
-
-/// Password generation utilities
-pub struct PasswordUtils;
-
-/// Configuration options for password generation
-#[derive(Debug, Clone)]
-pub struct PasswordOptions {
-    pub length: usize,
-    pub include_uppercase: bool,
-    pub include_lowercase: bool,
-    pub include_numbers: bool,
-    pub include_symbols: bool,
-}
-
-impl Default for PasswordOptions {
-    fn default() -> Self {
-        Self {
-            length: 16,
-            include_uppercase: true,
-            include_lowercase: true,
-            include_numbers: true,
-            include_symbols: true,
+        #[test]
+        fn test_extract_domain() {
+            assert_eq!(
+                extract_domain("https://example.com/path"),
+                Some("example.com".to_string())
+            );
+            assert_eq!(
+                extract_domain("http://localhost:8080"),
+                Some("localhost".to_string())
+            );
+            assert_eq!(
+                extract_domain("https://sub.example.com"),
+                Some("sub.example.com".to_string())
+            );
+            assert_eq!(extract_domain("not a url"), None);
         }
     }
 }
 
-impl PasswordUtils {
-    /// Generate a secure password with the given options
-    pub fn generate_password(options: PasswordOptions) -> Result<String, String> {
-        if options.length == 0 {
-            return Err("Password length must be greater than 0".to_string());
-        }
+/// Utility functions for working with time
+pub mod time_utils {
+    use chrono::{TimeZone, Utc};
 
-        if options.length > 256 {
-            return Err("Password length cannot exceed 256 characters".to_string());
-        }
-
-        if !options.include_uppercase
-            && !options.include_lowercase
-            && !options.include_numbers
-            && !options.include_symbols
-        {
-            return Err("At least one character type must be enabled".to_string());
-        }
-
-        let mut charset = String::new();
-
-        if options.include_lowercase {
-            charset.push_str("abcdefghijklmnopqrstuvwxyz");
-        }
-
-        if options.include_uppercase {
-            charset.push_str("ABCDEFGHIJKLMNOPQRSTUVWXYZ");
-        }
-
-        if options.include_numbers {
-            charset.push_str("0123456789");
-        }
-
-        if options.include_symbols {
-            charset.push_str("!@#$%^&*()_+-=[]{}|;:,.<>?");
-        }
-
-        let charset_chars: Vec<char> = charset.chars().collect();
-        let mut rng = rand::thread_rng();
-        let mut password = String::with_capacity(options.length);
-
-        // Ensure at least one character from each enabled category
-        if options.include_lowercase {
-            let lowercase_chars: Vec<char> = "abcdefghijklmnopqrstuvwxyz".chars().collect();
-            password.push(lowercase_chars[rng.gen_range(0..lowercase_chars.len())]);
-        }
-
-        if options.include_uppercase {
-            let uppercase_chars: Vec<char> = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".chars().collect();
-            password.push(uppercase_chars[rng.gen_range(0..uppercase_chars.len())]);
-        }
-
-        if options.include_numbers {
-            let number_chars: Vec<char> = "0123456789".chars().collect();
-            password.push(number_chars[rng.gen_range(0..number_chars.len())]);
-        }
-
-        if options.include_symbols {
-            let symbol_chars: Vec<char> = "!@#$%^&*()_+-=[]{}|;:,.<>?".chars().collect();
-            password.push(symbol_chars[rng.gen_range(0..symbol_chars.len())]);
-        }
-
-        // Fill the rest randomly
-        while password.len() < options.length {
-            password.push(charset_chars[rng.gen_range(0..charset_chars.len())]);
-        }
-
-        // Shuffle the password to avoid predictable patterns
-        let mut password_chars: Vec<char> = password.chars().collect();
-        for i in (1..password_chars.len()).rev() {
-            let j = rng.gen_range(0..=i);
-            password_chars.swap(i, j);
-        }
-
-        Ok(password_chars.into_iter().collect())
-    }
-
-    /// Check if a password contains common patterns that make it weak
-    pub fn has_common_patterns(password: &str) -> bool {
-        let common_patterns = [
-            "password", "123456", "qwerty", "abc", "admin", "test", "user", "login", "welcome",
-            "123", "321", "111", "000",
-        ];
-
-        let lowercase_password = password.to_lowercase();
-
-        for pattern in &common_patterns {
-            if lowercase_password.contains(pattern) {
-                return true;
+    /// Format a Unix timestamp for display
+    pub fn format_timestamp(timestamp: i64) -> String {
+        match Utc.timestamp_opt(timestamp, 0) {
+            chrono::LocalResult::Single(datetime) => {
+                datetime.format("%Y-%m-%d %H:%M:%S UTC").to_string()
             }
+            _ => "Invalid date".to_string(),
+        }
+    }
+
+    /// Get current Unix timestamp
+    pub fn current_timestamp() -> i64 {
+        Utc::now().timestamp()
+    }
+
+    /// Format duration in human-readable form
+    pub fn format_duration_since(timestamp: i64) -> String {
+        let now = current_timestamp();
+        let diff = now - timestamp;
+
+        if diff < 0 {
+            return "in the future".to_string();
         }
 
-        // Check for repeated characters (more than 3 in a row)
-        let chars: Vec<char> = password.chars().collect();
-        for window in chars.windows(4) {
-            if window.iter().all(|&c| c == window[0]) {
-                return true;
-            }
+        match diff {
+            0..=59 => "just now".to_string(),
+            60..=3599 => format!(
+                "{} minute{} ago",
+                diff / 60,
+                if diff >= 120 { "s" } else { "" }
+            ),
+            3600..=86399 => format!(
+                "{} hour{} ago",
+                diff / 3600,
+                if diff >= 7200 { "s" } else { "" }
+            ),
+            86400..=2591999 => format!(
+                "{} day{} ago",
+                diff / 86400,
+                if diff >= 172800 { "s" } else { "" }
+            ),
+            2592000..=31535999 => format!(
+                "{} month{} ago",
+                diff / 2592000,
+                if diff >= 5184000 { "s" } else { "" }
+            ),
+            _ => format!(
+                "{} year{} ago",
+                diff / 31536000,
+                if diff >= 63072000 { "s" } else { "" }
+            ),
+        }
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[test]
+        fn test_format_timestamp() {
+            let timestamp = 1640995200; // 2022-01-01 00:00:00 UTC
+            let formatted = format_timestamp(timestamp);
+            assert!(formatted.contains("2022-01-01"));
+            assert!(formatted.contains("00:00:00"));
         }
 
-        // Check for simple sequences
-        for window in chars.windows(4) {
-            let mut is_sequence = true;
-            for i in 1..window.len() {
-                if (window[i] as u8).saturating_sub(window[i - 1] as u8) != 1 {
-                    is_sequence = false;
-                    break;
-                }
-            }
-            if is_sequence {
-                return true;
-            }
+        #[test]
+        fn test_current_timestamp() {
+            let timestamp = current_timestamp();
+            assert!(timestamp > 1600000000); // Should be after 2020
         }
 
-        false
-    }
-}
-
-// Re-export for convenience (already defined above)
-
-/// Socket utilities for consistent IPC configuration
-pub struct SocketUtils;
-
-impl SocketUtils {
-    /// Get the default socket path for the ZipLock backend
-    /// This uses the same logic as the backend to ensure consistency
-    pub fn default_socket_path() -> std::path::PathBuf {
-        dirs::runtime_dir()
-            .or_else(|| dirs::home_dir().map(|p| p.join(".local/share")))
-            .unwrap_or_else(|| std::path::PathBuf::from("/tmp"))
-            .join("ziplock")
-            .join("backend.sock")
-    }
-}
-
-#[cfg(test)]
-mod password_tests {
-    use super::*;
-
-    #[test]
-    fn test_password_generation() {
-        let options = PasswordOptions::default();
-        let password = PasswordUtils::generate_password(options).unwrap();
-
-        assert_eq!(password.len(), 16);
-        assert!(password.chars().any(|c| c.is_ascii_lowercase()));
-        assert!(password.chars().any(|c| c.is_ascii_uppercase()));
-        assert!(password.chars().any(|c| c.is_ascii_digit()));
-        assert!(password.chars().any(|c| !c.is_alphanumeric()));
-    }
-
-    #[test]
-    fn test_password_generation_with_custom_options() {
-        let options = PasswordOptions {
-            length: 8,
-            include_uppercase: false,
-            include_lowercase: true,
-            include_numbers: true,
-            include_symbols: false,
-        };
-
-        let password = PasswordUtils::generate_password(options).unwrap();
-
-        assert_eq!(password.len(), 8);
-        assert!(password.chars().any(|c| c.is_ascii_lowercase()));
-        assert!(password.chars().any(|c| c.is_ascii_digit()));
-        assert!(!password.chars().any(|c| c.is_ascii_uppercase()));
-        assert!(!password.chars().any(|c| !c.is_alphanumeric()));
-    }
-
-    #[test]
-    fn test_password_generation_errors() {
-        let invalid_options = PasswordOptions {
-            length: 0,
-            include_uppercase: false,
-            include_lowercase: false,
-            include_numbers: false,
-            include_symbols: false,
-        };
-
-        assert!(PasswordUtils::generate_password(invalid_options).is_err());
-    }
-
-    #[test]
-    fn test_common_patterns() {
-        assert!(PasswordUtils::has_common_patterns("password123"));
-        assert!(PasswordUtils::has_common_patterns("qwerty456"));
-        assert!(PasswordUtils::has_common_patterns("aaaa"));
-        assert!(PasswordUtils::has_common_patterns("1234"));
-        assert!(!PasswordUtils::has_common_patterns("ComplexPhrase987$"));
+        #[test]
+        fn test_format_duration_since() {
+            let now = current_timestamp();
+            assert_eq!(format_duration_since(now), "just now");
+            assert_eq!(format_duration_since(now - 30), "just now");
+            assert_eq!(format_duration_since(now - 120), "2 minutes ago");
+            assert_eq!(format_duration_since(now - 3660), "1 hour ago");
+            assert_eq!(format_duration_since(now - 86400), "1 day ago");
+        }
     }
 }

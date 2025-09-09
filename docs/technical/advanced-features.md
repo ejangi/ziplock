@@ -16,7 +16,7 @@ This document covers the implementation details of advanced ZipLock features inc
 
 ### Overview
 
-The comprehensive repository validation system ensures archive integrity and content validation when the backend connects to a repository. It replaces basic validation with a multi-layered approach that includes automatic repair capabilities.
+The comprehensive repository validation system ensures archive integrity and content validation when opening a repository through the unified architecture. It provides multi-layered validation with automatic repair capabilities.
 
 ### Implementation Details
 
@@ -131,23 +131,36 @@ storage:
 Cloud storage services present unique challenges for ZipLock archives:
 
 1. **Storage Access Framework (SAF) Limitations**: Cloud files provide virtual URIs that don't support traditional file locking
-2. **Temporary Caching**: Cloud services cache files unpredictably
+2. **Caching Behavior**: Cloud services cache files unpredictably
 3. **Background Sync Conflicts**: Services may sync while ZipLock has files open
 4. **No Direct File Path**: Modern storage APIs abstract file paths for security
 
 ### Solution Architecture
 
-#### Cloud-Aware File Handling
+#### Cloud-Aware File Provider
 
-**CloudFileHandle Structure:**
+**Custom File Provider for Cloud Storage:**
 ```rust
-pub struct CloudFileHandle {
+pub struct CloudFileProvider {
     original_path: PathBuf,     // Original cloud storage path
-    local_path: PathBuf,        // Local working copy path
-    _lock_file: LockFile,       // File lock on local copy
-    original_hash: String,      // Content hash for conflict detection
-    is_cloud_file: bool,        // Whether this is a cloud file
+    local_cache_dir: PathBuf,   // Local cache directory
+    content_hash: String,       // Content hash for conflict detection
     needs_sync_back: bool,      // Whether changes need to be synced back
+}
+
+impl FileOperationProvider for CloudFileProvider {
+    fn read_archive(&self, path: &str) -> FileResult<Vec<u8>> {
+        // Download from cloud to local cache, then read
+        let local_path = self.ensure_local_copy(path)?;
+        std::fs::read(local_path).map_err(|e| FileError::from(e))
+    }
+    
+    fn write_archive(&self, path: &str, data: &[u8]) -> FileResult<()> {
+        // Write locally, then sync to cloud
+        let local_path = self.get_local_path(path);
+        std::fs::write(&local_path, data)?;
+        self.sync_to_cloud(&local_path, path)
+    }
 }
 ```
 
@@ -169,15 +182,15 @@ content://com.google.android.apps.docs.files/
 content://com.dropbox.android.provider/
 ```
 
-#### Copy-to-Local Strategy
+#### Unified Architecture Cloud Strategy
 
 **Operation Flow:**
 1. Detect cloud storage file using pattern matching
-2. Create secure local working copy
-3. Establish file lock on local copy
-4. Perform all operations on local copy
+2. Implement custom `FileOperationProvider` for cloud storage
+3. Create secure local cache for archive data
+4. Use `sevenz-rust2` for in-memory archive operations (no temporary files)
 5. Calculate content hash for conflict detection
-6. Sync changes back to original location
+6. Sync changes back to original cloud location through provider
 7. Clean up local working copy
 
 **Conflict Detection:**
@@ -359,76 +372,90 @@ class ArchivePathManager {
 
 ## Integration Examples
 
-### Backend Integration
+### Unified Architecture Integration
 
 **Repository Opening with Validation:**
 ```rust
-use ziplock_shared::validation::RepositoryValidator;
+use ziplock_shared::core::{UnifiedRepositoryManager, DesktopFileProvider};
 use ziplock_shared::config::ValidationConfig;
+use ziplock_shared::utils::validation::RepositoryValidator;
 
-pub fn open_repository(path: &Path, config: &ValidationConfig) -> Result<Repository, Error> {
-    // Extract archive
-    let temp_dir = extract_archive(path)?;
+pub fn open_repository(path: &Path, config: &ValidationConfig) -> Result<(), CoreError> {
+    // Create repository manager with desktop file provider
+    let file_provider = DesktopFileProvider::new();
+    let mut manager = UnifiedRepositoryManager::new(file_provider);
     
-    // Create validator
-    let validator = RepositoryValidator::new(config.clone());
+    // Open repository (validation happens automatically)
+    manager.open_repository(path.to_str().unwrap(), "password")?;
     
-    // Perform validation
-    let validation_result = validator.validate_repository(&temp_dir)?;
-    
-    if config.log_validation_details {
-        log::info!("Validation result: {:?}", validation_result);
+    // Perform additional validation if configured
+    if config.enable_comprehensive_validation {
+        let stats = manager.get_stats()?;
+        log::info!("Repository loaded with {} credentials", stats.credential_count);
     }
     
-    // Handle auto-repair
-    if config.auto_repair && !validation_result.fixable_issues.is_empty() {
-        validator.repair_issues(&temp_dir, &validation_result.fixable_issues)?;
-        
-        // Re-save archive if repairs were made
-        save_archive(path, &temp_dir)?;
-    }
-    
-    // Handle critical issues
-    if config.fail_on_critical_issues && !validation_result.critical_issues.is_empty() {
-        return Err(Error::CriticalValidationFailure(validation_result.critical_issues));
-    }
-    
-    // Load repository
-    Repository::from_directory(&temp_dir)
+    Ok(())
 }
 ```
 
 ### Android Integration
 
-**Create Archive with Cloud Detection:**
+**Mobile FFI Integration with Cloud Detection:**
 ```kotlin
-class CreateArchiveViewModel : ViewModel() {
+class AndroidRepositoryManager {
+    private var repositoryHandle: Long = 0
     
-    suspend fun createArchive(
-        destinationPath: String,
-        archiveName: String,
+    suspend fun createRepository(
+        destinationUri: Uri,
         passphrase: String
-    ) {
-        try {
-            val fullPath = constructArchivePath(destinationPath, archiveName)
+    ): Boolean {
+        return try {
+            // 1. Create repository in memory using Mobile FFI
+            repositoryHandle = ZipLockNative.ziplock_mobile_repository_create()
+            if (repositoryHandle <= 0) return false
             
-            // FFI handles cloud detection automatically
-            val result = ZipLockNative.createArchive(fullPath, passphrase)
+            // 2. Initialize repository
+            val initResult = ZipLockNative.ziplock_mobile_repository_initialize(repositoryHandle)
+            if (initResult != 0) return false
             
-            if (result.isSuccess()) {
-                // Store in recent archives
-                ArchivePathManager.storeRecentArchive(fullPath, archiveName)
-                
-                _uiState.value = _uiState.value.copy(
-                    currentStep = CreateArchiveStep.Success,
-                    createdArchivePath = fullPath
-                )
-            } else {
-                val errorMessage = ZipLockNativeHelper.getDetailedError(result)
-                setError(errorMessage)
-            }
+            // 3. Create empty file map for new repository
+            val emptyFileMap = createEmptyRepositoryFileMap()
+            val filesJson = gson.toJson(emptyFileMap)
+            
+            // 4. Load empty structure into memory repository
+            val loadResult = ZipLockNative.ziplock_mobile_repository_load_from_files(repositoryHandle, filesJson)
+            if (loadResult != 0) return false
+            
+            // 5. Save to archive using cloud-aware file operations
+            saveToArchive(destinationUri, passphrase)
         } catch (e: Exception) {
-            setError("Archive creation failed: ${e.message}")
+            Log.e("RepositoryManager", "Failed to create repository", e)
+            false
+        }
+    }
+    
+    private suspend fun saveToArchive(uri: Uri, password: String): Boolean {
+        return try {
+            // Get current repository state as file map
+            val filesJson = ZipLockNative.ziplock_mobile_repository_serialize_to_files(repositoryHandle)
+                ?: return false
+                
+            // Convert JSON to file map
+            val fileMap = gson.fromJson<Map<String, String>>(filesJson, Map::class.java)
+            
+            // Create 7z archive using Android native libraries
+            val archiveData = create7zArchive(fileMap, password)
+            
+            // Write to URI (handles cloud storage automatically)
+            contentResolver.openOutputStream(uri)?.use { outputStream ->
+                outputStream.write(archiveData)
+            }
+            
+            // Mark repository as saved
+            ZipLockNative.ziplock_mobile_mark_saved(repositoryHandle)
+            true
+        } finally {
+            ZipLockNative.ziplock_free_string(filesJson)
         }
     }
 }

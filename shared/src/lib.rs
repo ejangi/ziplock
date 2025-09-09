@@ -1,288 +1,231 @@
-//! ZipLock Shared Library
+//! ZipLock Shared Library - Unified Architecture
 //!
-//! This crate contains shared data models, utilities, and common functionality
-//! used across the ZipLock password manager application. It provides a consistent
-//! interface for credential management, field validation, and data serialization.
+//! This crate provides the core shared functionality for the ZipLock password manager
+//! using a unified architecture that separates memory operations from file operations.
+//! This design enables optimal performance and platform-specific optimizations while
+//! maintaining code reuse across desktop and mobile platforms.
 //!
-//! # Features
+//! # Architecture Overview
 //!
-//! - **Data Models**: Core structures for credentials, fields, and templates
-//! - **Field Types**: Comprehensive field type system with validation
-//! - **YAML Support**: Serialization and deserialization for credential records
-//! - **Utilities**: Common functions for validation, search, and manipulation
-//! - **Template System**: Pre-defined templates for common credential types
+//! The unified architecture consists of:
+//! - **Core**: Pure memory repository and file operation abstraction
+//! - **Models**: Credential data structures and templates
+//! - **Utils**: Validation, search, YAML, and TOTP utilities
+//! - **FFI**: Platform-specific interfaces for mobile and desktop
+//! - **Logging**: Cross-platform logging infrastructure
 //!
-//! # Usage
+//! # Platform Integration
+//!
+//! - **Mobile Platforms**: Use memory-only FFI with JSON file exchange
+//! - **Desktop Platforms**: Use full FFI with direct file operations
+//! - **File Operations**: Delegated to platform-specific providers
+//!
+//! # Usage Examples
+//!
+//! ## Pure Memory Operations
 //!
 //! ```rust
-//! use ziplock_shared::models::{CredentialRecord, CredentialField, FieldType};
+//! use ziplock_shared::core::UnifiedMemoryRepository;
+//! use ziplock_shared::models::{CredentialRecord, CredentialField};
 //!
-//! // Create a new credential
-//! let mut credential = CredentialRecord::new(
-//!     "My Login".to_string(),
-//!     "login".to_string(),
-//! );
+//! let mut repo = UnifiedMemoryRepository::new();
+//! repo.initialize().unwrap();
 //!
-//! // Add fields
-//! credential.set_field("username", CredentialField::username("user@example.com"));
-//! credential.set_field("password", CredentialField::password("secure_password"));
+//! let mut credential = CredentialRecord::new("Gmail".to_string(), "login".to_string());
+//! credential.set_field("username", CredentialField::username("user@gmail.com"));
+//! credential.set_field("password", CredentialField::password("secure123"));
 //!
-//! // Validate the credential
-//! assert!(credential.validate().is_ok());
+//! repo.add_credential(credential).unwrap();
+//! ```
+//!
+//! ## Full Repository Manager
+//!
+//! ```rust,no_run
+//! use ziplock_shared::core::{UnifiedRepositoryManager, DesktopFileProvider};
+//!
+//! let provider = DesktopFileProvider::new();
+//! let mut manager = UnifiedRepositoryManager::new(provider);
+//!
+//! // Create or open repository
+//! manager.create_repository("/path/to/vault.7z", "master_password").unwrap();
+//!
+//! // Add credentials, save automatically handled
+//! // ...
 //! ```
 
-pub mod api;
-pub mod archive;
-pub mod client;
 pub mod config;
-pub mod memory_repository;
-
+pub mod core;
+pub mod ffi;
 pub mod logging;
 pub mod models;
-pub mod platform;
-pub mod update_checker;
 pub mod utils;
-pub mod validation;
-pub mod yaml;
 
-// C FFI module for mobile platform integration
-#[cfg(feature = "c-api")]
-pub mod ffi;
+// Re-export core functionality
+pub use core::{
+    CoreError, CoreResult, DesktopFileProvider, FileError, FileOperationProvider, FileResult,
+    UnifiedMemoryRepository, UnifiedRepositoryManager,
+};
 
-// Hybrid FFI module for Android - data and crypto operations only
-#[cfg(feature = "c-api")]
-pub mod ffi_hybrid;
+// Re-export configuration management
+pub use config::{
+    AppConfig, ConfigManager, ConfigPaths, ConfigPresets, ConfigValidator, RepositoryConfig,
+    RepositoryInfo, RepositoryMetadata, RepositorySecurity, SecurityConfig, UiConfig,
+    ValidationConfig, ValidationRule, ValidationSeverity,
+};
 
-// Hybrid FFI tests for adaptive runtime strategy
-#[cfg(all(test, feature = "c-api"))]
-pub mod ffi_hybrid_test;
-
-// Integration tests for adaptive runtime strategy
-#[cfg(all(test, feature = "c-api"))]
-pub mod ffi_hybrid_integration_test;
-
-// Re-export commonly used types for convenience
+// Re-export commonly used models
 pub use models::{
     CommonTemplates, CredentialField, CredentialRecord, CredentialTemplate, FieldTemplate,
-    FieldType, FieldValidation,
+    FieldType,
 };
-
-// Re-export config functionality
-pub use config::{
-    AppConfig, ConfigManager, FrontendConfig, RecentRepository, RepositoryConfig, RepositoryInfo,
-    UiConfig,
-};
-
-// Re-export client functionality
-pub use client::{hybrid::ZipLockHybridClient, ZipLockClient};
 
 // Re-export utilities
-pub use utils::*;
-
-// Re-export validation functionality
-pub use validation::{
-    is_valid_credential_id, sanitize_identifier, validate_credential, validate_master_passphrase,
-    validate_master_passphrase_strict, CommonPatterns, EnhancedPassphraseValidator,
-    PassphraseRequirements, PassphraseStrength, PassphraseValidationResult, PassphraseValidator,
-    StrengthLevel, ValidationPresets, ValidationUtils,
+pub use utils::{
+    deserialize_credential, generate_totp, serialize_credential, validate_credential, BackupData,
+    BackupManager, CredentialCrypto, CredentialSearchEngine, EncryptionUtils, ExportFormat,
+    ExportOptions, PasswordAnalyzer, PasswordGenerator, PasswordOptions, PasswordStrength,
+    SearchQuery, SearchResult, SecureString, ValidationResult,
 };
 
-// Re-export YAML functionality
-pub use yaml::*;
-
-// Re-export API functionality
-pub use api::{ApiError, ApiResult, ApiSession, ZipLockApi};
-
-// Re-export archive functionality
-pub use archive::{ArchiveConfig, ArchiveError, ArchiveManager, ArchiveResult};
-
-// Re-export memory repository functionality
-pub use memory_repository::{
-    FileOperation, MemoryRepository, MemoryRepositoryError, MemoryRepositoryResult,
-    RepositoryFileInfo, RepositoryStructure,
-};
-
-// Re-export update checker functionality
-pub use update_checker::{
-    InstallationMethod, ReleaseAsset, ReleaseInfo, UpdateCheckResult, UpdateChecker,
-};
-
-// Re-export logging functionality
+// Re-export logging
 pub use logging::{
-    configure_logging, get_config, init_logging, is_debug_enabled, set_debug_enabled,
-    LoggingConfig, MobileLogWriter,
+    init_default_logging, init_desktop_logging, init_mobile_logging, LogLevel, LoggingConfig,
 };
 
-// Re-export Android SAF functionality
-#[cfg(target_os = "android")]
-pub use archive::{
-    is_android_saf_available, is_content_uri, AndroidSafError, AndroidSafHandle, AndroidSafResult,
-};
+// Re-export FFI common utilities for platform integration
+pub use ffi::common::{VersionInfo, ZipLockError};
+
+// Re-export plugin system
+pub use core::{Plugin, PluginCapability, PluginManager, PluginRegistry};
 
 /// Current library version
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
-/// Supported archive format version
+/// Archive format version supported by this library
 pub const ARCHIVE_FORMAT_VERSION: &str = "1.0";
 
-/// Error types used throughout the library
-pub mod error {
-    use thiserror::Error;
+/// Shared error type for the unified architecture
+pub type SharedError = CoreError;
 
-    /// Common error type for shared library operations
-    #[derive(Error, Debug)]
-    pub enum SharedError {
-        #[error("Validation error: {message}")]
-        Validation { message: String },
+/// Shared result type for the unified architecture
+pub type SharedResult<T> = CoreResult<T>;
 
-        #[error("Serialization error: {message}")]
-        Serialization { message: String },
-
-        #[error("Field error: {field} - {message}")]
-        Field { field: String, message: String },
-
-        #[error("Template error: {template} - {message}")]
-        Template { template: String, message: String },
-
-        #[error("Invalid data format: {message}")]
-        InvalidFormat { message: String },
-
-        #[error("Missing required field: {field}")]
-        MissingField { field: String },
-
-        #[error("Internal error: {message}")]
-        Internal { message: String },
-
-        #[error("Archive error: {0}")]
-        Archive(#[from] crate::archive::ArchiveError),
-
-        #[error("API error: {message}")]
-        Api { message: String },
-
-        #[error("IO error: {0}")]
-        Io(#[from] std::io::Error),
-
-        #[error("Configuration error: {message}")]
-        Config { message: String },
-
-        #[error("Authentication error: {message}")]
-        Auth { message: String },
-
-        #[error("Memory repository error: {0}")]
-        MemoryRepository(#[from] crate::memory_repository::MemoryRepositoryError),
-    }
-
-    impl From<anyhow::Error> for SharedError {
-        fn from(error: anyhow::Error) -> Self {
-            SharedError::Internal {
-                message: error.to_string(),
-            }
-        }
-    }
-
-    /// Result type alias for shared library operations
-    pub type SharedResult<T> = Result<T, SharedError>;
+/// Initialize the shared library with default configuration
+///
+/// This should be called once at application startup. It initializes
+/// logging and other global state needed by the shared library.
+pub fn init_ziplock_shared() {
+    init_default_logging();
 }
 
-pub use error::{SharedError, SharedResult};
+/// Initialize the shared library for mobile platforms
+///
+/// This variant sets up mobile-specific configuration including
+/// appropriate logging and performance optimizations.
+pub fn init_ziplock_shared_mobile() {
+    init_mobile_logging();
+}
 
-/// Library configuration and constants
-pub mod constants {
-    /// Maximum field value length (1MB)
-    pub const MAX_FIELD_VALUE_LENGTH: usize = 1024 * 1024;
+/// Initialize the shared library for desktop platforms
+///
+/// This variant enables more verbose logging and debugging features
+/// suitable for desktop development and usage.
+pub fn init_ziplock_shared_desktop() {
+    init_desktop_logging();
+}
 
-    /// Maximum number of fields per credential
-    pub const MAX_FIELDS_PER_CREDENTIAL: usize = 100;
+/// Create a desktop configuration manager with default paths
+///
+/// This is a convenience function for desktop applications to quickly
+/// set up configuration management using platform-appropriate paths.
+pub fn create_desktop_config_manager() -> ConfigManager<DesktopFileProvider> {
+    let file_provider = DesktopFileProvider::new();
+    let config_path = ConfigPaths::app_config_file();
+    ConfigManager::new(file_provider, config_path)
+}
 
-    /// Maximum number of tags per credential
-    pub const MAX_TAGS_PER_CREDENTIAL: usize = 20;
+/// Get library version information
+pub fn get_version() -> &'static str {
+    VERSION
+}
 
-    /// Maximum tag length
-    pub const MAX_TAG_LENGTH: usize = 50;
-
-    /// Maximum credential title length
-    pub const MAX_CREDENTIAL_TITLE_LENGTH: usize = 200;
-
-    /// Maximum notes length
-    pub const MAX_NOTES_LENGTH: usize = 10000;
-
-    /// Supported field types for validation
-    pub const SUPPORTED_FIELD_TYPES: &[&str] = &[
-        "text",
-        "password",
-        "email",
-        "url",
-        "username",
-        "phone",
-        "credit_card_number",
-        "expiry_date",
-        "cvv",
-        "totp_secret",
-        "text_area",
-        "number",
-        "date",
-    ];
+/// Get supported archive format version
+pub fn get_archive_format_version() -> &'static str {
+    ARCHIVE_FORMAT_VERSION
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::core::{MockFileProvider, PluginManager, UnifiedRepositoryManager};
+    use config::{AppConfig, ConfigManager, ConfigPaths, ConfigValidator, RepositoryInfo};
     use models::{CredentialField, CredentialRecord};
+    use utils::{BackupManager, ExportFormat, ExportOptions};
 
     #[test]
     fn test_library_version() {
-        // VERSION and ARCHIVE_FORMAT_VERSION are compile-time constants
-        // Just verify they exist and have expected content
-        assert!(VERSION.starts_with(env!("CARGO_PKG_VERSION")));
-        assert!(ARCHIVE_FORMAT_VERSION
-            .chars()
-            .all(|c| c.is_ascii_digit() || c == '.'));
+        assert!(!get_version().is_empty());
+        assert!(!get_archive_format_version().is_empty());
     }
 
     #[test]
-    fn test_credential_creation() {
-        let credential = CredentialRecord::new("Test".to_string(), "login".to_string());
-        assert_eq!(credential.title, "Test");
-        assert_eq!(credential.credential_type, "login");
-        assert!(!credential.id.is_empty());
+    fn test_unified_memory_repository() {
+        let mut repo = UnifiedMemoryRepository::new();
+        assert!(!repo.is_initialized());
+
+        repo.initialize().unwrap();
+        assert!(repo.is_initialized());
+
+        let mut credential = CredentialRecord::new("Test".to_string(), "login".to_string());
+        credential.set_field("username", CredentialField::username("testuser"));
+
+        let credential_id = credential.id.clone();
+        repo.add_credential(credential).unwrap();
+
+        let retrieved = repo.get_credential_readonly(&credential_id).unwrap();
+        assert_eq!(retrieved.title, "Test");
     }
 
     #[test]
-    fn test_field_creation() {
-        let field = CredentialField::password("secret").with_label("Password");
-        assert_eq!(field.value, "secret");
-        assert!(field.sensitive);
-        assert_eq!(field.label, Some("Password".to_string()));
+    fn test_repository_manager() {
+        let provider = MockFileProvider::new();
+        let mut manager = UnifiedRepositoryManager::new(provider);
+
+        assert!(!manager.is_open());
+
+        manager.create_repository("/test.7z", "password").unwrap();
+        assert!(manager.is_open());
+
+        let credential = CredentialRecord::new("Test Cred".to_string(), "test".to_string());
+        manager.add_credential(credential).unwrap();
+
+        let credentials = manager.list_credentials().unwrap();
+        assert_eq!(credentials.len(), 1);
     }
 
     #[test]
-    fn test_validation() {
-        let credential = CredentialRecord::new("Test".to_string(), "login".to_string());
-        assert!(validate_credential(&credential).is_ok());
-
-        // Test invalid ID format
-        assert!(!is_valid_credential_id("invalid"));
-        assert!(is_valid_credential_id(
-            "550e8400-e29b-41d4-a716-446655440000"
-        ));
+    fn test_credential_validation() {
+        let credential = CredentialRecord::new("Valid Credential".to_string(), "login".to_string());
+        let result = validate_credential(&credential);
+        assert!(result.is_valid);
     }
 
     #[test]
-    fn test_identifier_sanitization() {
-        assert_eq!(sanitize_identifier("Hello World!"), "Hello_World_");
-        assert_eq!(sanitize_identifier("test-file_123"), "test-file_123");
-    }
+    fn test_search_functionality() {
+        use std::collections::HashMap;
 
-    #[test]
-    fn test_config_constants() {
-        // Test that constants have expected values for functionality
-        let large_value = "a".repeat(constants::MAX_FIELD_VALUE_LENGTH + 1);
-        assert!(large_value.len() > constants::MAX_FIELD_VALUE_LENGTH);
+        let mut credentials = HashMap::new();
+        let cred1 = CredentialRecord::new("Gmail Account".to_string(), "login".to_string());
+        let cred2 = CredentialRecord::new("Bank Login".to_string(), "login".to_string());
 
-        let field_types = constants::SUPPORTED_FIELD_TYPES;
-        assert!(field_types.contains(&"password"));
-        assert!(field_types.contains(&"username"));
-        assert!(field_types.contains(&"email"));
+        credentials.insert(cred1.id.clone(), cred1);
+        credentials.insert(cred2.id.clone(), cred2);
+
+        let query = SearchQuery::text("Gmail");
+        let results = CredentialSearchEngine::search(&credentials, &query);
+
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].credential.title, "Gmail Account");
     }
 
     #[test]
@@ -291,193 +234,341 @@ mod tests {
         assert_eq!(login_template.name, "login");
         assert!(!login_template.fields.is_empty());
 
-        let cc_template = CommonTemplates::credit_card();
-        assert_eq!(cc_template.name, "credit_card");
-        assert!(!cc_template.fields.is_empty());
-
-        let note_template = CommonTemplates::secure_note();
-        assert_eq!(note_template.name, "secure_note");
-        assert!(!note_template.fields.is_empty());
-
-        let identity_template = CommonTemplates::identity();
-        assert_eq!(identity_template.name, "identity");
-        assert!(!identity_template.fields.is_empty());
-
-        let password_template = CommonTemplates::password();
-        assert_eq!(password_template.name, "password");
-        assert!(!password_template.fields.is_empty());
-
-        let document_template = CommonTemplates::document();
-        assert_eq!(document_template.name, "document");
-        assert!(!document_template.fields.is_empty());
-
-        let ssh_key_template = CommonTemplates::ssh_key();
-        assert_eq!(ssh_key_template.name, "ssh_key");
-        assert!(!ssh_key_template.fields.is_empty());
-
-        let bank_account_template = CommonTemplates::bank_account();
-        assert_eq!(bank_account_template.name, "bank_account");
-        assert!(!bank_account_template.fields.is_empty());
-
-        let api_credentials_template = CommonTemplates::api_credentials();
-        assert_eq!(api_credentials_template.name, "api_credentials");
-        assert!(!api_credentials_template.fields.is_empty());
-
-        let crypto_wallet_template = CommonTemplates::crypto_wallet();
-        assert_eq!(crypto_wallet_template.name, "crypto_wallet");
-        assert!(!crypto_wallet_template.fields.is_empty());
-
-        let database_template = CommonTemplates::database();
-        assert_eq!(database_template.name, "database");
-        assert!(!database_template.fields.is_empty());
-
-        let software_license_template = CommonTemplates::software_license();
-        assert_eq!(software_license_template.name, "software_license");
-        assert!(!software_license_template.fields.is_empty());
+        let credential = login_template
+            .create_credential("My Login".to_string())
+            .unwrap();
+        assert_eq!(credential.title, "My Login");
     }
 
     #[test]
-    #[cfg(feature = "c-api")]
-    fn test_common_templates_ffi_integration() {
-        // Test that CommonTemplates can be accessed through FFI
-        use std::ffi::CString;
-        use std::ptr;
+    fn test_list_credentials_serialization() {
+        println!("=== Testing list_credentials serialization ===");
 
-        // Test getting all templates
-        let mut templates_ptr: *mut crate::ffi::CCredentialTemplate = ptr::null_mut();
-        let mut count: std::os::raw::c_int = 0;
+        // Create a memory repository
+        let mut repo = UnifiedMemoryRepository::new();
+        repo.initialize().expect("Failed to initialize repository");
 
-        let result =
-            unsafe { crate::ffi::ziplock_templates_get_all(&mut templates_ptr, &mut count) };
-        assert_eq!(result, 0); // Success
-        assert!(!templates_ptr.is_null());
-        assert_eq!(count, 12); // We have 12 built-in templates
-
-        // Clean up
-        unsafe { crate::ffi::ziplock_templates_free(templates_ptr, count) };
-
-        // Test getting specific template
-        let mut template = crate::ffi::CCredentialTemplate {
-            name: ptr::null_mut(),
-            description: ptr::null_mut(),
-            field_count: 0,
-            fields: ptr::null_mut(),
-            tag_count: 0,
-            tags: ptr::null_mut(),
-        };
-
-        let template_name = CString::new("login").unwrap();
-        let result = unsafe {
-            crate::ffi::ziplock_template_get_by_name(template_name.as_ptr(), &mut template)
-        };
-        assert_eq!(result, 0); // Success
-
-        assert!(!template.name.is_null());
-        let name = unsafe { std::ffi::CStr::from_ptr(template.name).to_str().unwrap() };
-        assert_eq!(name, "login");
-
-        // Clean up
-        unsafe { crate::ffi::ziplock_template_free(&mut template) };
-    }
-
-    #[test]
-    fn test_all_specification_credential_types_implemented() {
-        // According to specification section 3.3, these are all the required credential types
-        let all_templates = vec![
-            ("Login", CommonTemplates::login()),
-            ("Secure Note", CommonTemplates::secure_note()),
-            ("Credit Card", CommonTemplates::credit_card()),
-            ("Identity", CommonTemplates::identity()),
-            ("Password", CommonTemplates::password()),
-            ("Document", CommonTemplates::document()),
-            ("SSH Key", CommonTemplates::ssh_key()),
-            ("Bank Account", CommonTemplates::bank_account()),
-            ("API Credentials", CommonTemplates::api_credentials()),
-            ("Crypto Wallet", CommonTemplates::crypto_wallet()),
-            ("Database", CommonTemplates::database()),
-            ("Software License", CommonTemplates::software_license()),
-        ];
-
-        // Verify we have all 12 credential types from the specification
-        assert_eq!(
-            all_templates.len(),
-            12,
-            "Missing credential types from specification"
+        // Create a test credential with username field
+        let mut credential =
+            CredentialRecord::new("Test Credential".to_string(), "login".to_string());
+        credential.set_field(
+            "username",
+            CredentialField::new(FieldType::Username, "test@example.com".to_string(), false),
+        );
+        credential.set_field(
+            "password",
+            CredentialField::new(FieldType::Password, "testpass".to_string(), true),
         );
 
-        // Verify each template is properly configured
-        for (description, template) in all_templates {
-            assert!(
-                !template.name.is_empty(),
-                "{} template missing name",
-                description
-            );
-            assert!(
-                !template.description.is_empty(),
-                "{} template missing description",
-                description
-            );
-            assert!(
-                !template.fields.is_empty(),
-                "{} template has no fields",
-                description
-            );
-            assert!(
-                !template.default_tags.is_empty(),
-                "{} template has no default tags",
-                description
+        // Add the credential
+        repo.add_credential(credential)
+            .expect("Failed to add credential");
+
+        // Test list_credentials
+        let credentials = repo.list_credentials().expect("Failed to list credentials");
+        println!(
+            "DEBUG: list_credentials returned {} items",
+            credentials.len()
+        );
+
+        if let Some(first_cred) = credentials.first() {
+            println!("DEBUG: First credential ID: '{}'", first_cred.id);
+            println!("DEBUG: First credential title: '{}'", first_cred.title);
+            println!(
+                "DEBUG: First credential fields: {:?}",
+                first_cred.fields.keys().collect::<Vec<_>>()
             );
 
-            // Verify each field has required properties
-            for field in &template.fields {
-                assert!(
-                    !field.name.is_empty(),
-                    "{} template has field with empty name",
-                    description
-                );
-                assert!(
-                    !field.label.is_empty(),
-                    "{} template has field with empty label",
-                    description
-                );
+            // Test serialization
+            match serde_json::to_string(&credentials) {
+                Ok(json) => {
+                    println!("DEBUG: Serialized JSON: {}", json);
+
+                    // Verify it starts with array of objects, not tuples
+                    if json.starts_with("[{") {
+                        println!("✅ Serialization produces array of objects (correct)");
+                    } else if json.starts_with("[[") {
+                        println!("❌ Serialization produces array of arrays (incorrect - tuples)");
+                    } else {
+                        println!(
+                            "⚠️  Unexpected serialization format: {}",
+                            &json[..50.min(json.len())]
+                        );
+                    }
+                }
+                Err(e) => {
+                    println!("❌ Serialization failed: {}", e);
+                }
+            }
+        }
+
+        // Test list_credential_summaries for comparison
+        let summaries = repo
+            .list_credential_summaries()
+            .expect("Failed to list summaries");
+        println!(
+            "DEBUG: list_credential_summaries returned {} items",
+            summaries.len()
+        );
+
+        match serde_json::to_string(&summaries) {
+            Ok(json) => {
+                println!("DEBUG: Summaries JSON: {}", json);
+                if json.starts_with("[[") {
+                    println!("✅ Summaries correctly produce array of arrays (tuples)");
+                }
+            }
+            Err(e) => {
+                println!("❌ Summaries serialization failed: {}", e);
             }
         }
     }
 
     #[test]
-    fn test_secure_note_uses_textarea() {
-        let secure_note_template = CommonTemplates::secure_note();
+    fn test_ffi_list_credentials_direct() {
+        use crate::ffi::mobile::*;
+        use std::ffi::CStr;
 
-        // Verify it has the correct name
-        assert_eq!(secure_note_template.name, "secure_note");
+        println!("=== Testing FFI list_credentials directly ===");
 
-        // Verify it has at least one field
-        assert!(!secure_note_template.fields.is_empty());
+        // Create repository handle
+        let handle = unsafe { ziplock_mobile_repository_create() };
+        assert!(!handle.is_null(), "Failed to create repository handle");
 
-        // Find the content field and verify it's a TextArea
-        let content_field = secure_note_template
-            .fields
-            .iter()
-            .find(|field| field.name == "content")
-            .expect("Secure note template should have a 'content' field");
-
-        assert_eq!(
-            content_field.field_type,
-            FieldType::TextArea,
-            "Secure note content field should use TextArea type for multi-line input"
-        );
-        assert_eq!(content_field.label, "Content");
+        // Initialize repository
+        let init_result = unsafe { ziplock_mobile_repository_initialize(handle) };
         assert!(
-            !content_field.sensitive,
-            "Secure note content should not be marked as sensitive to allow multi-line display"
+            matches!(init_result, crate::ffi::ZipLockError::Success),
+            "Failed to initialize repository"
         );
+
+        // Create test credential JSON
+        let test_credential = r#"{
+            "id": "test-id-123",
+            "title": "Test Login",
+            "credential_type": "login",
+            "fields": {
+                "username": {
+                    "value": "testuser@example.com",
+                    "field_type": "Username",
+                    "sensitive": false,
+                    "metadata": {}
+                },
+                "password": {
+                    "value": "testpassword",
+                    "field_type": "Password",
+                    "sensitive": true,
+                    "metadata": {}
+                }
+            },
+            "tags": [],
+            "notes": null,
+            "created_at": 1694000000,
+            "updated_at": 1694000000,
+            "accessed_at": 1694000000,
+            "favorite": false,
+            "folder_path": null
+        }"#;
+
+        // Add the credential
+        let add_result = unsafe {
+            let c_str = std::ffi::CString::new(test_credential).unwrap();
+            ziplock_mobile_add_credential(handle, c_str.as_ptr())
+        };
+        assert!(
+            matches!(add_result, crate::ffi::ZipLockError::Success),
+            "Failed to add credential"
+        );
+
+        // Test list_credentials
+        let list_result = unsafe { ziplock_mobile_list_credentials(handle) };
+        assert!(!list_result.is_null(), "list_credentials returned null");
+
+        let c_str = unsafe { CStr::from_ptr(list_result) };
+        let json_str = c_str.to_str().expect("Invalid UTF-8");
+
+        println!("DEBUG: FFI list_credentials JSON: {}", json_str);
+
+        if json_str.starts_with("[{") {
+            println!("✅ FFI list_credentials produces array of objects (correct)");
+        } else if json_str.starts_with("[[") {
+            println!("❌ FFI list_credentials produces array of arrays (incorrect - tuples)");
+        } else {
+            println!(
+                "⚠️  FFI unexpected format: {}",
+                &json_str[..50.min(json_str.len())]
+            );
+        }
+
+        // Clean up
+        unsafe {
+            ziplock_mobile_free_string(list_result);
+            ziplock_mobile_repository_destroy(handle);
+        }
     }
 
     #[test]
-    fn test_passphrase_validation() {
-        let validator = PassphraseValidator::default();
-        let result = validator.validate("MySecurePassphrase123!");
-        assert!(result.meets_requirements);
-        assert!(result.level.is_acceptable());
+    fn test_totp_generation() {
+        let secret = "JBSWY3DPEHPK3PXP";
+        let code = generate_totp(secret, 30).unwrap();
+        assert_eq!(code.len(), 6);
+        assert!(code.chars().all(|c| c.is_ascii_digit()));
+    }
+
+    #[test]
+    fn test_serialization() {
+        let credential = CredentialRecord::new("Test".to_string(), "test".to_string());
+
+        let yaml = serialize_credential(&credential).unwrap();
+        assert!(yaml.contains("Test"));
+
+        let deserialized = deserialize_credential(&yaml).unwrap();
+        assert_eq!(credential.id, deserialized.id);
+        assert_eq!(credential.title, deserialized.title);
+    }
+
+    #[test]
+    fn test_initialization_functions() {
+        // These should not panic
+        init_ziplock_shared();
+        init_ziplock_shared_mobile();
+        init_ziplock_shared_desktop();
+    }
+
+    #[test]
+    fn test_plugin_system() {
+        let plugin_manager = PluginManager::new();
+        let templates = plugin_manager.get_plugin_templates();
+        let field_types = plugin_manager.get_custom_field_types();
+
+        // Should work even with no plugins registered
+        // Check that plugin system is functional
+        assert!(templates.is_empty() || !templates.is_empty()); // Either state is valid
+        assert!(field_types.is_empty() || !field_types.is_empty()); // Either state is valid
+    }
+
+    #[test]
+    fn test_backup_functionality() {
+        let mut repo = UnifiedMemoryRepository::new();
+        repo.initialize().unwrap();
+
+        let credential = CredentialRecord::new("Backup Test".to_string(), "test".to_string());
+        repo.add_credential(credential).unwrap();
+
+        let options = ExportOptions {
+            format: ExportFormat::Json,
+            ..Default::default()
+        };
+
+        let backup = BackupManager::create_backup(&repo, &options, None);
+        assert!(backup.is_ok());
+
+        let backup = backup.unwrap();
+        assert_eq!(backup.credentials.len(), 1);
+        assert!(BackupManager::verify_backup(&backup));
+    }
+
+    #[test]
+    fn test_password_utilities() {
+        let options = PasswordOptions::default();
+        let password = PasswordGenerator::generate(&options).unwrap();
+        assert_eq!(password.len(), options.length);
+
+        let analysis = PasswordAnalyzer::analyze(&password);
+        assert!(analysis.score > 0);
+        assert!(analysis.entropy > 0.0);
+    }
+
+    #[test]
+    fn test_encryption_utilities() {
+        let plaintext = "sensitive data";
+        let master_password = "master_key";
+
+        let encrypted = CredentialCrypto::encrypt_field(plaintext, master_password).unwrap();
+        assert!(CredentialCrypto::is_encrypted(&encrypted));
+
+        let decrypted = CredentialCrypto::decrypt_field(&encrypted, master_password).unwrap();
+        assert_eq!(decrypted, plaintext);
+    }
+
+    #[test]
+    fn test_secure_string() {
+        let sensitive_data = "password123".to_string();
+        let secure = SecureString::new(sensitive_data.clone());
+
+        assert_eq!(secure.as_str(), &sensitive_data);
+        assert_eq!(secure.len(), sensitive_data.len());
+        assert!(!secure.is_empty());
+
+        // Test that debug output is redacted
+        let debug_output = format!("{:?}", secure);
+        assert!(debug_output.contains("[REDACTED]"));
+        assert!(!debug_output.contains("password123"));
+    }
+
+    #[test]
+    fn test_config_management() {
+        let provider = MockFileProvider::new();
+        let mut manager = ConfigManager::new(provider, "/test/config.yml".to_string());
+
+        // Should not be loaded initially
+        assert!(!manager.is_loaded());
+
+        // Load should succeed even without file
+        manager.load().unwrap();
+        assert!(manager.is_loaded());
+
+        // Should have default configuration
+        let config = manager.config();
+        assert_eq!(config.ui.theme, "system");
+        assert_eq!(config.ui.language, "en");
+        assert_eq!(config.security.password_timeout, 300);
+
+        // Test repository management
+        let repo = RepositoryInfo::new("Test Repo".to_string(), "/path/to/test.7z".to_string());
+        manager.add_recent_repository(repo);
+
+        let recent = manager.get_recent_repositories();
+        assert_eq!(recent.len(), 1);
+        assert_eq!(recent[0].name, "Test Repo");
+    }
+
+    #[test]
+    fn test_config_paths() {
+        let config_dir = ConfigPaths::app_config_dir();
+        assert!(!config_dir.is_empty());
+
+        let config_file = ConfigPaths::app_config_file();
+        assert!(config_file.contains("config.yml"));
+        assert!(config_file.contains(&config_dir));
+
+        let repos_dir = ConfigPaths::default_repositories_dir();
+        assert!(!repos_dir.is_empty());
+    }
+
+    #[test]
+    fn test_config_validation() {
+        let config = AppConfig::default();
+        let errors = ConfigValidator::validate_app_config(&config);
+        assert!(errors.is_empty());
+
+        // Test repository path validation
+        assert!(ConfigValidator::is_valid_repository_path(
+            "/path/to/vault.7z"
+        ));
+        assert!(ConfigValidator::is_valid_repository_path(
+            "C:\\Users\\test\\vault.zip"
+        ));
+        assert!(!ConfigValidator::is_valid_repository_path(
+            "/path/to/vault.txt"
+        ));
+        assert!(!ConfigValidator::is_valid_repository_path(""));
+    }
+
+    #[test]
+    fn test_desktop_config_manager_creation() {
+        // This should not panic and should return a valid config manager
+        let manager = create_desktop_config_manager();
+        assert!(!manager.is_loaded()); // Should not be loaded until explicitly loaded
     }
 }

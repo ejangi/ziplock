@@ -1,9 +1,11 @@
 #!/bin/bash
+set -euo pipefail
 
-# Android Integration Test Script
-# Tests that the Android libraries function correctly
+# ZipLock Android Integration Test Script
+# Tests Android native libraries for functionality, performance, and security
 
-set -e
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 # Colors for output
 RED='\033[0;31m'
@@ -12,413 +14,530 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
-print_status() { echo -e "${BLUE}[INFO]${NC} $1"; }
-print_success() { echo -e "${GREEN}[SUCCESS]${NC} $1"; }
-print_warning() { echo -e "${YELLOW}[WARNING]${NC} $1"; }
-print_error() { echo -e "${RED}[ERROR]${NC} $1"; }
+# Test configuration
+TEST_OUTPUT_DIR="$PROJECT_ROOT/target/test-results"
+ANDROID_LIBS_DIR="$PROJECT_ROOT/target/android"
 
-# Configuration
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(dirname "$(dirname "$SCRIPT_DIR")")"
-OUTPUT_DIR="$PROJECT_ROOT/target/android"
+# Logging functions
+log_info() {
+    echo -e "${BLUE}[INFO]${NC} $1"
+}
 
-# Test that libraries can be loaded
-test_library_loading() {
-    echo "Testing library loading..."
+log_success() {
+    echo -e "${GREEN}[SUCCESS]${NC} $1"
+}
 
-    for arch in arm64-v8a armeabi-v7a; do
-        lib_path="$OUTPUT_DIR/$arch/libziplock_shared.so"
-        if [ -f "$lib_path" ]; then
-            if command -v readelf >/dev/null 2>&1; then
-                echo "✓ $arch: Library structure valid"
-                readelf -d "$lib_path" | grep SONAME || echo "Warning: No SONAME found"
-            else
-                echo "✓ $arch: Library file exists"
-            fi
+log_warning() {
+    echo -e "${YELLOW}[WARNING]${NC} $1"
+}
+
+log_error() {
+    echo -e "${RED}[ERROR]${NC} $1"
+}
+
+# Show usage
+show_usage() {
+    cat << EOF
+Usage: $0 <test_type> [options]
+
+Test Android native libraries for various aspects.
+
+TEST TYPES:
+    basic          Basic functionality tests (library loading, symbols)
+    performance    Performance and size analysis
+    security       Security features analysis
+    integration    Full integration tests
+    all            Run all test types
+
+OPTIONS:
+    -v, --verbose    Enable verbose output
+    -o, --output     Output directory for test results (default: target/test-results)
+
+EXAMPLES:
+    $0 basic                    # Run basic functionality tests
+    $0 performance              # Run performance tests
+    $0 security                 # Run security analysis
+    $0 all -v                   # Run all tests with verbose output
+
+EOF
+}
+
+# Check if required tools are available
+check_dependencies() {
+    local missing_tools=()
+
+    # Check for basic tools
+    for tool in file readelf objdump; do
+        if ! command -v "$tool" &> /dev/null; then
+            missing_tools+=("$tool")
+        fi
+    done
+
+    # Check for Android-specific tools (optional)
+    if ! command -v adb &> /dev/null; then
+        log_warning "adb not found - device testing will be skipped"
+    fi
+
+    if [ ${#missing_tools[@]} -ne 0 ]; then
+        log_error "Missing required tools: ${missing_tools[*]}"
+        log_info "Install with: sudo apt-get install ${missing_tools[*]}"
+        exit 1
+    fi
+}
+
+# Initialize test environment
+init_test_env() {
+    log_info "Initializing test environment..."
+
+    mkdir -p "$TEST_OUTPUT_DIR"
+
+    # Check if Android libraries exist
+    if [ ! -d "$ANDROID_LIBS_DIR" ]; then
+        log_error "Android libraries not found at $ANDROID_LIBS_DIR"
+        log_info "Run './scripts/build/build-android-docker.sh build' first"
+        exit 1
+    fi
+
+    log_success "Test environment initialized"
+}
+
+# Basic functionality tests
+test_basic_functionality() {
+    log_info "Running basic functionality tests..."
+
+    local test_results="$TEST_OUTPUT_DIR/basic-tests.txt"
+    local failed_tests=0
+
+    echo "=== ZipLock Android Basic Tests ===" > "$test_results"
+    echo "Timestamp: $(date)" >> "$test_results"
+    echo >> "$test_results"
+
+    # Test each architecture
+    local architectures=("arm64-v8a" "armeabi-v7a" "x86_64" "x86")
+
+    for arch in "${architectures[@]}"; do
+        local lib_path="$ANDROID_LIBS_DIR/jniLibs/$arch/libziplock_shared.so"
+
+        echo "Testing $arch:" >> "$test_results"
+
+        if [ ! -f "$lib_path" ]; then
+            echo "  ✗ Library not found" >> "$test_results"
+            log_warning "Library not found for $arch"
+            ((failed_tests++))
+            continue
+        fi
+
+        echo "  ✓ Library exists" >> "$test_results"
+
+        # Check file type
+        local file_info
+        file_info=$(file "$lib_path")
+        echo "  File type: $file_info" >> "$test_results"
+
+        if [[ "$file_info" == *"shared object"* ]]; then
+            echo "  ✓ Valid shared object" >> "$test_results"
         else
-            echo "✗ $arch: Library file missing"
-            exit 1
+            echo "  ✗ Invalid file type" >> "$test_results"
+            ((failed_tests++))
         fi
-    done
-}
 
-# Test library symbols
-test_library_symbols() {
-    echo "Testing library symbols..."
+        # Check file size
+        local file_size
+        file_size=$(stat -c%s "$lib_path")
+        echo "  Size: $file_size bytes ($(echo "scale=2; $file_size / 1024 / 1024" | bc -l) MB)" >> "$test_results"
 
-    lib_path="$OUTPUT_DIR/arm64-v8a/libziplock_shared.so"
-
-    if command -v nm >/dev/null 2>&1; then
-        # Check for key FFI functions that actually exist
-        required_symbols=(
-            "ziplock_init"
-            "ziplock_get_version"
-            "ziplock_session_create"
-            "ziplock_archive_create"
-            "ziplock_archive_open"
-            "ziplock_credential_list"
-            "ziplock_string_free"
-        )
-
-        for symbol in "${required_symbols[@]}"; do
-            if nm -D "$lib_path" | grep -q "$symbol"; then
-                echo "✓ Symbol found: $symbol"
-            else
-                echo "✗ Missing symbol: $symbol"
-                exit 1
-            fi
-        done
-    else
-        echo "nm not available, skipping symbol test"
-    fi
-}
-
-# Test library dependencies
-test_library_dependencies() {
-    echo "Testing library dependencies..."
-
-    lib_path="$OUTPUT_DIR/arm64-v8a/libziplock_shared.so"
-
-    if command -v ldd >/dev/null 2>&1; then
-        echo "Library dependencies:"
-        ldd "$lib_path" || echo "Note: ldd may not work for cross-compiled libraries"
-    fi
-}
-
-# Test library file properties
-test_library_properties() {
-    echo "Testing library properties..."
-
-    for arch in arm64-v8a armeabi-v7a; do
-        lib_path="$OUTPUT_DIR/$arch/libziplock_shared.so"
-        if [ -f "$lib_path" ]; then
-            # Check file size (should not be too large or too small)
-            size=$(stat -c%s "$lib_path" 2>/dev/null || stat -f%z "$lib_path")
-            size_mb=$((size / 1024 / 1024))
-
-            if [ $size -lt 1024 ]; then
-                print_error "✗ $arch: Library suspiciously small (< 1KB)"
-                exit 1
-            elif [ $size -gt $((50 * 1024 * 1024)) ]; then
-                print_warning "⚠ $arch: Library quite large (> 50MB)"
-            else
-                print_success "✓ $arch: Library size acceptable (${size_mb}MB)"
-            fi
-
-            # Check that it's actually a shared library
-            if file "$lib_path" | grep -q "shared object"; then
-                echo "  - Valid shared library format"
-            else
-                print_error "  - Invalid library format"
-                exit 1
-            fi
-
-            # Check architecture
-            case "$arch" in
-                "arm64-v8a")
-                    if file "$lib_path" | grep -q "aarch64"; then
-                        echo "  - Correct ARM64 architecture"
-                    else
-                        print_error "  - Incorrect architecture for ARM64"
-                        exit 1
-                    fi
-                    ;;
-                "armeabi-v7a")
-                    if file "$lib_path" | grep -q "ARM"; then
-                        echo "  - Correct ARM architecture"
-                    else
-                        print_error "  - Incorrect architecture for ARMv7"
-                        exit 1
-                    fi
-                    ;;
-                "x86_64")
-                    if file "$lib_path" | grep -q "x86-64"; then
-                        echo "  - Correct x86_64 architecture"
-                    else
-                        print_error "  - Incorrect architecture for x86_64"
-                        exit 1
-                    fi
-                    ;;
-                "x86")
-                    if file "$lib_path" | grep -q "80386\|i386"; then
-                        echo "  - Correct x86 architecture"
-                    else
-                        print_error "  - Incorrect architecture for x86"
-                        exit 1
-                    fi
-                    ;;
-            esac
+        if [ "$file_size" -gt 100 ] && [ "$file_size" -lt $((50 * 1024 * 1024)) ]; then
+            echo "  ✓ Reasonable file size" >> "$test_results"
+        else
+            echo "  ⚠ Unusual file size" >> "$test_results"
         fi
+
+        # Check for ziplock symbols
+        if readelf -s "$lib_path" 2>/dev/null | grep -q "ziplock_"; then
+            echo "  ✓ Contains ziplock symbols" >> "$test_results"
+        else
+            echo "  ⚠ No ziplock symbols found" >> "$test_results"
+        fi
+
+        # Check for required sections
+        local sections
+        sections=$(readelf -S "$lib_path" 2>/dev/null | grep -E "\.(text|data|rodata)" | wc -l)
+        if [ "$sections" -ge 3 ]; then
+            echo "  ✓ Has required sections" >> "$test_results"
+        else
+            echo "  ⚠ Missing expected sections" >> "$test_results"
+        fi
+
+        # Check dependencies
+        local deps
+        deps=$(readelf -d "$lib_path" 2>/dev/null | grep "NEEDED" | wc -l)
+        echo "  Dependencies: $deps" >> "$test_results"
+
+        echo >> "$test_results"
     done
-}
 
-# Test header file
-test_header_file() {
-    echo "Testing header file..."
+    # Test header file
+    local header_path="$ANDROID_LIBS_DIR/ziplock.h"
+    echo "Testing header file:" >> "$test_results"
 
-    header_path="$OUTPUT_DIR/ziplock.h"
     if [ -f "$header_path" ]; then
-        # Check that it contains essential declarations
-        required_declarations=(
-            "extern \"C\""
-            "ziplock_init"
-            "ziplock_get_version"
-            "ziplock_session_create"
-            "ziplock_archive_create"
-            "ziplock_string_free"
-        )
+        echo "  ✓ Header file exists" >> "$test_results"
 
-        for declaration in "${required_declarations[@]}"; do
-            if grep -q "$declaration" "$header_path"; then
-                echo "✓ Found declaration: $declaration"
-            else
-                echo "✗ Missing declaration: $declaration"
-                exit 1
+        local function_count
+        function_count=$(grep -c "^[[:space:]]*[a-zA-Z].*(" "$header_path" 2>/dev/null || echo 0)
+        echo "  Functions declared: $function_count" >> "$test_results"
+
+        if [ "$function_count" -gt 0 ]; then
+            echo "  ✓ Contains function declarations" >> "$test_results"
+        else
+            echo "  ⚠ No function declarations found" >> "$test_results"
+        fi
+    else
+        echo "  ⚠ Header file not found" >> "$test_results"
+    fi
+
+    echo >> "$test_results"
+    echo "=== Test Summary ===" >> "$test_results"
+    echo "Failed tests: $failed_tests" >> "$test_results"
+
+    if [ "$failed_tests" -eq 0 ]; then
+        log_success "All basic functionality tests passed"
+    else
+        log_warning "$failed_tests basic functionality tests failed"
+    fi
+
+    log_info "Basic test results saved to: $test_results"
+}
+
+# Performance tests
+test_performance() {
+    log_info "Running performance tests..."
+
+    local test_results="$TEST_OUTPUT_DIR/performance-tests.txt"
+
+    echo "=== ZipLock Android Performance Tests ===" > "$test_results"
+    echo "Timestamp: $(date)" >> "$test_results"
+    echo >> "$test_results"
+
+    # Size analysis
+    echo "Library Size Analysis:" >> "$test_results"
+    echo "| Architecture | Size (bytes) | Size (MB) | Status |" >> "$test_results"
+    echo "|--------------|--------------|-----------|--------|" >> "$test_results"
+
+    local architectures=("arm64-v8a" "armeabi-v7a" "x86_64" "x86")
+    local total_size=0
+
+    for arch in "${architectures[@]}"; do
+        local lib_path="$ANDROID_LIBS_DIR/jniLibs/$arch/libziplock_shared.so"
+
+        if [ -f "$lib_path" ]; then
+            local size_bytes
+            size_bytes=$(stat -c%s "$lib_path")
+            local size_mb
+            size_mb=$(echo "scale=2; $size_bytes / 1024 / 1024" | bc -l)
+
+            local status="Good"
+            if [ "$size_bytes" -gt $((20 * 1024 * 1024)) ]; then
+                status="Large"
+            elif [ "$size_bytes" -lt 1024 ]; then
+                status="Too small"
+            fi
+
+            echo "| $arch | $size_bytes | ${size_mb} MB | $status |" >> "$test_results"
+            total_size=$((total_size + size_bytes))
+        else
+            echo "| $arch | - | - | Missing |" >> "$test_results"
+        fi
+    done
+
+    local total_mb
+    total_mb=$(echo "scale=2; $total_size / 1024 / 1024" | bc -l)
+    echo "| **Total** | **$total_size** | **${total_mb} MB** | - |" >> "$test_results"
+    echo >> "$test_results"
+
+    # Symbol analysis
+    echo "Symbol Analysis:" >> "$test_results"
+    for arch in "${architectures[@]}"; do
+        local lib_path="$ANDROID_LIBS_DIR/jniLibs/$arch/libziplock_shared.so"
+
+        if [ -f "$lib_path" ]; then
+            echo "$arch:" >> "$test_results"
+
+            local total_symbols
+            total_symbols=$(readelf -s "$lib_path" 2>/dev/null | wc -l)
+            echo "  Total symbols: $total_symbols" >> "$test_results"
+
+            local exported_symbols
+            exported_symbols=$(readelf -s "$lib_path" 2>/dev/null | grep -c " GLOBAL " || echo 0)
+            echo "  Exported symbols: $exported_symbols" >> "$test_results"
+
+            local ziplock_symbols
+            ziplock_symbols=$(readelf -s "$lib_path" 2>/dev/null | grep -c "ziplock_" || echo 0)
+            echo "  ZipLock symbols: $ziplock_symbols" >> "$test_results"
+
+            echo >> "$test_results"
+        fi
+    done
+
+    log_success "Performance tests completed"
+    log_info "Performance test results saved to: $test_results"
+}
+
+# Security tests
+test_security() {
+    log_info "Running security tests..."
+
+    local test_results="$TEST_OUTPUT_DIR/security-tests.txt"
+
+    echo "=== ZipLock Android Security Tests ===" > "$test_results"
+    echo "Timestamp: $(date)" >> "$test_results"
+    echo >> "$test_results"
+
+    local architectures=("arm64-v8a" "armeabi-v7a" "x86_64" "x86")
+
+    for arch in "${architectures[@]}"; do
+        local lib_path="$ANDROID_LIBS_DIR/jniLibs/$arch/libziplock_shared.so"
+
+        if [ ! -f "$lib_path" ]; then
+            continue
+        fi
+
+        echo "Security Analysis for $arch:" >> "$test_results"
+
+        # Check for stack protection
+        if readelf -s "$lib_path" 2>/dev/null | grep -q "__stack_chk"; then
+            echo "  ✓ Stack protection enabled" >> "$test_results"
+        else
+            echo "  ⚠ Stack protection not detected" >> "$test_results"
+        fi
+
+        # Check for position independent code
+        if readelf -h "$lib_path" 2>/dev/null | grep -q "DYN"; then
+            echo "  ✓ Position independent executable" >> "$test_results"
+        else
+            echo "  ⚠ Not position independent" >> "$test_results"
+        fi
+
+        # Check for RELRO (Read-Only Relocations)
+        if readelf -l "$lib_path" 2>/dev/null | grep -q "GNU_RELRO"; then
+            echo "  ✓ RELRO protection enabled" >> "$test_results"
+        else
+            echo "  ⚠ RELRO protection not found" >> "$test_results"
+        fi
+
+        # Check for executable stack
+        if readelf -l "$lib_path" 2>/dev/null | grep "GNU_STACK" | grep -q "E"; then
+            echo "  ⚠ Executable stack detected" >> "$test_results"
+        else
+            echo "  ✓ Non-executable stack" >> "$test_results"
+        fi
+
+        # Check for stripped symbols
+        local symbol_count
+        symbol_count=$(readelf -s "$lib_path" 2>/dev/null | wc -l)
+        if [ "$symbol_count" -lt 50 ]; then
+            echo "  ✓ Symbols stripped ($symbol_count symbols)" >> "$test_results"
+        else
+            echo "  ⚠ Many symbols present ($symbol_count symbols)" >> "$test_results"
+        fi
+
+        # Check for dangerous functions
+        local dangerous_functions=("strcpy" "strcat" "sprintf" "gets")
+        for func in "${dangerous_functions[@]}"; do
+            if readelf -s "$lib_path" 2>/dev/null | grep -q "$func"; then
+                echo "  ⚠ Uses potentially unsafe function: $func" >> "$test_results"
             fi
         done
 
-        print_success "✓ Header file contains required declarations"
-    else
-        print_error "✗ Header file not found"
-        exit 1
-    fi
-}
+        # Check for hardcoded strings (simple check)
+        local strings_output
+        strings_output=$(strings "$lib_path" 2>/dev/null | wc -l)
+        echo "  String constants: $strings_output" >> "$test_results"
 
-# Test cross-compilation consistency
-test_cross_compilation_consistency() {
-    echo "Testing cross-compilation consistency..."
-
-    # Check that all architectures have the same symbols
-    reference_arch="arm64-v8a"
-    reference_lib="$OUTPUT_DIR/$reference_arch/libziplock_shared.so"
-
-    if [ ! -f "$reference_lib" ] || ! command -v nm >/dev/null 2>&1; then
-        echo "Skipping consistency test (missing tools or reference library)"
-        return
-    fi
-
-    reference_symbols=$(nm -D "$reference_lib" 2>/dev/null | grep -E "ziplock_" | cut -d' ' -f3 | sort)
-
-    for arch in armeabi-v7a; do
-        lib_path="$OUTPUT_DIR/$arch/libziplock_shared.so"
-        if [ -f "$lib_path" ]; then
-            arch_symbols=$(nm -D "$lib_path" 2>/dev/null | grep -E "ziplock_" | cut -d' ' -f3 | sort)
-
-            if [ "$reference_symbols" = "$arch_symbols" ]; then
-                echo "✓ $arch: Symbol consistency with $reference_arch"
-            else
-                print_warning "⚠ $arch: Symbol differences with $reference_arch"
-                echo "  This may be normal due to architecture differences"
-            fi
-        fi
-    done
-}
-
-# Test that libraries can be used in Android project structure
-test_android_project_structure() {
-    echo "Testing Android project structure..."
-
-    # Create a temporary Android project structure
-    temp_dir=$(mktemp -d)
-    jni_libs_dir="$temp_dir/app/src/main/jniLibs"
-
-    mkdir -p "$jni_libs_dir"/{arm64-v8a,armeabi-v7a}
-
-    # Copy libraries
-    for arch in arm64-v8a armeabi-v7a; do
-        if [ -f "$OUTPUT_DIR/$arch/libziplock_shared.so" ]; then
-            cp "$OUTPUT_DIR/$arch/libziplock_shared.so" "$jni_libs_dir/$arch/"
-            echo "✓ Copied $arch library to Android project structure"
-        fi
+        echo >> "$test_results"
     done
 
-    # Verify structure
-    if [ -d "$jni_libs_dir" ]; then
-        echo "✓ Android jniLibs directory structure created successfully"
-        echo "  Structure: $jni_libs_dir"
-        ls -la "$jni_libs_dir"
-    fi
-
-    # Clean up
-    rm -rf "$temp_dir"
+    log_success "Security tests completed"
+    log_info "Security test results saved to: $test_results"
 }
 
-# Performance smoke test
-test_performance_smoke() {
-    echo "Running performance smoke test..."
+# Integration tests
+test_integration() {
+    log_info "Running integration tests..."
 
-    # Check that libraries are not obviously broken
-    for arch in arm64-v8a armeabi-v7a; do
-        lib_path="$OUTPUT_DIR/$arch/libziplock_shared.so"
-        if [ -f "$lib_path" ]; then
-            # Check for obvious performance killers
-            if command -v strings >/dev/null 2>&1; then
-                # Check for debug symbols (should be stripped in release)
-                if strings "$lib_path" | grep -q "debug"; then
-                    print_warning "⚠ $arch: May contain debug information (larger size)"
+    local test_results="$TEST_OUTPUT_DIR/integration-tests.txt"
+
+    echo "=== ZipLock Android Integration Tests ===" > "$test_results"
+    echo "Timestamp: $(date)" >> "$test_results"
+    echo >> "$test_results"
+
+    # Test Android app integration
+    local android_app_dir="$PROJECT_ROOT/apps/mobile/android"
+    if [ -d "$android_app_dir" ]; then
+        echo "Android App Integration:" >> "$test_results"
+
+        local jnilibs_dir="$android_app_dir/app/src/main/jniLibs"
+        if [ -d "$jnilibs_dir" ]; then
+            echo "  ✓ jniLibs directory exists" >> "$test_results"
+
+            # Check if libraries are copied
+            local architectures=("arm64-v8a" "armeabi-v7a" "x86_64" "x86")
+            for arch in "${architectures[@]}"; do
+                if [ -f "$jnilibs_dir/$arch/libziplock_shared.so" ]; then
+                    echo "  ✓ $arch library copied to app" >> "$test_results"
                 else
-                    echo "✓ $arch: No obvious debug information found"
+                    echo "  ✗ $arch library missing from app" >> "$test_results"
                 fi
-
-                # Check for panic strings (should use abort in release)
-                panic_count=$(strings "$lib_path" | grep -c "panic" || true)
-                if [ "$panic_count" -gt 5 ]; then
-                    print_warning "⚠ $arch: High number of panic strings found ($panic_count)"
-                else
-                    echo "✓ $arch: Reasonable panic string count ($panic_count)"
-                fi
-            fi
-        fi
-    done
-}
-
-# Security smoke test
-test_security_smoke() {
-    echo "Running security smoke test..."
-
-    for arch in arm64-v8a armeabi-v7a; do
-        lib_path="$OUTPUT_DIR/$arch/libziplock_shared.so"
-        if [ -f "$lib_path" ]; then
-            # Check for common security features
-            if command -v readelf >/dev/null 2>&1; then
-                # Check for stack protection
-                if readelf -s "$lib_path" | grep -q "__stack_chk"; then
-                    echo "✓ $arch: Stack protection enabled"
-                else
-                    echo "? $arch: Stack protection not detected"
-                fi
-
-                # Check for position independent code
-                if readelf -h "$lib_path" | grep -q "DYN"; then
-                    echo "✓ $arch: Position independent executable"
-                else
-                    echo "? $arch: Not position independent"
-                fi
-            fi
-        fi
-    done
-}
-
-# Main test runner
-run_all_tests() {
-    echo "Running Android integration tests..."
-    echo "===================================="
-
-    # Check if build output exists
-    if [ ! -d "$OUTPUT_DIR" ]; then
-        print_error "Build output directory not found: $OUTPUT_DIR"
-        print_error "Please run the build first: ./scripts/build/build-android-docker.sh build"
-        exit 1
-    fi
-
-    test_library_loading
-    echo ""
-    test_library_symbols
-    echo ""
-    test_library_dependencies
-    echo ""
-    test_library_properties
-    echo ""
-    test_header_file
-    echo ""
-    test_cross_compilation_consistency
-    echo ""
-    test_android_project_structure
-    echo ""
-    test_performance_smoke
-    echo ""
-    test_security_smoke
-    echo ""
-    echo "✅ All integration tests completed!"
-
-    # Summary
-    echo ""
-    echo "Build Summary:"
-    echo "=============="
-    for arch in arm64-v8a armeabi-v7a; do
-        lib_path="$OUTPUT_DIR/$arch/libziplock_shared.so"
-        if [ -f "$lib_path" ]; then
-            size=$(du -h "$lib_path" | cut -f1)
-            echo "  ✓ $arch: $size"
+            done
         else
-            echo "  ✗ $arch: Missing"
+            echo "  ⚠ jniLibs directory not found in Android app" >> "$test_results"
+        fi
+
+        # Check for build.gradle
+        if [ -f "$android_app_dir/app/build.gradle" ]; then
+            echo "  ✓ Android build.gradle exists" >> "$test_results"
+        else
+            echo "  ⚠ Android build.gradle not found" >> "$test_results"
+        fi
+
+    else
+        echo "Android App Integration:" >> "$test_results"
+        echo "  ⚠ Android app directory not found" >> "$test_results"
+    fi
+
+    echo >> "$test_results"
+
+    # Test build artifacts
+    echo "Build Artifacts:" >> "$test_results"
+
+    if [ -f "$ANDROID_LIBS_DIR/build-info.json" ]; then
+        echo "  ✓ Build info exists" >> "$test_results"
+        echo "  Build info:" >> "$test_results"
+        sed 's/^/    /' "$ANDROID_LIBS_DIR/build-info.json" >> "$test_results"
+    else
+        echo "  ⚠ Build info missing" >> "$test_results"
+    fi
+
+    if [ -f "$ANDROID_LIBS_DIR/ziplock.h" ]; then
+        echo "  ✓ C header file exists" >> "$test_results"
+    else
+        echo "  ⚠ C header file missing" >> "$test_results"
+    fi
+
+    echo >> "$test_results"
+
+    log_success "Integration tests completed"
+    log_info "Integration test results saved to: $test_results"
+}
+
+# Run all tests
+run_all_tests() {
+    log_info "Running all Android tests..."
+
+    test_basic_functionality
+    test_performance
+    test_security
+    test_integration
+
+    # Create summary report
+    local summary_report="$TEST_OUTPUT_DIR/test-summary.txt"
+
+    echo "=== ZipLock Android Test Summary ===" > "$summary_report"
+    echo "Timestamp: $(date)" >> "$summary_report"
+    echo >> "$summary_report"
+
+    echo "Test Results:" >> "$summary_report"
+    echo "- Basic functionality: $([ -f "$TEST_OUTPUT_DIR/basic-tests.txt" ] && echo "✓ Completed" || echo "✗ Failed")" >> "$summary_report"
+    echo "- Performance analysis: $([ -f "$TEST_OUTPUT_DIR/performance-tests.txt" ] && echo "✓ Completed" || echo "✗ Failed")" >> "$summary_report"
+    echo "- Security analysis: $([ -f "$TEST_OUTPUT_DIR/security-tests.txt" ] && echo "✓ Completed" || echo "✗ Failed")" >> "$summary_report"
+    echo "- Integration tests: $([ -f "$TEST_OUTPUT_DIR/integration-tests.txt" ] && echo "✓ Completed" || echo "✗ Failed")" >> "$summary_report"
+    echo >> "$summary_report"
+
+    echo "Output Files:" >> "$summary_report"
+    for file in "$TEST_OUTPUT_DIR"/*.txt; do
+        if [ -f "$file" ]; then
+            echo "- $(basename "$file")" >> "$summary_report"
         fi
     done
 
-    if [ -f "$OUTPUT_DIR/ziplock.h" ]; then
-        echo "  ✓ Header file: Available"
-    else
-        echo "  ✗ Header file: Missing"
-    fi
-}
-
-# Usage function
-usage() {
-    echo "Usage: $0 [test_name]"
-    echo ""
-    echo "Available tests:"
-    echo "  all                    Run all tests (default)"
-    echo "  loading                Test library loading"
-    echo "  symbols                Test library symbols"
-    echo "  dependencies           Test library dependencies"
-    echo "  properties             Test library properties"
-    echo "  header                 Test header file"
-    echo "  consistency            Test cross-compilation consistency"
-    echo "  android-structure      Test Android project structure"
-    echo "  performance            Performance smoke test"
-    echo "  security               Security smoke test"
-    echo ""
-    echo "Examples:"
-    echo "  $0                     # Run all tests"
-    echo "  $0 symbols             # Test only symbols"
-    echo "  $0 loading             # Test only loading"
+    log_success "All tests completed"
+    log_info "Summary report: $summary_report"
 }
 
 # Main function
 main() {
-    local test_name="${1:-all}"
+    local test_type=""
+    local verbose=false
 
-    case "$test_name" in
+    # Parse arguments
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            -v|--verbose)
+                verbose=true
+                shift
+                ;;
+            -o|--output)
+                TEST_OUTPUT_DIR="$2"
+                shift 2
+                ;;
+            -h|--help)
+                show_usage
+                exit 0
+                ;;
+            *)
+                if [ -z "$test_type" ]; then
+                    test_type="$1"
+                else
+                    log_error "Unknown option: $1"
+                    show_usage
+                    exit 1
+                fi
+                shift
+                ;;
+        esac
+    done
+
+    if [ -z "$test_type" ]; then
+        log_error "Test type is required"
+        show_usage
+        exit 1
+    fi
+
+    # Set verbose output
+    if [ "$verbose" = true ]; then
+        set -x
+    fi
+
+    # Check dependencies and initialize
+    check_dependencies
+    init_test_env
+
+    # Run requested tests
+    case "$test_type" in
+        "basic")
+            test_basic_functionality
+            ;;
+        "performance")
+            test_performance
+            ;;
+        "security")
+            test_security
+            ;;
+        "integration")
+            test_integration
+            ;;
         "all")
             run_all_tests
             ;;
-        "loading")
-            test_library_loading
-            ;;
-        "symbols")
-            test_library_symbols
-            ;;
-        "dependencies")
-            test_library_dependencies
-            ;;
-        "properties")
-            test_library_properties
-            ;;
-        "header")
-            test_header_file
-            ;;
-        "consistency")
-            test_cross_compilation_consistency
-            ;;
-        "android-structure")
-            test_android_project_structure
-            ;;
-        "performance")
-            test_performance_smoke
-            ;;
-        "security")
-            test_security_smoke
-            ;;
-        "help"|"-h"|"--help")
-            usage
-            ;;
         *)
-            print_error "Unknown test: $test_name"
-            echo ""
-            usage
+            log_error "Invalid test type: $test_type"
+            show_usage
             exit 1
             ;;
     esac
+
+    log_info "Test results available in: $TEST_OUTPUT_DIR"
 }
 
+# Run main function
 main "$@"

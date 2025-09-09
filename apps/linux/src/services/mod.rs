@@ -5,6 +5,10 @@
 
 pub mod clipboard;
 pub mod credential_store;
+pub mod repository_service;
+pub mod update_checker;
 
 pub use clipboard::{ClipboardContentType, ClipboardManager};
-pub use credential_store::{get_credential_store, CredentialStore, SimpleCredential};
+pub use credential_store::get_credential_store;
+pub use repository_service::get_repository_service;
+pub use update_checker::{InstallationMethod, UpdateCheckResult, UpdateChecker};

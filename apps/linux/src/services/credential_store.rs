@@ -5,9 +5,8 @@
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::path::Path;
 use std::sync::{Arc, Mutex};
-use tracing::{debug, error, info, warn};
+use tracing::{debug, info, warn};
 
 /// A simple credential record
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -43,6 +42,7 @@ impl CredentialStore {
     }
 
     /// Load credentials from extracted archive files
+    #[allow(dead_code)]
     pub fn load_from_extracted_files(
         &self,
         extracted_files: HashMap<String, Vec<u8>>,
@@ -87,6 +87,7 @@ impl CredentialStore {
     }
 
     /// Parse a credential file
+    #[allow(dead_code)]
     fn parse_credential_file(
         &self,
         file_path: &str,
@@ -123,6 +124,7 @@ impl CredentialStore {
     }
 
     /// Parse YAML credential data
+    #[allow(dead_code)]
     fn parse_yaml_credential(
         &self,
         file_path: &str,
@@ -212,6 +214,7 @@ impl CredentialStore {
     }
 
     /// Get all credentials
+    #[allow(dead_code)]
     pub fn list_credentials(&self) -> Vec<SimpleCredential> {
         if !self.is_unlocked() {
             return Vec::new();
@@ -222,6 +225,7 @@ impl CredentialStore {
     }
 
     /// Get a specific credential by ID
+    #[allow(dead_code)]
     pub fn get_credential(&self, id: &str) -> Option<SimpleCredential> {
         if !self.is_unlocked() {
             return None;
@@ -232,6 +236,7 @@ impl CredentialStore {
     }
 
     /// Add or update a credential
+    #[allow(dead_code)]
     pub fn save_credential(&self, credential: SimpleCredential) -> Result<(), String> {
         if !self.is_unlocked() {
             return Err("Store is locked".to_string());
@@ -243,6 +248,7 @@ impl CredentialStore {
     }
 
     /// Delete a credential
+    #[allow(dead_code)]
     pub fn delete_credential(&self, id: &str) -> Result<(), String> {
         if !self.is_unlocked() {
             return Err("Store is locked".to_string());
@@ -261,16 +267,19 @@ impl CredentialStore {
     }
 
     /// Set the archive path
+    #[allow(dead_code)]
     pub fn set_archive_path(&self, path: Option<String>) {
         *self.archive_path.lock().unwrap() = path;
     }
 
     /// Get the archive path
+    #[allow(dead_code)]
     pub fn get_archive_path(&self) -> Option<String> {
         self.archive_path.lock().unwrap().clone()
     }
 
     /// Get credential count
+    #[allow(dead_code)]
     pub fn credential_count(&self) -> usize {
         if !self.is_unlocked() {
             return 0;
@@ -279,6 +288,7 @@ impl CredentialStore {
     }
 
     /// Search credentials by title or username
+    #[allow(dead_code)]
     pub fn search_credentials(&self, query: &str) -> Vec<SimpleCredential> {
         if !self.is_unlocked() {
             return Vec::new();
@@ -305,6 +315,7 @@ impl CredentialStore {
     }
 
     /// Get credentials by type
+    #[allow(dead_code)]
     pub fn get_credentials_by_type(&self, credential_type: &str) -> Vec<SimpleCredential> {
         if !self.is_unlocked() {
             return Vec::new();

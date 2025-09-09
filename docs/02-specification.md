@@ -8,29 +8,35 @@
 
 ## **2\. Core Architecture**
 
-The application follows a unified architecture where frontend clients communicate directly with a shared core library through FFI (Foreign Function Interface) bindings. This eliminates the complexity of separate backend services while providing consistent functionality across all platforms.
+The application follows a unified architecture with pure separation of concerns where all platform implementations communicate through a shared core library that handles ALL data operations in memory, while platform-specific code handles file I/O operations through clean callback interfaces. This approach provides maximum code reuse while respecting platform capabilities and constraints.
 
 ### **2.1 Shared Core Library**
 
 * **Language:** Rust
-* **Functionality:** The core library is responsible for managing the encrypted 7z file containing the user's credentials. It provides a C FFI interface that all platform clients can use.
-  * **Universal Implementation:** A single Rust implementation serves all platforms through FFI bindings, ensuring consistent behavior across desktop and mobile platforms.
-  * **Storage Management:** It handles all read, write, and encryption operations on the 7z file. The file is locked when in use to prevent data corruption from concurrent access (e.g., by a cloud sync service).
-  * **Security:** The core library holds the master key in a secure, in-memory state only after the user has authenticated. It never persists the master key to disk.
+* **Functionality:** The core library handles ALL data operations, validation, cryptography, and business logic in pure memory operations using sevenz-rust2. It provides platform-specific FFI interfaces for different integration patterns.
+  * **Pure Memory Repository:** All credential operations happen in memory with no direct file I/O. The library serializes/deserializes data to/from file maps provided by platform code.
+  * **File Operation Callbacks:** File I/O is handled through clean callback interfaces implemented by platform-specific code, ensuring optimal file handling for each platform.
+  * **Platform Flexibility:** Mobile platforms handle ALL file operations in native code, desktop platforms use sevenz-rust2 for in-memory 7z operations with AES-256 encryption.
+  * **Security:** The core library holds the master key in secure, in-memory state only. All cryptographic operations happen within the memory-safe Rust library using sevenz-rust2.
   * **Configuration:** The library manages minimal configuration data, such as the path to the user's encrypted 7z file. This data is stored in platform-specific locations:
     * **Linux:** \~/.config/ziplock/config.yml
     * **Windows:** %APPDATA%/ZipLock/config.yml
     * **macOS:** ~/Library/Application Support/ZipLock/config.yml
     * The library also manages user preferences like auto-lock timeout.
-* **Encryption:** The 7z file is encrypted using **AES-256** with the user-provided master key.
+* **Encryption:** The 7z file is encrypted using **AES-256** via sevenz-rust2 library with the user-provided master key. Desktop platforms use sevenz-rust2 for in-memory encryption/decryption operations.
 
 ### **2.2 Frontend Clients**
 
-The frontend clients are native applications that communicate with the shared core library via direct FFI calls. They are responsible for rendering the user interface and translating user actions into library function calls.
+The frontend clients are native applications that communicate with the shared core library through platform-appropriate FFI interfaces. They handle platform-specific UI rendering and file operations while delegating all data operations to the shared core.
 
-* **Linux:** Written in **Rust** using a GUI framework like gtk-rs or iced to ensure native look and feel and compatibility with the **Wayland** display server. Communicates with the shared core library through direct FFI calls.
-* **Windows:** Written in **Rust** using a framework like tauri or winrt-rs to provide a native application experience. If this proves too complex, a fallback to a C\# application using WPF or WinForms is an acceptable alternative.
-* **Other Platforms:** The architecture is designed to support other platforms in the future. The specification should be extended to include clients for macOS (Swift/SwiftUI), iOS (Swift/SwiftUI), and Android (Kotlin/Jetpack Compose).
+* **Desktop Platforms (Linux, Windows, macOS):**
+  * **Linux:** Written in **Rust** using iced for native experience with Wayland support. Uses full FFI with sevenz-rust2 for in-memory 7z operations.
+  * **Windows:** Written in **Rust** using iced for consistent cross-platform experience. Uses full FFI with sevenz-rust2 for in-memory 7z operations.
+  * **macOS:** Planned implementation in **Swift/SwiftUI** using memory-only FFI with native file operations.
+
+* **Mobile Platforms (Android, iOS):**
+  * **Android:** Written in **Kotlin/Jetpack Compose** using memory-only FFI. All file operations (SAF, Documents API, 7z extraction/creation) handled in native Android code using platform 7z libraries.
+  * **iOS:** Planned implementation in **Swift/SwiftUI** using memory-only FFI. All file operations (Documents API, 7z libraries) handled in native iOS code using platform 7z libraries.
 
 ### **2.3 Project Structure**
 

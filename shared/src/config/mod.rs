@@ -1,669 +1,373 @@
-//! Shared configuration management for ZipLock applications
+//! Configuration management for ZipLock unified architecture
 //!
-//! This module provides cross-platform configuration management that can be used
-//! by all frontend implementations. It handles user preferences, repository paths,
-//! and provides repository detection functionality.
+//! This module provides configuration management capabilities primarily for desktop
+//! applications that need to manage application settings and repository information.
+//! Mobile platforms typically handle configuration through their native frameworks
+//! and use the shared library only for credential operations.
+//!
+//! # Architecture Integration
+//!
+//! - **Desktop Apps**: Use full configuration management with file persistence
+//! - **Mobile Apps**: May use subset of configuration types for memory operations
+//! - **Repository Config**: Integrates with UnifiedRepositoryManager
+//! - **File Operations**: Uses FileOperationProvider for config persistence
 
-use anyhow::{Context, Result};
-use serde::{Deserialize, Serialize};
-use std::fs;
-use std::path::{Path, PathBuf};
-use std::time::SystemTime;
-use tracing::{debug, info, warn};
+pub mod app_config;
+pub mod repository_config;
 
-use crate::SharedError;
+pub use app_config::*;
+pub use repository_config::*;
 
-pub mod paths;
-pub mod repository;
+use crate::core::{CoreError, CoreResult, FileOperationProvider};
 
-use crate::error::SharedResult;
-
-/// Main configuration structure for frontend applications
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct FrontendConfig {
-    /// Repository settings
-    pub repository: RepositoryConfig,
-
-    /// UI preferences
-    pub ui: UiConfig,
-
-    /// Application settings
-    pub app: AppConfig,
-
-    /// Configuration version for future migrations
-    pub version: String,
+/// Configuration manager for desktop applications
+///
+/// Handles loading, saving, and managing application configuration files.
+/// Uses the FileOperationProvider pattern for cross-platform file operations.
+pub struct ConfigManager<F: FileOperationProvider> {
+    file_provider: F,
+    config_path: String,
+    app_config: AppConfig,
+    loaded: bool,
 }
 
-/// Repository configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RepositoryConfig {
-    /// Path to the currently selected repository (zip file)
-    pub path: Option<PathBuf>,
-
-    /// Default directory for creating new repositories
-    pub default_directory: Option<PathBuf>,
-
-    /// Recently used repositories with metadata
-    pub recent_repositories: Vec<RecentRepository>,
-
-    /// Maximum number of recent repositories to remember
-    pub max_recent: usize,
-
-    /// Automatically detect repositories on startup
-    pub auto_detect: bool,
-
-    /// Search additional directories for repositories
-    pub search_directories: Vec<PathBuf>,
-}
-
-/// Information about a recently used repository
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct RecentRepository {
-    /// Path to the repository file
-    pub path: PathBuf,
-
-    /// Last accessed timestamp
-    pub last_accessed: SystemTime,
-
-    /// Display name (defaults to filename)
-    pub display_name: Option<String>,
-
-    /// Whether this repository is pinned (always shown)
-    pub pinned: bool,
-}
-
-/// UI configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct UiConfig {
-    /// Window width
-    pub window_width: u32,
-
-    /// Window height
-    pub window_height: u32,
-
-    /// Theme selection ("light", "dark", "system")
-    pub theme: String,
-
-    /// Show wizard on startup if no repository is configured
-    pub show_wizard_on_startup: bool,
-
-    /// Font size for UI elements
-    pub font_size: f32,
-
-    /// UI language/locale
-    pub language: String,
-}
-
-/// Application configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AppConfig {
-    /// Auto-lock timeout in minutes (0 = disabled)
-    pub auto_lock_timeout: u32,
-
-    /// Clear clipboard after copying password (seconds)
-    pub clipboard_timeout: u32,
-
-    /// Enable auto-backup
-    pub enable_backup: bool,
-
-    /// Show passwords by default (not recommended)
-    pub show_passwords_default: bool,
-
-    /// Enable password strength indicators
-    pub show_password_strength: bool,
-
-    /// Minimize to system tray on close
-    pub minimize_to_tray: bool,
-
-    /// Start minimized
-    pub start_minimized: bool,
-
-    /// Check for updates automatically
-    pub auto_check_updates: bool,
-}
-
-/// Repository information for detection and validation
-#[derive(Debug, Clone, PartialEq)]
-pub struct RepositoryInfo {
-    /// Path to the repository file
-    pub path: PathBuf,
-
-    /// File size in bytes
-    pub size: u64,
-
-    /// Last modified timestamp
-    pub last_modified: SystemTime,
-
-    /// Whether the file is accessible for reading
-    pub accessible: bool,
-
-    /// Display name
-    pub display_name: String,
-
-    /// Whether this is a valid ZipLock repository format
-    pub is_valid_format: bool,
-}
-
-impl Default for FrontendConfig {
-    fn default() -> Self {
-        Self {
-            repository: RepositoryConfig::default(),
-            ui: UiConfig::default(),
-            app: AppConfig::default(),
-            version: "1.0".to_string(),
-        }
-    }
-}
-
-impl Default for RepositoryConfig {
-    fn default() -> Self {
-        let default_directory = dirs::document_dir()
-            .or_else(dirs::home_dir)
-            .map(|p| p.join("ZipLock"));
-
-        Self {
-            path: None,
-            default_directory,
-            recent_repositories: Vec::new(),
-            max_recent: 10,
-            auto_detect: true,
-            search_directories: Vec::new(),
-        }
-    }
-}
-
-impl Default for UiConfig {
-    fn default() -> Self {
-        Self {
-            window_width: 1000,
-            window_height: 700,
-            theme: "system".to_string(),
-
-            show_wizard_on_startup: true,
-            font_size: 14.0,
-            language: "en".to_string(),
-        }
-    }
-}
-
-impl Default for AppConfig {
-    fn default() -> Self {
-        Self {
-            auto_lock_timeout: 15, // 15 minutes
-            clipboard_timeout: 30, // 30 seconds
-            enable_backup: true,
-            show_passwords_default: false,
-            show_password_strength: true,
-            minimize_to_tray: false,
-            start_minimized: false,
-            auto_check_updates: true,
-        }
-    }
-}
-
-impl RecentRepository {
-    /// Create a new recent repository entry
-    pub fn new<P: Into<PathBuf>>(path: P) -> Self {
-        let path = path.into();
-        let display_name = path
-            .file_stem()
-            .and_then(|s| s.to_str())
-            .map(|s| s.to_string());
-
-        Self {
-            path,
-            last_accessed: SystemTime::now(),
-            display_name,
-            pinned: false,
-        }
-    }
-
-    /// Update the last accessed timestamp
-    pub fn touch(&mut self) {
-        self.last_accessed = SystemTime::now();
-    }
-
-    /// Get the display name or filename
-    pub fn display_name(&self) -> String {
-        self.display_name.clone().unwrap_or_else(|| {
-            self.path
-                .file_stem()
-                .and_then(|s| s.to_str())
-                .unwrap_or("Unknown")
-                .to_string()
-        })
-    }
-
-    /// Check if the repository file exists
-    pub fn exists(&self) -> bool {
-        self.path.exists()
-    }
-}
-
-impl RepositoryInfo {
-    /// Create repository info from a file path
-    pub fn from_path<P: AsRef<Path>>(path: P) -> SharedResult<Self> {
-        let path = path.as_ref().to_path_buf();
-
-        let metadata = fs::metadata(&path).map_err(|e| SharedError::Internal {
-            message: format!("Failed to read file metadata: {e}"),
-        })?;
-
-        let display_name = path
-            .file_stem()
-            .and_then(|s| s.to_str())
-            .unwrap_or("Unknown")
-            .to_string();
-
-        Ok(Self {
-            path,
-            size: metadata.len(),
-            last_modified: metadata.modified().unwrap_or(SystemTime::UNIX_EPOCH),
-            accessible: true,
-            display_name,
-            is_valid_format: false, // Will be validated separately
-        })
-    }
-
-    /// Check if this appears to be a ZipLock repository based on extension
-    pub fn has_valid_extension(&self) -> bool {
-        self.path
-            .extension()
-            .and_then(|ext| ext.to_str())
-            .map(|ext| ext.eq_ignore_ascii_case("7z"))
-            .unwrap_or(false)
-    }
-}
-
-/// Configuration manager for frontend applications
-#[derive(Debug)]
-pub struct ConfigManager {
-    config_dir: PathBuf,
-    config_file: PathBuf,
-    config: FrontendConfig,
-}
-
-impl ConfigManager {
+impl<F: FileOperationProvider> ConfigManager<F> {
     /// Create a new configuration manager
-    pub fn new() -> Result<Self> {
-        let config_dir = paths::get_config_directory()?;
-        let config_file = config_dir.join("config.yml");
-
-        // Ensure config directory exists
-        if !config_dir.exists() {
-            fs::create_dir_all(&config_dir)
-                .with_context(|| format!("Failed to create config directory: {config_dir:?}"))?;
-            info!("Created config directory: {:?}", config_dir);
+    ///
+    /// # Arguments
+    /// * `file_provider` - File operation provider for config persistence
+    /// * `config_path` - Path to the configuration file
+    pub fn new(file_provider: F, config_path: String) -> Self {
+        Self {
+            file_provider,
+            config_path,
+            app_config: AppConfig::default(),
+            loaded: false,
         }
-
-        // Load existing config or create default
-        let config = if config_file.exists() {
-            Self::load_config(&config_file)?
-        } else {
-            let default_config = FrontendConfig::default();
-            Self::save_config(&config_file, &default_config)?;
-            info!("Created default config file: {:?}", config_file);
-            default_config
-        };
-
-        Ok(Self {
-            config_dir,
-            config_file,
-            config,
-        })
     }
 
     /// Load configuration from file
-    fn load_config(path: &Path) -> Result<FrontendConfig> {
-        debug!("Loading config from: {:?}", path);
+    ///
+    /// If the configuration file doesn't exist, uses default configuration.
+    /// This method is safe to call multiple times.
+    pub fn load(&mut self) -> CoreResult<()> {
+        match self.file_provider.read_archive(&self.config_path) {
+            Ok(data) => {
+                let config_str =
+                    String::from_utf8(data).map_err(|e| CoreError::SerializationError {
+                        message: format!("Invalid UTF-8 in config file: {e}"),
+                    })?;
 
-        let content = fs::read_to_string(path)
-            .with_context(|| format!("Failed to read config file: {path:?}"))?;
+                self.app_config = serde_yaml::from_str(&config_str).map_err(|e| {
+                    CoreError::SerializationError {
+                        message: format!("Failed to parse config YAML: {e}"),
+                    }
+                })?;
 
-        let mut config: FrontendConfig = serde_yaml::from_str(&content)
-            .with_context(|| format!("Failed to parse config file: {path:?}"))?;
-
-        // Validate and clean up recent repositories
-        config.repository.recent_repositories.retain(|repo| {
-            if repo.exists() {
-                true
-            } else {
-                warn!(
-                    "Removing non-existent repository from recent list: {:?}",
-                    repo.path
-                );
-                false
+                self.loaded = true;
+                Ok(())
             }
-        });
-
-        info!("Successfully loaded config from: {:?}", path);
-        Ok(config)
+            Err(_) => {
+                // Config file doesn't exist, use defaults
+                self.app_config = AppConfig::default();
+                self.loaded = true;
+                Ok(())
+            }
+        }
     }
 
     /// Save configuration to file
-    fn save_config(path: &Path, config: &FrontendConfig) -> Result<()> {
-        debug!("Saving config to: {:?}", path);
+    pub fn save(&self) -> CoreResult<()> {
+        if !self.loaded {
+            return Err(CoreError::NotInitialized);
+        }
 
-        let content = serde_yaml::to_string(config).context("Failed to serialize config")?;
+        let config_yaml =
+            serde_yaml::to_string(&self.app_config).map_err(|e| CoreError::SerializationError {
+                message: format!("Failed to serialize config: {e}"),
+            })?;
 
-        fs::write(path, content)
-            .with_context(|| format!("Failed to write config file: {path:?}"))?;
+        self.file_provider
+            .write_archive(&self.config_path, config_yaml.as_bytes())
+            .map_err(CoreError::FileOperation)?;
 
-        info!("Successfully saved config to: {:?}", path);
         Ok(())
     }
 
-    /// Get the current configuration
-    pub fn config(&self) -> &FrontendConfig {
-        &self.config
+    /// Get immutable reference to configuration
+    pub fn config(&self) -> &AppConfig {
+        &self.app_config
     }
 
     /// Get mutable reference to configuration
-    pub fn config_mut(&mut self) -> &mut FrontendConfig {
-        &mut self.config
+    pub fn config_mut(&mut self) -> &mut AppConfig {
+        &mut self.app_config
     }
 
-    /// Save the current configuration to disk
-    pub fn save(&self) -> Result<()> {
-        Self::save_config(&self.config_file, &self.config)
+    /// Check if configuration has been loaded
+    pub fn is_loaded(&self) -> bool {
+        self.loaded
     }
 
-    /// Set the repository path and add to recent repositories
-    pub fn set_repository_path<P: Into<PathBuf>>(&mut self, path: P) -> Result<()> {
-        let path = path.into();
-        debug!("Setting repository path to: {:?}", path);
+    /// Add a repository to the recent repositories list
+    pub fn add_recent_repository(&mut self, repo_info: RepositoryInfo) {
+        // Remove existing entry if present
+        self.app_config
+            .repositories
+            .retain(|r| r.path != repo_info.path);
 
-        // Update or add to recent repositories
-        let mut recent_repo = RecentRepository::new(&path);
+        // Add to front of list
+        self.app_config.repositories.insert(0, repo_info);
 
-        // Check if it already exists in recent list
-        if let Some(existing) = self
-            .config
-            .repository
-            .recent_repositories
-            .iter_mut()
-            .find(|r| r.path == path)
-        {
-            existing.touch();
-            if existing.pinned {
-                recent_repo.pinned = true;
-            }
-            if existing.display_name.is_some() {
-                recent_repo.display_name = existing.display_name.clone();
-            }
+        // Keep only the most recent entries
+        const MAX_RECENT: usize = 10;
+        if self.app_config.repositories.len() > MAX_RECENT {
+            self.app_config.repositories.truncate(MAX_RECENT);
         }
-
-        // Remove existing entry and add to front
-        self.config
-            .repository
-            .recent_repositories
-            .retain(|r| r.path != path);
-        self.config
-            .repository
-            .recent_repositories
-            .insert(0, recent_repo);
-
-        // Limit the number of recent repositories (keep pinned ones)
-        let max_recent = self.config.repository.max_recent;
-        if self.config.repository.recent_repositories.len() > max_recent {
-            // Separate pinned and unpinned repositories
-            let (mut pinned, mut unpinned): (Vec<_>, Vec<_>) = self
-                .config
-                .repository
-                .recent_repositories
-                .drain(..)
-                .partition(|r| r.pinned);
-
-            // Sort by last accessed
-            unpinned.sort_by(|a, b| b.last_accessed.cmp(&a.last_accessed));
-
-            // Keep all pinned + up to max_recent unpinned
-            pinned.extend(unpinned.into_iter().take(max_recent));
-            self.config.repository.recent_repositories = pinned;
-        }
-
-        self.config.repository.path = Some(path);
-        self.save()
     }
 
-    /// Get the current repository path
-    pub fn repository_path(&self) -> Option<&PathBuf> {
-        self.config.repository.path.as_ref()
+    /// Remove a repository from the recent repositories list
+    pub fn remove_recent_repository(&mut self, path: &str) {
+        self.app_config.repositories.retain(|r| r.path != path);
     }
 
-    /// Check if a repository is configured
-    pub fn has_repository(&self) -> bool {
-        self.config.repository.path.is_some()
-    }
-
-    /// Get recent repositories
-    pub fn recent_repositories(&self) -> &[RecentRepository] {
-        &self.config.repository.recent_repositories
-    }
-
-    /// Remove a repository from recent list
-    pub fn remove_recent_repository(&mut self, path: &Path) -> Result<()> {
-        self.config
-            .repository
-            .recent_repositories
-            .retain(|r| r.path != path);
-
-        // If this was the current repository, clear it
-        if self.config.repository.path.as_ref() == Some(&path.to_path_buf()) {
-            self.config.repository.path = None;
-        }
-
-        self.save()
-    }
-
-    /// Pin or unpin a recent repository
-    pub fn set_repository_pinned(&mut self, path: &Path, pinned: bool) -> Result<()> {
+    /// Update the last accessed time for a repository
+    pub fn touch_repository(&mut self, path: &str) {
         if let Some(repo) = self
-            .config
-            .repository
-            .recent_repositories
+            .app_config
+            .repositories
             .iter_mut()
             .find(|r| r.path == path)
         {
-            repo.pinned = pinned;
-            self.save()
-        } else {
-            Ok(())
+            repo.last_accessed = Some(chrono::Utc::now());
         }
     }
 
-    /// Set display name for a repository
-    pub fn set_repository_display_name(&mut self, path: &Path, name: Option<String>) -> Result<()> {
-        if let Some(repo) = self
-            .config
-            .repository
-            .recent_repositories
-            .iter_mut()
-            .find(|r| r.path == path)
+    /// Get recent repositories sorted by last accessed (most recent first)
+    pub fn get_recent_repositories(&self) -> Vec<&RepositoryInfo> {
+        let mut repos: Vec<&RepositoryInfo> = self.app_config.repositories.iter().collect();
+        repos.sort_by(|a, b| match (a.last_accessed, b.last_accessed) {
+            (Some(a_time), Some(b_time)) => b_time.cmp(&a_time),
+            (Some(_), None) => std::cmp::Ordering::Less,
+            (None, Some(_)) => std::cmp::Ordering::Greater,
+            (None, None) => std::cmp::Ordering::Equal,
+        });
+        repos
+    }
+}
+
+/// Default configuration paths for different platforms
+pub struct ConfigPaths;
+
+impl ConfigPaths {
+    /// Get the default application config directory for the current platform
+    #[cfg(target_os = "linux")]
+    pub fn app_config_dir() -> String {
+        if let Ok(xdg_config_home) = std::env::var("XDG_CONFIG_HOME") {
+            format!("{xdg_config_home}/ziplock")
+        } else if let Ok(home) = std::env::var("HOME") {
+            format!("{home}/.config/ziplock")
+        } else {
+            "./.config/ziplock".to_string()
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    pub fn app_config_dir() -> String {
+        if let Ok(appdata) = std::env::var("APPDATA") {
+            format!("{}\\ZipLock", appdata)
+        } else {
+            ".\\config".to_string()
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    pub fn app_config_dir() -> String {
+        if let Ok(home) = std::env::var("HOME") {
+            format!("{}/Library/Application Support/ZipLock", home)
+        } else {
+            "./config".to_string()
+        }
+    }
+
+    #[cfg(not(any(target_os = "linux", target_os = "windows", target_os = "macos")))]
+    pub fn app_config_dir() -> String {
+        "./config".to_string()
+    }
+
+    /// Get the default application config file path
+    pub fn app_config_file() -> String {
+        format!("{}/config.yml", Self::app_config_dir())
+    }
+
+    /// Get the default repositories directory
+    pub fn default_repositories_dir() -> String {
+        #[cfg(target_os = "linux")]
         {
-            repo.display_name = name;
-            self.save()
-        } else {
-            Ok(())
-        }
-    }
-
-    /// Discover repositories in configured search directories
-    pub fn discover_repositories(&self) -> Vec<RepositoryInfo> {
-        let mut repositories = Vec::new();
-
-        // Search in default directory
-        if let Some(default_dir) = &self.config.repository.default_directory {
-            if let Ok(repos) = repository::find_repositories_in_directory(default_dir) {
-                repositories.extend(repos);
+            if let Ok(home) = std::env::var("HOME") {
+                format!("{home}/Documents/ZipLock")
+            } else {
+                "./repositories".to_string()
             }
         }
 
-        // Search in additional directories
-        for search_dir in &self.config.repository.search_directories {
-            if let Ok(repos) = repository::find_repositories_in_directory(search_dir) {
-                repositories.extend(repos);
+        #[cfg(target_os = "windows")]
+        {
+            if let Ok(userprofile) = std::env::var("USERPROFILE") {
+                format!("{}\\Documents\\ZipLock", userprofile)
+            } else {
+                ".\\repositories".to_string()
             }
         }
 
-        // Remove duplicates and sort by last modified
-        repositories.sort_by(|a, b| b.last_modified.cmp(&a.last_modified));
-        repositories.dedup_by(|a, b| a.path == b.path);
+        #[cfg(target_os = "macos")]
+        {
+            if let Ok(home) = std::env::var("HOME") {
+                format!("{}/Documents/ZipLock", home)
+            } else {
+                "./repositories".to_string()
+            }
+        }
 
-        repositories
-    }
-
-    /// Get repositories that exist from recent list
-    pub fn get_accessible_recent_repositories(&self) -> Vec<RepositoryInfo> {
-        self.config
-            .repository
-            .recent_repositories
-            .iter()
-            .filter(|r| r.exists())
-            .filter_map(|r| RepositoryInfo::from_path(&r.path).ok())
-            .collect()
-    }
-
-    /// Update UI settings
-    pub fn set_window_size(&mut self, width: u32, height: u32) -> Result<()> {
-        self.config.ui.window_width = width;
-        self.config.ui.window_height = height;
-        self.save()
-    }
-
-    /// Get config directory path
-    pub fn config_directory(&self) -> &PathBuf {
-        &self.config_dir
-    }
-
-    /// Add a search directory for repositories
-    pub fn add_search_directory<P: Into<PathBuf>>(&mut self, dir: P) -> Result<()> {
-        let dir = dir.into();
-        if !self.config.repository.search_directories.contains(&dir) {
-            self.config.repository.search_directories.push(dir);
-            self.save()
-        } else {
-            Ok(())
+        #[cfg(not(any(target_os = "linux", target_os = "windows", target_os = "macos")))]
+        {
+            "./repositories".to_string()
         }
     }
+}
 
-    /// Remove a search directory
-    pub fn remove_search_directory(&mut self, dir: &Path) -> Result<()> {
-        self.config
-            .repository
-            .search_directories
-            .retain(|d| d != dir);
-        self.save()
+/// Configuration validation utilities
+pub struct ConfigValidator;
+
+impl ConfigValidator {
+    /// Validate application configuration
+    pub fn validate_app_config(config: &AppConfig) -> Vec<String> {
+        let mut errors = Vec::new();
+
+        // Validate UI configuration
+        if config.ui.auto_lock_timeout == 0 {
+            errors.push("Auto lock timeout cannot be zero".to_string());
+        }
+
+        if config.ui.auto_lock_timeout > 86400 {
+            errors.push("Auto lock timeout cannot exceed 24 hours".to_string());
+        }
+
+        // Validate security configuration
+        if config.security.password_timeout > 3600 {
+            errors.push("Password timeout should not exceed 1 hour for security".to_string());
+        }
+
+        if config.security.clipboard_timeout > 300 {
+            errors.push("Clipboard timeout should not exceed 5 minutes for security".to_string());
+        }
+
+        // Validate repository paths
+        for repo in &config.repositories {
+            if repo.path.is_empty() {
+                errors.push(format!("Repository '{}' has empty path", repo.name));
+            }
+
+            if repo.name.is_empty() {
+                errors.push(format!("Repository at '{}' has empty name", repo.path));
+            }
+        }
+
+        errors
+    }
+
+    /// Check if a repository path appears to be valid
+    pub fn is_valid_repository_path(path: &str) -> bool {
+        !path.is_empty() && (path.ends_with(".7z") || path.ends_with(".zip"))
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::fs::File;
-    use tempfile::TempDir;
+    use crate::core::MockFileProvider;
 
     #[test]
-    fn test_default_config() {
-        let config = FrontendConfig::default();
-        assert!(config.repository.path.is_none());
-        assert!(config.ui.window_width > 0);
-        assert!(config.ui.window_height > 0);
-        assert_eq!(config.app.auto_lock_timeout, 15);
-        assert_eq!(config.version, "1.0");
+    fn test_config_manager_lifecycle() {
+        let provider = MockFileProvider::new();
+        let config_path = "/test/config.yml".to_string();
+
+        let mut manager = ConfigManager::new(provider, config_path);
+        assert!(!manager.is_loaded());
+
+        // Load should succeed even if file doesn't exist
+        manager.load().unwrap();
+        assert!(manager.is_loaded());
+
+        // Should have default config
+        assert_eq!(manager.config().ui.theme, "system");
     }
 
     #[test]
-    fn test_config_serialization() {
-        let config = FrontendConfig::default();
-        let serialized = serde_yaml::to_string(&config).unwrap();
-        let deserialized: FrontendConfig = serde_yaml::from_str(&serialized).unwrap();
+    fn test_recent_repositories_management() {
+        let provider = MockFileProvider::new();
+        let mut manager = ConfigManager::new(provider, "/test/config.yml".to_string());
+        manager.load().unwrap();
 
-        assert_eq!(config.ui.window_width, deserialized.ui.window_width);
-        assert_eq!(
-            config.app.auto_lock_timeout,
-            deserialized.app.auto_lock_timeout
-        );
-        assert_eq!(config.version, deserialized.version);
+        let repo1 = RepositoryInfo {
+            name: "Test Repo 1".to_string(),
+            path: "/path/to/repo1.7z".to_string(),
+            last_accessed: None,
+            pinned: false,
+            settings: Default::default(),
+        };
+
+        let repo2 = RepositoryInfo {
+            name: "Test Repo 2".to_string(),
+            path: "/path/to/repo2.7z".to_string(),
+            last_accessed: None,
+            pinned: false,
+            settings: Default::default(),
+        };
+
+        manager.add_recent_repository(repo1);
+        manager.add_recent_repository(repo2);
+
+        let recent = manager.get_recent_repositories();
+        assert_eq!(recent.len(), 2);
+        assert_eq!(recent[0].name, "Test Repo 2"); // Most recently accessed first
     }
 
     #[test]
-    fn test_recent_repository() {
-        let path = PathBuf::from("/test/repo.7z");
-        let mut recent = RecentRepository::new(&path);
+    fn test_config_validation() {
+        let mut config = AppConfig::default();
+        let errors = ConfigValidator::validate_app_config(&config);
+        assert!(errors.is_empty());
 
-        assert_eq!(recent.path, path);
-        assert_eq!(recent.display_name(), "repo");
-        assert!(!recent.pinned);
-
-        recent.pinned = true;
-        let old_time = recent.last_accessed;
-        std::thread::sleep(std::time::Duration::from_millis(1));
-        recent.touch();
-        assert!(recent.last_accessed > old_time);
+        // Test invalid timeout
+        config.ui.auto_lock_timeout = 0;
+        let errors = ConfigValidator::validate_app_config(&config);
+        assert!(!errors.is_empty());
     }
 
     #[test]
-    fn test_repository_info() {
-        let temp_dir = TempDir::new().unwrap();
-        let repo_path = temp_dir.path().join("test.7z");
-
-        // Create a test file
-        File::create(&repo_path).unwrap();
-
-        let info = RepositoryInfo::from_path(&repo_path).unwrap();
-        assert_eq!(info.path, repo_path);
-        assert_eq!(info.display_name, "test");
-        assert!(info.has_valid_extension());
-        assert!(info.accessible);
+    fn test_repository_path_validation() {
+        assert!(ConfigValidator::is_valid_repository_path(
+            "/path/to/repo.7z"
+        ));
+        assert!(ConfigValidator::is_valid_repository_path(
+            "/path/to/repo.zip"
+        ));
+        assert!(!ConfigValidator::is_valid_repository_path(
+            "/path/to/repo.txt"
+        ));
+        assert!(!ConfigValidator::is_valid_repository_path(""));
     }
 
     #[test]
-    fn test_repository_manager_recent_list() {
-        let mut config = FrontendConfig::default();
-        config.repository.max_recent = 3;
+    fn test_config_paths() {
+        let config_dir = ConfigPaths::app_config_dir();
+        assert!(!config_dir.is_empty());
 
-        // Simulate adding repositories
-        let paths = vec![
-            PathBuf::from("/test/repo1.7z"),
-            PathBuf::from("/test/repo2.7z"),
-            PathBuf::from("/test/repo3.7z"),
-            PathBuf::from("/test/repo4.7z"),
-        ];
+        let config_file = ConfigPaths::app_config_file();
+        assert!(config_file.contains("config.yml"));
 
-        let mut recent_repos = Vec::new();
-        for path in &paths {
-            let mut repo = RecentRepository::new(path);
-            // Pin the second repository
-            if path.to_string_lossy().contains("repo2") {
-                repo.pinned = true;
-            }
-            recent_repos.insert(0, repo);
-        }
-
-        config.repository.recent_repositories = recent_repos;
-
-        // Simulate trimming logic
-        let max_recent = config.repository.max_recent;
-        if config.repository.recent_repositories.len() > max_recent {
-            let (pinned, mut unpinned): (Vec<_>, Vec<_>) = config
-                .repository
-                .recent_repositories
-                .drain(..)
-                .partition(|r| r.pinned);
-
-            unpinned.sort_by(|a, b| b.last_accessed.cmp(&a.last_accessed));
-            let mut result = pinned;
-            result.extend(unpinned.into_iter().take(max_recent));
-            config.repository.recent_repositories = result;
-        }
-
-        // Should keep pinned repo plus 3 most recent
-        assert!(config.repository.recent_repositories.len() <= max_recent + 1);
-        assert!(config
-            .repository
-            .recent_repositories
-            .iter()
-            .any(|r| r.pinned));
+        let repos_dir = ConfigPaths::default_repositories_dir();
+        assert!(!repos_dir.is_empty());
     }
 }

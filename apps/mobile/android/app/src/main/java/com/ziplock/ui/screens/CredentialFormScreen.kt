@@ -33,27 +33,34 @@ fun CredentialFormScreen(
     errorMessage: String? = null,
     modifier: Modifier = Modifier
 ) {
+    // Debug existing credential data
+    existingCredential?.let { cred ->
+        println("CredentialFormScreen: Received existing credential:")
+        println("CredentialFormScreen: - ID: '${cred.id}'")
+        println("CredentialFormScreen: - Title: '${cred.title}'")
+        println("CredentialFormScreen: - Fields: ${cred.fields.keys}")
+        cred.fields.forEach { (key, field) ->
+            println("CredentialFormScreen: - Field '$key' = '${field.value}' (${field.fieldType})")
+        }
+    }
     // Form state
     var title by remember { mutableStateOf(existingCredential?.title ?: "") }
     var fieldValues by remember {
         mutableStateOf<Map<String, String>>(
-            template.fields.associate { field: ZipLockNativeHelper.FieldTemplate ->
-                field.name to (getExistingFieldValue(existingCredential, field.name) ?: field.defaultValue ?: "")
+            template.fields.associate { field: ZipLockNativeHelper.TemplateField ->
+                field.name to (getExistingFieldValue(existingCredential, field.name) ?: "")
             }
         )
     }
     var tags by remember {
         mutableStateOf<String>(
-            existingCredential?.tags?.joinToString(", ") ?: template.defaultTags.joinToString(", ")
+            existingCredential?.tags?.joinToString(", ") ?: ""
         )
     }
 
-    // Validation state
-    val isFormValid = remember(title, fieldValues) {
-        title.isNotBlank() && template.fields.filter { field: ZipLockNativeHelper.FieldTemplate -> field.required }.all { field: ZipLockNativeHelper.FieldTemplate ->
-            val value = fieldValues[field.name]
-            !value.isNullOrBlank()
-        }
+    // Validation state - only title is required
+    val isFormValid = remember(title) {
+        title.isNotBlank()
     }
 
     val focusManager = LocalFocusManager.current
@@ -120,7 +127,7 @@ fun CredentialFormScreen(
             ),
             verticalArrangement = Arrangement.spacedBy(ZipLockSpacing.Standard)
         ) {
-            // Title field
+            // Single Card containing all form fields
             item {
                 Card(
                     colors = CardDefaults.cardColors(containerColor = ZipLockColors.White),
@@ -130,84 +137,118 @@ fun CredentialFormScreen(
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(ZipLockSpacing.Standard)
+                            .padding(ZipLockSpacing.Standard),
+                        verticalArrangement = Arrangement.spacedBy(ZipLockSpacing.Standard)
                     ) {
-                        Text(
-                            text = "Title *",
-                            style = ZipLockTypography.Medium,
-                            color = ZipLockColors.DarkText,
-                            fontWeight = FontWeight.Medium
-                        )
+                        // Title field
+                        Column {
+                            Text(
+                                text = "Title *",
+                                style = ZipLockTypography.Medium,
+                                color = ZipLockColors.DarkText,
+                                fontWeight = FontWeight.Medium
+                            )
 
-                        Spacer(modifier = Modifier.height(ZipLockSpacing.Small))
+                            Spacer(modifier = Modifier.height(ZipLockSpacing.Small))
 
-                        ZipLockTextInput(
-                            value = title,
-                            onValueChange = { title = it },
-                            placeholder = "Enter a title for this credential",
-                            imeAction = ImeAction.Next,
-                            keyboardActions = KeyboardActions(
-                                onNext = { focusManager.moveFocus(FocusDirection.Down) }
-                            ),
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                    }
-                }
-            }
+                            ZipLockTextInput(
+                                value = title,
+                                onValueChange = { title = it },
+                                placeholder = "Enter a title for this credential",
+                                imeAction = ImeAction.Next,
+                                keyboardActions = KeyboardActions(
+                                    onNext = { focusManager.moveFocus(FocusDirection.Down) }
+                                ),
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
 
-            // Template fields
-            items(template.fields) { field ->
-                CredentialFieldInput(
-                    field = field,
-                    value = fieldValues[field.name] ?: "",
-                    onValueChange = { newValue ->
-                        fieldValues = fieldValues + (field.name to newValue)
-                    },
-                    isLastField = field == template.fields.last(),
-                    onNext = { focusManager.moveFocus(FocusDirection.Down) },
-                    onDone = { focusManager.clearFocus() }
-                )
-            }
+                        // Template fields
+                        template.fields.forEach { field ->
+                            Column {
+                                // Field label
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = field.label,
+                                        style = ZipLockTypography.Medium,
+                                        color = ZipLockColors.DarkText,
+                                        fontWeight = FontWeight.Medium
+                                    )
 
-            // Tags field
-            item {
-                Card(
-                    colors = CardDefaults.cardColors(containerColor = ZipLockColors.White),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-                    shape = RoundedCornerShape(ZipLockSpacing.BorderRadius)
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(ZipLockSpacing.Standard)
-                    ) {
-                        Text(
-                            text = "Tags",
-                            style = ZipLockTypography.Medium,
-                            color = ZipLockColors.DarkText,
-                            fontWeight = FontWeight.Medium
-                        )
+                                    if (field.required) {
+                                        Text(
+                                            text = " *",
+                                            style = ZipLockTypography.Medium,
+                                            color = ZipLockColors.ErrorRed,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                    }
+                                }
 
-                        Spacer(modifier = Modifier.height(ZipLockSpacing.Small))
+                                Spacer(modifier = Modifier.height(ZipLockSpacing.Small))
 
-                        Text(
-                            text = "Separate multiple tags with commas",
-                            style = ZipLockTypography.Small,
-                            color = ZipLockColors.LightGrayText
-                        )
+                                // Field input
+                                ZipLockTextInput(
+                                    value = fieldValues[field.name] ?: "",
+                                    onValueChange = { newValue ->
+                                        fieldValues = fieldValues + (field.name to newValue)
+                                    },
+                                    placeholder = getFieldPlaceholder(field),
+                                    isPassword = field.sensitive && field.fieldType.lowercase() != "textarea",
+                                    singleLine = field.fieldType.lowercase() != "textarea",
+                                    keyboardType = getKeyboardType(field.fieldType),
+                                    imeAction = if (field == template.fields.last()) ImeAction.Next else ImeAction.Next,
+                                    keyboardActions = KeyboardActions(
+                                        onNext = { focusManager.moveFocus(FocusDirection.Down) },
+                                        onDone = { focusManager.moveFocus(FocusDirection.Down) }
+                                    ),
+                                    modifier = Modifier.fillMaxWidth()
+                                )
 
-                        Spacer(modifier = Modifier.height(ZipLockSpacing.Small))
+                                // Required field validation
+                                if (field.required && (fieldValues[field.name] ?: "").isBlank()) {
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        text = "This field is required",
+                                        style = ZipLockTypography.Small,
+                                        color = ZipLockColors.ErrorRed
+                                    )
+                                }
+                            }
+                        }
 
-                        ZipLockTextInput(
-                            value = tags,
-                            onValueChange = { tags = it },
-                            placeholder = "e.g., work, personal, important",
-                            imeAction = ImeAction.Done,
-                            keyboardActions = KeyboardActions(
-                                onDone = { focusManager.clearFocus() }
-                            ),
-                            modifier = Modifier.fillMaxWidth()
-                        )
+                        // Tags field
+                        Column {
+                            Text(
+                                text = "Tags",
+                                style = ZipLockTypography.Medium,
+                                color = ZipLockColors.DarkText,
+                                fontWeight = FontWeight.Medium
+                            )
+
+                            Spacer(modifier = Modifier.height(ZipLockSpacing.Small))
+
+                            Text(
+                                text = "Separate multiple tags with commas",
+                                style = ZipLockTypography.Small,
+                                color = ZipLockColors.LightGrayText
+                            )
+
+                            Spacer(modifier = Modifier.height(ZipLockSpacing.Small))
+
+                            ZipLockTextInput(
+                                value = tags,
+                                onValueChange = { tags = it },
+                                placeholder = "e.g., work, personal, important",
+                                imeAction = ImeAction.Done,
+                                keyboardActions = KeyboardActions(
+                                    onDone = { focusManager.clearFocus() }
+                                ),
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
                     }
                 }
             }
@@ -285,83 +326,12 @@ private fun CredentialFormHeader(
     }
 }
 
-@Composable
-private fun CredentialFieldInput(
-    field: ZipLockNativeHelper.FieldTemplate,
-    value: String,
-    onValueChange: (String) -> Unit,
-    isLastField: Boolean,
-    onNext: () -> Unit,
-    onDone: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Card(
-        modifier = modifier,
-        colors = CardDefaults.cardColors(containerColor = ZipLockColors.White),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-        shape = RoundedCornerShape(ZipLockSpacing.BorderRadius)
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(ZipLockSpacing.Standard)
-        ) {
-            // Field label
-            Row(
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = field.label,
-                    style = ZipLockTypography.Medium,
-                    color = ZipLockColors.DarkText,
-                    fontWeight = FontWeight.Medium
-                )
-
-                if (field.required) {
-                    Text(
-                        text = " *",
-                        style = ZipLockTypography.Medium,
-                        color = ZipLockColors.ErrorRed,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(ZipLockSpacing.Small))
-
-            // Field input
-            ZipLockTextInput(
-                value = value,
-                onValueChange = onValueChange,
-                placeholder = getFieldPlaceholder(field),
-                isPassword = field.sensitive && field.fieldType.lowercase() != "textarea",
-                singleLine = field.fieldType.lowercase() != "textarea",
-                keyboardType = getKeyboardType(field.fieldType),
-                imeAction = if (isLastField) ImeAction.Done else ImeAction.Next,
-                keyboardActions = KeyboardActions(
-                    onNext = { onNext() },
-                    onDone = { onDone() }
-                ),
-                modifier = Modifier.fillMaxWidth()
-            )
-
-            // Required field validation
-            if (field.required && value.isBlank()) {
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = "This field is required",
-                    style = ZipLockTypography.Small,
-                    color = ZipLockColors.ErrorRed
-                )
-            }
-        }
-    }
-}
+// CredentialFieldInput function removed - fields are now inline in the main Card
 
 /**
  * Get placeholder text for a field
  */
-private fun getFieldPlaceholder(field: ZipLockNativeHelper.FieldTemplate): String {
+private fun getFieldPlaceholder(field: ZipLockNativeHelper.TemplateField): String {
     return when (field.fieldType.lowercase()) {
         "email" -> "example@domain.com"
         "url" -> "https://example.com"
@@ -396,13 +366,16 @@ private fun getKeyboardType(fieldType: String): KeyboardType {
 private fun getExistingFieldValue(credential: ZipLockNative.Credential?, fieldName: String): String? {
     if (credential == null) return null
 
-    return when (fieldName.lowercase()) {
-        "username" -> credential.username
-        "url", "website" -> credential.url
-        "notes", "note" -> credential.notes
-        "content" -> credential.notes  // For secure notes, content is stored in notes field
-        else -> null
+    val value = when (fieldName.lowercase()) {
+        "username" -> credential.fields["Username"]?.value ?: credential.fields["username"]?.value
+        "url", "website" -> credential.fields["Website URL"]?.value ?: credential.fields["url"]?.value ?: credential.fields["website"]?.value
+        "notes", "note" -> credential.fields["Notes"]?.value ?: credential.fields["notes"]?.value ?: credential.fields["note"]?.value
+        "content" -> credential.fields["content"]?.value ?: credential.fields["Notes"]?.value ?: credential.fields["notes"]?.value
+        else -> credential.fields[fieldName]?.value
     }
+
+    println("CredentialFormScreen: getExistingFieldValue('$fieldName') = '$value'")
+    return value
 }
 
 /**

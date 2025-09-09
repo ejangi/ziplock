@@ -407,7 +407,7 @@ object FileUtils {
         return if (isAndroidSafAvailable()) {
             try {
                 // Test if we can access the content URI through Android SAF
-                val testResult = com.ziplock.ffi.ZipLockNative.testAndroidSaf(contentUri)
+                val testResult = com.ziplock.ffi.ZipLockNative.testAndroidSaf()
 
                 FileAccessibilityInfo(
                     exists = testResult,

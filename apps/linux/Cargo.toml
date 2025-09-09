@@ -16,13 +16,14 @@ path = "src/main.rs"
 
 [dependencies]
 # Workspace dependencies
-ziplock-shared = { path = "../../shared", features = ["c-api"] }
+ziplock-shared = { path = "../../shared" }
 tokio.workspace = true
 serde.workspace = true
 anyhow.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
+chrono = "0.4"
 
 
 # GUI framework - using iced as primary choice

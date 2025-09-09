@@ -3,17 +3,20 @@
 //! This module contains the core data structures used throughout the
 //! ZipLock application, including credential records, field types,
 //! and validation logic.
+//! Shared credential, field, and template models
 
 pub mod credential;
 pub mod field;
+pub mod template;
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::time::SystemTime;
+
 use uuid::Uuid;
 
 pub use credential::*;
 pub use field::*;
+pub use template::*;
 
 /// A complete credential record as stored in the archive
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -36,11 +39,20 @@ pub struct CredentialRecord {
     /// Optional notes/description
     pub notes: Option<String>,
 
-    /// When this credential was created
-    pub created_at: SystemTime,
+    /// When this credential was created (Unix timestamp)
+    pub created_at: i64,
 
-    /// When this credential was last modified
-    pub updated_at: SystemTime,
+    /// When this credential was last modified (Unix timestamp)
+    pub updated_at: i64,
+
+    /// When this credential was last accessed (Unix timestamp)
+    pub accessed_at: i64,
+
+    /// Whether this credential is marked as favorite
+    pub favorite: bool,
+
+    /// Optional folder path for organization
+    pub folder_path: Option<String>,
 }
 
 /// A credential field that can hold different types of data
@@ -108,22 +120,6 @@ pub enum FieldType {
     Custom(String),
 }
 
-/// Credential templates for common types
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CredentialTemplate {
-    /// Template name
-    pub name: String,
-
-    /// Template description
-    pub description: String,
-
-    /// Default fields for this template
-    pub fields: Vec<FieldTemplate>,
-
-    /// Default tags to apply
-    pub default_tags: Vec<String>,
-}
-
 /// Template for a field in a credential template
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FieldTemplate {
@@ -168,7 +164,11 @@ pub struct FieldValidation {
 impl CredentialRecord {
     /// Create a new credential record with generated ID
     pub fn new(title: String, credential_type: String) -> Self {
-        let now = SystemTime::now();
+        use std::time::{SystemTime, UNIX_EPOCH};
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as i64;
 
         Self {
             id: Uuid::new_v4().to_string(),
@@ -179,36 +179,25 @@ impl CredentialRecord {
             notes: None,
             created_at: now,
             updated_at: now,
+            accessed_at: now,
+            favorite: false,
+            folder_path: None,
         }
     }
 
     /// Create a credential from a template
-    pub fn from_template(template: &CredentialTemplate, title: String) -> Self {
-        let mut credential = Self::new(title, template.name.clone());
+    pub fn from_template(_template: &FieldTemplate, title: String) -> Self {
+        let credential = Self::new(title, "custom".to_string());
 
-        // Add default fields from template
-        for field_template in &template.fields {
-            let field = CredentialField {
-                field_type: field_template.field_type.clone(),
-                value: field_template.default_value.clone().unwrap_or_default(),
-                sensitive: field_template.sensitive,
-                label: Some(field_template.label.clone()),
-                metadata: HashMap::new(),
-            };
-
-            credential.fields.insert(field_template.name.clone(), field);
-        }
-
-        // Add default tags
-        credential.tags = template.default_tags.clone();
-
+        // For now, just create a basic credential
+        // This method is deprecated in favor of using template::CredentialTemplate
         credential
     }
 
     /// Add or update a field
     pub fn set_field<S: Into<String>>(&mut self, name: S, field: CredentialField) {
         self.fields.insert(name.into(), field);
-        self.updated_at = SystemTime::now();
+        self.updated_at = chrono::Utc::now().timestamp();
     }
 
     /// Get a field by name
@@ -218,7 +207,7 @@ impl CredentialRecord {
 
     /// Remove a field
     pub fn remove_field(&mut self, name: &str) -> Option<CredentialField> {
-        self.updated_at = SystemTime::now();
+        self.updated_at = chrono::Utc::now().timestamp();
         self.fields.remove(name)
     }
 
@@ -227,7 +216,7 @@ impl CredentialRecord {
         let tag = tag.into();
         if !self.tags.contains(&tag) {
             self.tags.push(tag);
-            self.updated_at = SystemTime::now();
+            self.updated_at = chrono::Utc::now().timestamp();
         }
     }
 
@@ -235,7 +224,7 @@ impl CredentialRecord {
     pub fn remove_tag(&mut self, tag: &str) -> bool {
         if let Some(pos) = self.tags.iter().position(|t| t == tag) {
             self.tags.remove(pos);
-            self.updated_at = SystemTime::now();
+            self.updated_at = chrono::Utc::now().timestamp();
             true
         } else {
             false
@@ -534,435 +523,6 @@ impl std::fmt::Display for FieldType {
 /// 12. **Software License** - Software license information (License Key, Product Name, Purchase Date)
 ///
 /// Each template includes appropriate field types, sensitivity settings, validation rules, and default tags.
-pub struct CommonTemplates;
-
-impl CommonTemplates {
-    /// Login credential template
-    pub fn login() -> CredentialTemplate {
-        CredentialTemplate {
-            name: "login".to_string(),
-            description: "Website or application login".to_string(),
-            fields: vec![
-                FieldTemplate {
-                    name: "username".to_string(),
-                    field_type: FieldType::Username,
-                    label: "Username".to_string(),
-                    required: false,
-                    sensitive: false,
-                    default_value: None,
-                    validation: None,
-                },
-                FieldTemplate {
-                    name: "password".to_string(),
-                    field_type: FieldType::Password,
-                    label: "Password".to_string(),
-                    required: false,
-                    sensitive: true,
-                    default_value: None,
-                    validation: Some(FieldValidation {
-                        min_length: Some(8),
-                        max_length: None,
-                        pattern: None,
-                        message: Some("Password must be at least 8 characters".to_string()),
-                    }),
-                },
-                FieldTemplate {
-                    name: "website".to_string(),
-                    field_type: FieldType::Url,
-                    label: "Website".to_string(),
-                    required: false,
-                    sensitive: false,
-                    default_value: None,
-                    validation: None,
-                },
-                FieldTemplate {
-                    name: "totp".to_string(),
-                    field_type: FieldType::TotpSecret,
-                    label: "2FA Secret".to_string(),
-                    required: false,
-                    sensitive: true,
-                    default_value: None,
-                    validation: None,
-                },
-            ],
-            default_tags: vec!["login".to_string()],
-        }
-    }
-
-    /// Credit card template
-    pub fn credit_card() -> CredentialTemplate {
-        CredentialTemplate {
-            name: "credit_card".to_string(),
-            description: "Credit card information".to_string(),
-            fields: vec![
-                FieldTemplate {
-                    name: "cardholder".to_string(),
-                    field_type: FieldType::Text,
-                    label: "Cardholder Name".to_string(),
-                    required: false,
-                    sensitive: false,
-                    default_value: None,
-                    validation: None,
-                },
-                FieldTemplate {
-                    name: "number".to_string(),
-                    field_type: FieldType::CreditCardNumber,
-                    label: "Card Number".to_string(),
-                    required: false,
-                    sensitive: true,
-                    default_value: None,
-                    validation: None,
-                },
-                FieldTemplate {
-                    name: "expiry".to_string(),
-                    field_type: FieldType::ExpiryDate,
-                    label: "Expiry Date".to_string(),
-                    required: false,
-                    sensitive: false,
-                    default_value: None,
-                    validation: None,
-                },
-                FieldTemplate {
-                    name: "cvv".to_string(),
-                    field_type: FieldType::Cvv,
-                    label: "CVV".to_string(),
-                    required: false,
-                    sensitive: true,
-                    default_value: None,
-                    validation: None,
-                },
-            ],
-            default_tags: vec!["credit_card".to_string()],
-        }
-    }
-
-    /// Secure note template
-    pub fn secure_note() -> CredentialTemplate {
-        CredentialTemplate {
-            name: "secure_note".to_string(),
-            description: "Secure note or document".to_string(),
-            fields: vec![FieldTemplate {
-                name: "content".to_string(),
-                field_type: FieldType::TextArea,
-                label: "Content".to_string(),
-                required: false,
-                sensitive: false,
-                default_value: None,
-                validation: None,
-            }],
-            default_tags: vec!["note".to_string()],
-        }
-    }
-
-    /// Identity template
-    pub fn identity() -> CredentialTemplate {
-        CredentialTemplate {
-            name: "identity".to_string(),
-            description: "Personal identity information".to_string(),
-            fields: vec![
-                FieldTemplate {
-                    name: "name".to_string(),
-                    field_type: FieldType::Text,
-                    label: "Full Name".to_string(),
-                    required: false,
-                    sensitive: false,
-                    default_value: None,
-                    validation: None,
-                },
-                FieldTemplate {
-                    name: "birthday".to_string(),
-                    field_type: FieldType::Date,
-                    label: "Date of Birth".to_string(),
-                    required: false,
-                    sensitive: false,
-                    default_value: None,
-                    validation: None,
-                },
-                FieldTemplate {
-                    name: "ssn".to_string(),
-                    field_type: FieldType::Text,
-                    label: "SSN/ID Number".to_string(),
-                    required: false,
-                    sensitive: true,
-                    default_value: None,
-                    validation: None,
-                },
-            ],
-            default_tags: vec!["identity".to_string()],
-        }
-    }
-
-    /// Password template
-    pub fn password() -> CredentialTemplate {
-        CredentialTemplate {
-            name: "password".to_string(),
-            description: "Password only".to_string(),
-            fields: vec![FieldTemplate {
-                name: "password".to_string(),
-                field_type: FieldType::Password,
-                label: "Password".to_string(),
-                required: false,
-                sensitive: true,
-                default_value: None,
-                validation: Some(FieldValidation {
-                    min_length: Some(8),
-                    max_length: None,
-                    pattern: None,
-                    message: Some("Password must be at least 8 characters".to_string()),
-                }),
-            }],
-            default_tags: vec!["password".to_string()],
-        }
-    }
-
-    /// Document template
-    pub fn document() -> CredentialTemplate {
-        CredentialTemplate {
-            name: "document".to_string(),
-            description: "Document with file attachment".to_string(),
-            fields: vec![
-                FieldTemplate {
-                    name: "title".to_string(),
-                    field_type: FieldType::Text,
-                    label: "Document Title".to_string(),
-                    required: false,
-                    sensitive: false,
-                    default_value: None,
-                    validation: None,
-                },
-                FieldTemplate {
-                    name: "file".to_string(),
-                    field_type: FieldType::Text,
-                    label: "File Path".to_string(),
-                    required: false,
-                    sensitive: false,
-                    default_value: None,
-                    validation: None,
-                },
-            ],
-            default_tags: vec!["document".to_string()],
-        }
-    }
-
-    /// SSH Key template
-    pub fn ssh_key() -> CredentialTemplate {
-        CredentialTemplate {
-            name: "ssh_key".to_string(),
-            description: "SSH key and passphrase".to_string(),
-            fields: vec![
-                FieldTemplate {
-                    name: "key".to_string(),
-                    field_type: FieldType::TextArea,
-                    label: "SSH Key".to_string(),
-                    required: false,
-                    sensitive: true,
-                    default_value: None,
-                    validation: None,
-                },
-                FieldTemplate {
-                    name: "passphrase".to_string(),
-                    field_type: FieldType::Password,
-                    label: "Passphrase".to_string(),
-                    required: false,
-                    sensitive: true,
-                    default_value: None,
-                    validation: None,
-                },
-            ],
-            default_tags: vec!["ssh".to_string()],
-        }
-    }
-
-    /// Bank account template
-    pub fn bank_account() -> CredentialTemplate {
-        CredentialTemplate {
-            name: "bank_account".to_string(),
-            description: "Bank account information".to_string(),
-            fields: vec![
-                FieldTemplate {
-                    name: "account_number".to_string(),
-                    field_type: FieldType::Text,
-                    label: "Account Number".to_string(),
-                    required: false,
-                    sensitive: true,
-                    default_value: None,
-                    validation: None,
-                },
-                FieldTemplate {
-                    name: "routing_number".to_string(),
-                    field_type: FieldType::Text,
-                    label: "Routing Number".to_string(),
-                    required: false,
-                    sensitive: false,
-                    default_value: None,
-                    validation: None,
-                },
-                FieldTemplate {
-                    name: "pin".to_string(),
-                    field_type: FieldType::Password,
-                    label: "PIN".to_string(),
-                    required: false,
-                    sensitive: true,
-                    default_value: None,
-                    validation: None,
-                },
-            ],
-            default_tags: vec!["bank".to_string()],
-        }
-    }
-
-    /// API credentials template
-    pub fn api_credentials() -> CredentialTemplate {
-        CredentialTemplate {
-            name: "api_credentials".to_string(),
-            description: "API key and secret".to_string(),
-            fields: vec![
-                FieldTemplate {
-                    name: "key".to_string(),
-                    field_type: FieldType::Text,
-                    label: "API Key".to_string(),
-                    required: false,
-                    sensitive: true,
-                    default_value: None,
-                    validation: None,
-                },
-                FieldTemplate {
-                    name: "secret".to_string(),
-                    field_type: FieldType::Password,
-                    label: "API Secret".to_string(),
-                    required: false,
-                    sensitive: true,
-                    default_value: None,
-                    validation: None,
-                },
-                FieldTemplate {
-                    name: "url".to_string(),
-                    field_type: FieldType::Url,
-                    label: "API URL".to_string(),
-                    required: false,
-                    sensitive: false,
-                    default_value: None,
-                    validation: None,
-                },
-            ],
-            default_tags: vec!["api".to_string()],
-        }
-    }
-
-    /// Crypto wallet template
-    pub fn crypto_wallet() -> CredentialTemplate {
-        CredentialTemplate {
-            name: "crypto_wallet".to_string(),
-            description: "Cryptocurrency wallet keys".to_string(),
-            fields: vec![
-                FieldTemplate {
-                    name: "public_key".to_string(),
-                    field_type: FieldType::TextArea,
-                    label: "Public Key".to_string(),
-                    required: false,
-                    sensitive: false,
-                    default_value: None,
-                    validation: None,
-                },
-                FieldTemplate {
-                    name: "private_key".to_string(),
-                    field_type: FieldType::TextArea,
-                    label: "Private Key/Seed Phrase".to_string(),
-                    required: false,
-                    sensitive: true,
-                    default_value: None,
-                    validation: None,
-                },
-            ],
-            default_tags: vec!["crypto".to_string()],
-        }
-    }
-
-    /// Database template
-    pub fn database() -> CredentialTemplate {
-        CredentialTemplate {
-            name: "database".to_string(),
-            description: "Database connection credentials".to_string(),
-            fields: vec![
-                FieldTemplate {
-                    name: "hostname".to_string(),
-                    field_type: FieldType::Text,
-                    label: "Hostname".to_string(),
-                    required: false,
-                    sensitive: false,
-                    default_value: None,
-                    validation: None,
-                },
-                FieldTemplate {
-                    name: "port".to_string(),
-                    field_type: FieldType::Number,
-                    label: "Port".to_string(),
-                    required: false,
-                    sensitive: false,
-                    default_value: None,
-                    validation: None,
-                },
-                FieldTemplate {
-                    name: "username".to_string(),
-                    field_type: FieldType::Username,
-                    label: "Username".to_string(),
-                    required: false,
-                    sensitive: false,
-                    default_value: None,
-                    validation: None,
-                },
-                FieldTemplate {
-                    name: "password".to_string(),
-                    field_type: FieldType::Password,
-                    label: "Password".to_string(),
-                    required: false,
-                    sensitive: true,
-                    default_value: None,
-                    validation: None,
-                },
-            ],
-            default_tags: vec!["database".to_string()],
-        }
-    }
-
-    /// Software license template
-    pub fn software_license() -> CredentialTemplate {
-        CredentialTemplate {
-            name: "software_license".to_string(),
-            description: "Software license information".to_string(),
-            fields: vec![
-                FieldTemplate {
-                    name: "license_key".to_string(),
-                    field_type: FieldType::TextArea,
-                    label: "License Key".to_string(),
-                    required: false,
-                    sensitive: true,
-                    default_value: None,
-                    validation: None,
-                },
-                FieldTemplate {
-                    name: "product_name".to_string(),
-                    field_type: FieldType::Text,
-                    label: "Product Name".to_string(),
-                    required: false,
-                    sensitive: false,
-                    default_value: None,
-                    validation: None,
-                },
-                FieldTemplate {
-                    name: "purchase_date".to_string(),
-                    field_type: FieldType::Date,
-                    label: "Purchase Date".to_string(),
-                    required: false,
-                    sensitive: false,
-                    default_value: None,
-                    validation: None,
-                },
-            ],
-            default_tags: vec!["license".to_string()],
-        }
-    }
-}
 
 #[cfg(test)]
 mod tests {
@@ -1035,13 +595,15 @@ mod tests {
     #[test]
     fn test_credential_from_template() {
         let template = CommonTemplates::login();
-        let cred = CredentialRecord::from_template(&template, "GitHub Login".to_string());
+        let cred = template
+            .create_credential("GitHub Login".to_string())
+            .unwrap();
 
         assert_eq!(cred.title, "GitHub Login");
         assert_eq!(cred.credential_type, "login");
         assert!(cred.get_field("username").is_some());
         assert!(cred.get_field("password").is_some());
-        assert!(cred.get_field("website").is_some());
+        assert!(cred.get_field("url").is_some());
         assert!(cred.has_tag("login"));
     }
 

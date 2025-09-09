@@ -3,6 +3,7 @@
 //! This view represents the primary interface shown after the initial setup wizard.
 //! It demonstrates how to use the shared theme system across different views.
 
+use crate::services::get_repository_service;
 use crate::ui::theme::container_styles;
 use crate::ui::theme::{EXTRA_LIGHT_GRAY, LIGHT_GRAY_TEXT, VERY_LIGHT_GRAY};
 use crate::ui::{button_styles, theme, utils};
@@ -36,6 +37,10 @@ pub enum MainViewMessage {
     ShowAbout,
     CheckForUpdates,
 
+    // Repository management
+    CloseRepository,
+    RepositoryOperationComplete(Result<String, String>),
+
     // Session management
     SessionTimeout,
     CloseArchive,
@@ -52,6 +57,7 @@ pub enum MainViewMessage {
 pub struct MainView {
     search_query: String,
     credentials: Vec<CredentialItem>,
+    filtered_credentials: Vec<CredentialItem>,
     session_id: Option<String>,
     is_authenticated: bool,
     selected_credential: Option<String>,
@@ -66,6 +72,7 @@ pub struct CredentialItem {
     pub username: String,
     pub url: Option<String>,
     pub last_modified: String,
+    pub credential_type: String,
 }
 
 impl MainView {
@@ -111,18 +118,27 @@ impl MainView {
         match message {
             MainViewMessage::SearchChanged(query) => {
                 self.search_query = query;
+                self.filter_credentials();
                 Command::none()
             }
 
             MainViewMessage::SearchSubmitted => {
-                // Search is already filtered in real-time via SearchChanged
-                // This handler satisfies the Enter key requirement
-                // Could be extended for additional search behaviors if needed
-                Command::none()
+                // Perform search using repository service for more advanced search
+                if !self.search_query.trim().is_empty() {
+                    self.is_loading = true;
+                    Command::perform(
+                        Self::search_credentials_async(self.search_query.clone()),
+                        MainViewMessage::CredentialsLoaded,
+                    )
+                } else {
+                    self.filter_credentials();
+                    Command::none()
+                }
             }
 
             MainViewMessage::ClearSearch => {
                 self.search_query.clear();
+                self.filter_credentials();
                 Command::none()
             }
 
@@ -162,6 +178,7 @@ impl MainView {
                     Ok((credentials, session_id, authenticated)) => {
                         let cred_count = credentials.len();
                         self.credentials = credentials;
+                        self.filter_credentials(); // Update filtered credentials after loading
                         if let Some(sid) = session_id {
                             self.session_id = Some(sid);
                         }
@@ -272,6 +289,30 @@ impl MainView {
                 Command::none()
             }
 
+            MainViewMessage::CloseRepository => {
+                // Close the current repository
+                tracing::info!("Closing repository...");
+                Command::perform(
+                    Self::close_repository_async(),
+                    MainViewMessage::RepositoryOperationComplete,
+                )
+            }
+
+            MainViewMessage::RepositoryOperationComplete(result) => {
+                match result {
+                    Ok(message) => {
+                        tracing::info!("Repository operation completed: {}", message);
+                        // Success messages are handled by the global toast system
+                        Command::none()
+                    }
+                    Err(error) => {
+                        tracing::error!("Repository operation failed: {}", error);
+                        // Error messages are handled by the global toast system
+                        Command::none()
+                    }
+                }
+            }
+
             MainViewMessage::SessionTimeout => {
                 // This is handled by the helper method and parent application
                 // Just return none as the timeout has already been processed
@@ -327,7 +368,7 @@ impl MainView {
                     .width(Length::Fixed(20.0))
                     .height(Length::Fixed(20.0)),
             )
-            .on_press(MainViewMessage::CheckForUpdates)
+            .on_press(MainViewMessage::RefreshCredentials)
             .padding(12)
             .style(button_styles::secondary()),
         )
@@ -451,25 +492,7 @@ impl MainView {
             .into();
         }
 
-        let filtered_credentials: Vec<&CredentialItem> = self
-            .credentials
-            .iter()
-            .filter(|cred| {
-                if self.search_query.is_empty() {
-                    true
-                } else {
-                    let query_lower = self.search_query.to_lowercase();
-                    cred.title.to_lowercase().contains(&query_lower)
-                        || cred.username.to_lowercase().contains(&query_lower)
-                        || cred
-                            .url
-                            .as_ref()
-                            .is_some_and(|url| url.to_lowercase().contains(&query_lower))
-                }
-            })
-            .collect();
-
-        if filtered_credentials.is_empty() {
+        if self.filtered_credentials.is_empty() {
             return if self.search_query.is_empty() {
                 if self.is_authenticated {
                     // No credentials and authenticated - show friendly empty state
@@ -559,7 +582,8 @@ impl MainView {
             };
         }
 
-        let credential_items: Vec<Element<MainViewMessage>> = filtered_credentials
+        let credential_items: Vec<Element<MainViewMessage>> = self
+            .filtered_credentials
             .iter()
             .map(|credential| self.view_credential_item(credential))
             .collect();
@@ -593,7 +617,7 @@ impl MainView {
             row![
                 svg(
                     crate::ui::theme::utils::typography::get_credential_type_icon(
-                        &credential.username
+                        &credential.credential_type
                     )
                 )
                 .width(Length::Fixed(20.0))
@@ -643,11 +667,11 @@ impl MainView {
     async fn load_credentials_async(
         session_id: Option<String>,
     ) -> Result<(Vec<CredentialItem>, Option<String>, bool), String> {
-        // Use credential store instead of hybrid client to avoid FFI issues
-        let credential_store = crate::services::get_credential_store();
+        // Use the new repository service
+        let repository_service = get_repository_service();
 
-        // Check if the credential store is unlocked (has credentials loaded)
-        if !credential_store.is_unlocked() {
+        // Check if repository is open
+        if !repository_service.is_open().await {
             return Ok((Vec::new(), session_id, false));
         }
 
@@ -662,26 +686,54 @@ impl MainView {
             format!("session_{}", timestamp)
         });
 
-        // Get credentials from the credential store
-        let simple_credentials = credential_store.list_credentials();
+        // Get credentials from the repository service
+        match repository_service.list_credentials().await {
+            Ok(credential_records) => {
+                let credentials: Vec<CredentialItem> = credential_records
+                    .into_iter()
+                    .map(|cred| {
+                        // Extract username from fields if available
+                        let username = cred
+                            .fields
+                            .iter()
+                            .find(|(_, field)| {
+                                field.field_type == ziplock_shared::models::FieldType::Username
+                            })
+                            .map(|(_, field)| field.value.clone())
+                            .unwrap_or_else(|| "No username".to_string());
 
-        let credentials: Vec<CredentialItem> = simple_credentials
-            .into_iter()
-            .map(|cred| CredentialItem {
-                id: cred.id.clone(),
-                title: cred.title,
-                username: cred.username.unwrap_or_else(|| "No username".to_string()),
-                url: cred.url,
-                last_modified: cred.updated_at,
-            })
-            .collect();
+                        // Extract URL from fields if available
+                        let url = cred
+                            .fields
+                            .iter()
+                            .find(|(_, field)| {
+                                field.field_type == ziplock_shared::models::FieldType::Url
+                            })
+                            .map(|(_, field)| field.value.clone());
 
-        tracing::info!(
-            "Successfully loaded {} credentials from credential store",
-            credentials.len()
-        );
+                        CredentialItem {
+                            id: cred.id.clone(),
+                            title: cred.title,
+                            username,
+                            url,
+                            last_modified: cred.updated_at.to_string(),
+                            credential_type: cred.credential_type,
+                        }
+                    })
+                    .collect();
 
-        Ok((credentials, Some(current_session_id), true))
+                tracing::info!(
+                    "Successfully loaded {} credentials from repository service",
+                    credentials.len()
+                );
+
+                Ok((credentials, Some(current_session_id), true))
+            }
+            Err(e) => {
+                tracing::error!("Failed to load credentials from repository service: {}", e);
+                Err(format!("Failed to load credentials: {}", e))
+            }
+        }
     }
 
     /// Async function to lock the database
@@ -708,6 +760,105 @@ impl MainView {
     }
 
     // Error handling methods removed since we're using global toast system
+
+    /// Filter credentials based on current search query
+    fn filter_credentials(&mut self) {
+        if self.search_query.trim().is_empty() {
+            self.filtered_credentials = self.credentials.clone();
+        } else {
+            let query_lower = self.search_query.to_lowercase();
+            self.filtered_credentials = self
+                .credentials
+                .iter()
+                .filter(|cred| {
+                    cred.title.to_lowercase().contains(&query_lower)
+                        || cred.username.to_lowercase().contains(&query_lower)
+                        || cred
+                            .url
+                            .as_ref()
+                            .map_or(false, |url| url.to_lowercase().contains(&query_lower))
+                })
+                .cloned()
+                .collect();
+        }
+    }
+
+    /// Async function to search credentials using repository service
+    async fn search_credentials_async(
+        query: String,
+    ) -> Result<(Vec<CredentialItem>, Option<String>, bool), String> {
+        let repository_service = get_repository_service();
+
+        // Check if repository is open
+        if !repository_service.is_open().await {
+            return Ok((Vec::new(), None, false));
+        }
+
+        // Search credentials using repository service
+        match repository_service.search_credentials(query).await {
+            Ok(credential_records) => {
+                let credentials: Vec<CredentialItem> = credential_records
+                    .into_iter()
+                    .map(|cred| {
+                        // Extract username from fields if available
+                        let username = cred
+                            .fields
+                            .iter()
+                            .find(|(_, field)| {
+                                field.field_type == ziplock_shared::models::FieldType::Username
+                            })
+                            .map(|(_, field)| field.value.clone())
+                            .unwrap_or_else(|| "No username".to_string());
+
+                        // Extract URL from fields if available
+                        let url = cred
+                            .fields
+                            .iter()
+                            .find(|(_, field)| {
+                                field.field_type == ziplock_shared::models::FieldType::Url
+                            })
+                            .map(|(_, field)| field.value.clone());
+
+                        CredentialItem {
+                            id: cred.id.clone(),
+                            title: cred.title,
+                            username,
+                            url,
+                            last_modified: cred.updated_at.to_string(),
+                            credential_type: cred.credential_type,
+                        }
+                    })
+                    .collect();
+
+                tracing::info!(
+                    "Found {} credentials matching search query",
+                    credentials.len()
+                );
+
+                Ok((credentials, None, true))
+            }
+            Err(e) => {
+                tracing::error!("Failed to search credentials: {}", e);
+                Err(format!("Failed to search credentials: {}", e))
+            }
+        }
+    }
+
+    /// Async function to close the repository
+    async fn close_repository_async() -> Result<String, String> {
+        let repository_service = get_repository_service();
+
+        match repository_service.close_repository().await {
+            Ok(()) => {
+                tracing::info!("Repository closed successfully");
+                Ok("Repository closed successfully".to_string())
+            }
+            Err(e) => {
+                tracing::error!("Failed to close repository: {}", e);
+                Err(format!("Failed to close repository: {}", e))
+            }
+        }
+    }
 }
 
 /// Custom container style for credential items

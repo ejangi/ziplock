@@ -7,11 +7,11 @@
 use iced::widget::{button, column, container, row, scrollable, text, text_input, Space};
 use iced::{Alignment, Command, Element, Length};
 use std::path::PathBuf;
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
-use crate::platform::LinuxFileOperationsHandler;
-use crate::services::get_credential_store;
+use crate::config::ConfigManager;
+use crate::services::get_repository_service;
 use crate::ui::theme::{self, button_styles, container_styles, utils, MEDIUM_GRAY};
 
 /// Messages for the open repository view
@@ -67,6 +67,8 @@ pub struct OpenRepositoryView {
     can_open: bool,
     /// Session ID if opening is complete
     session_id: Option<String>,
+    /// Whether this repository was auto-selected from recent history
+    auto_selected: bool,
 }
 
 impl Default for OpenRepositoryView {
@@ -85,6 +87,7 @@ impl OpenRepositoryView {
             show_passphrase: false,
             can_open: false,
             session_id: None,
+            auto_selected: false,
         }
     }
 
@@ -97,6 +100,7 @@ impl OpenRepositoryView {
             show_passphrase: false,
             can_open: false,
             session_id: None,
+            auto_selected: true,
         }
     }
 
@@ -178,6 +182,27 @@ impl OpenRepositoryView {
                         info!("Repository opened successfully");
                         self.session_id = Some(session_id);
                         self.state = OpenState::Complete;
+
+                        // Touch repository in config to update last accessed time
+                        if let Some(path) = &self.selected_file {
+                            match ConfigManager::new() {
+                                Ok(mut config_manager) => {
+                                    config_manager.touch_repository(&path.to_string_lossy());
+                                    if let Err(e) = config_manager.save() {
+                                        warn!(
+                                            "Failed to save config after touching repository: {}",
+                                            e
+                                        );
+                                    }
+                                }
+                                Err(e) => {
+                                    warn!(
+                                        "Failed to get config manager for touching repository: {}",
+                                        e
+                                    );
+                                }
+                            }
+                        }
                     }
                     Err(error) => {
                         error!("Failed to open repository: {}", error);
@@ -234,6 +259,12 @@ impl OpenRepositoryView {
 
     /// Render the header
     fn view_header(&self) -> Element<'_, OpenRepositoryMessage> {
+        let subtitle_text = if self.auto_selected {
+            "Enter your passphrase to unlock your most recently used repository."
+        } else {
+            "Select your repository file and enter your passphrase to unlock it."
+        };
+
         column![
             iced::widget::svg(theme::ziplock_logo())
                 .width(Length::Fixed(64.0))
@@ -243,7 +274,7 @@ impl OpenRepositoryView {
                 .size(crate::ui::theme::utils::typography::extra_large_text_size())
                 .horizontal_alignment(iced::alignment::Horizontal::Center),
             Space::with_height(Length::Fixed(10.0)),
-            text("Select your repository file and enter your passphrase to unlock it.")
+            text(subtitle_text)
                 .size(crate::ui::theme::utils::typography::normal_text_size())
                 .horizontal_alignment(iced::alignment::Horizontal::Center),
         ]
@@ -254,22 +285,39 @@ impl OpenRepositoryView {
     /// Render the file selection section
     fn view_file_selection(&self) -> Element<'_, OpenRepositoryMessage> {
         let file_display = if let Some(ref path) = self.selected_file {
-            text(format!(
-                "Selected: {}",
-                path.file_name()
-                    .unwrap_or_else(|| std::ffi::OsStr::new("Unknown"))
-                    .to_string_lossy()
-            ))
-            .size(crate::ui::theme::utils::typography::normal_text_size())
-            .style(iced::theme::Text::Color(theme::SUCCESS_GREEN))
+            let display_text = if self.auto_selected {
+                format!(
+                    "Recent repository: {}",
+                    path.file_name()
+                        .unwrap_or_else(|| std::ffi::OsStr::new("Unknown"))
+                        .to_string_lossy()
+                )
+            } else {
+                format!(
+                    "Selected: {}",
+                    path.file_name()
+                        .unwrap_or_else(|| std::ffi::OsStr::new("Unknown"))
+                        .to_string_lossy()
+                )
+            };
+
+            text(display_text)
+                .size(crate::ui::theme::utils::typography::normal_text_size())
+                .style(iced::theme::Text::Color(theme::SUCCESS_GREEN))
         } else {
             text("No file selected")
                 .size(crate::ui::theme::utils::typography::normal_text_size())
                 .style(iced::theme::Text::Color(MEDIUM_GRAY))
         };
 
+        let header_text = if self.auto_selected {
+            "Most Recent Repository"
+        } else {
+            "Repository File"
+        };
+
         column![
-            text("Repository File")
+            text(header_text)
                 .size(crate::ui::theme::utils::typography::medium_text_size())
                 .horizontal_alignment(iced::alignment::Horizontal::Left),
             Space::with_height(Length::Fixed(8.0)),
@@ -463,6 +511,7 @@ impl OpenRepositoryView {
         self.show_passphrase = false;
         self.can_open = false;
         self.session_id = None;
+        self.auto_selected = false;
     }
 
     /// Check if the opening process is complete
@@ -515,72 +564,27 @@ impl OpenRepositoryView {
     ) -> Result<String, String> {
         info!("Opening repository: {}", archive_path.display());
 
-        // For now, bypass the hanging hybrid client and use direct external file operations
-        // This prevents the async runtime conflicts that cause hanging
-        info!("Using external file operations approach to avoid runtime conflicts");
+        // Use the new unified repository service
+        let repository_service = get_repository_service();
 
-        let mut file_handler = LinuxFileOperationsHandler::new();
-
-        // Create file operations JSON for archive extraction
-        let file_operations = serde_json::json!({
-            "operations": [
-                {
-                    "type": "extract_archive",
-                    "path": archive_path.to_string_lossy(),
-                    "password": master_password,
-                    "format": "7z"
-                }
-            ]
-        })
-        .to_string();
-
-        // Execute the file operations
-        file_handler
-            .execute_file_operations(&file_operations)
+        match repository_service
+            .open_repository(archive_path.to_string_lossy().to_string(), master_password)
             .await
-            .map_err(|e| {
-                error!("Failed to execute file operations: {}", e);
-                format!("Failed to open repository via file operations: {}", e)
-            })?;
+        {
+            Ok(()) => {
+                info!("Repository opened successfully via repository service");
 
-        // Get the extracted files
-        let extracted_files = file_handler.get_extracted_files().map_err(|e| {
-            error!("Failed to get extracted files: {}", e);
-            format!("Failed to get extracted files: {}", e)
-        })?;
+                // Generate session ID for compatibility
+                let session_id = Uuid::new_v4().to_string();
+                info!("Session ID generated: {}", session_id);
 
-        info!(
-            "Successfully extracted {} files from archive",
-            extracted_files.len()
-        );
-
-        // Load extracted files into credential store
-        let credential_store = get_credential_store();
-
-        // Set the archive path for the credential store
-        credential_store.set_archive_path(Some(archive_path.to_string_lossy().to_string()));
-
-        // Load the extracted files into the credential store
-        match credential_store.load_from_extracted_files(extracted_files) {
-            Ok(credential_count) => {
-                info!(
-                    "Successfully loaded {} credentials into store",
-                    credential_count
-                );
+                Ok(session_id)
             }
             Err(e) => {
-                error!("Failed to load credentials into store: {}", e);
-                return Err(format!("Failed to load credentials: {}", e));
+                error!("Failed to open repository: {}", e);
+                Err(format!("Failed to open repository: {}", e))
             }
         }
-
-        info!("Repository opened successfully with credentials loaded");
-
-        // Generate a session ID for compatibility
-        let session_id = Uuid::new_v4().to_string();
-
-        // Return the session ID for later use
-        Ok(session_id)
     }
 }
 

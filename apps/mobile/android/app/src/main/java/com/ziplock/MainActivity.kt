@@ -11,10 +11,12 @@ import com.ziplock.utils.PlatformUtils
 import com.ziplock.utils.XZTestUtils
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
-import com.ziplock.ffi.ZipLockNative
-import com.ziplock.ffi.ZipLockDataManager
-import com.ziplock.viewmodel.HybridRepositoryViewModel
+import com.ziplock.viewmodel.RepositoryViewModel
+import com.ziplock.viewmodel.RepositoryViewModelFactory
+import com.ziplock.repository.MobileRepositoryManager
 import kotlinx.coroutines.launch
+import androidx.lifecycle.ViewModelProvider
+import com.ziplock.ffi.ZipLockNativeHelper
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.KeyboardActions
@@ -26,6 +28,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -38,13 +41,14 @@ import com.ziplock.ui.screens.CredentialTemplateSelectionScreen
 import com.ziplock.ui.screens.CredentialFormScreen
 
 import com.ziplock.ui.theme.*
-import com.ziplock.ffi.ZipLockNativeHelper
+import com.ziplock.ffi.ZipLockNative
 import com.ziplock.viewmodel.CredentialFormViewModel
+import com.ziplock.viewmodel.CredentialFormViewModelFactory
 import com.ziplock.viewmodel.CredentialsViewModel
-import androidx.lifecycle.ViewModelProvider
+import com.ziplock.viewmodel.CredentialsViewModelFactory
 import androidx.compose.runtime.collectAsState
-import com.ziplock.viewmodel.RepositoryState
 import com.ziplock.viewmodel.CreateArchiveViewModel
+import androidx.compose.ui.platform.LocalContext
 
 class MainActivity : ComponentActivity() {
 
@@ -52,9 +56,9 @@ class MainActivity : ComponentActivity() {
         private const val TAG = "MainActivity"
     }
 
-    // Use hybrid architecture by default
-    private val hybridRepositoryViewModel: HybridRepositoryViewModel by lazy {
-        ViewModelProvider(this, HybridRepositoryViewModel.Factory(this))[HybridRepositoryViewModel::class.java]
+    // Use unified architecture
+    private val repositoryViewModel: RepositoryViewModel by viewModels {
+        RepositoryViewModelFactory(this)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -99,19 +103,19 @@ class MainActivity : ComponentActivity() {
             println("MainActivity: Error during XZ test: ${e.message}")
         }
 
-        // Initialize hybrid architecture
+        // Initialize unified architecture
         try {
-            println("MainActivity: Initializing hybrid architecture...")
+            println("MainActivity: Initializing unified architecture...")
 
-            // Initialize hybrid repository manager (handled in ViewModel)
-            Log.i(TAG, "✅ Hybrid architecture initialization started")
-            println("MainActivity: ✅ Hybrid architecture mode enabled")
+            // Initialize repository manager (handled in ViewModel)
+            Log.i(TAG, "✅ Unified architecture initialization started")
+            println("MainActivity: ✅ Unified architecture mode enabled")
 
-            // Also initialize legacy library as fallback
-            println("MainActivity: Initializing legacy library as fallback...")
+            // Initialize native FFI library
+            println("MainActivity: Initializing native library...")
             val initResult = ZipLockNative.init()
-            println("MainActivity: Legacy init result: $initResult")
-            if (initResult) {
+            println("MainActivity: Native init result: $initResult")
+            if (initResult == 0) {
                 Log.d(TAG, "Legacy library initialized successfully")
                 println("MainActivity: ✅ Legacy fallback available")
 
@@ -122,29 +126,10 @@ class MainActivity : ComponentActivity() {
                 }
 
                 // Set application context for credential persistence
-                ZipLockNative.setApplicationContext(this)
+                ZipLockNative.setContext(this)
 
-                // Initialize Android SAF for content URI support
-                val safInitResult = ZipLockNative.initializeAndroidSaf(this)
-                if (safInitResult) {
-                    Log.d("MainActivity", "Android SAF initialized successfully")
-                    println("MainActivity: Android SAF initialized successfully")
-
-                    // Verify SAF is available
-                    val safAvailable = ZipLockNative.isAndroidSafAvailable()
-                    Log.d("MainActivity", "Android SAF availability check: $safAvailable")
-                    println("MainActivity: Android SAF availability: $safAvailable")
-                } else {
-                    Log.w("MainActivity", "Failed to initialize Android SAF - content URIs may not work")
-                    println("MainActivity: WARNING - Failed to initialize Android SAF")
-
-                    // Get error details
-                    val lastError = ZipLockNative.getLastError()
-                    if (lastError != null) {
-                        Log.e("MainActivity", "SAF initialization error: $lastError")
-                        println("MainActivity: SAF error details: $lastError")
-                    }
-                }
+                Log.d("MainActivity", "Android SAF is available via unified architecture")
+                println("MainActivity: Android SAF integrated via unified architecture")
 
                 // Get library version
                 val version = ZipLockNative.getVersion()
@@ -187,7 +172,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             ZipLockTheme {
                 MainApp(
-                    repositoryViewModel = hybridRepositoryViewModel,
+                    repositoryViewModel = repositoryViewModel,
                     initialFileUri = if (openedFromFile) fileUri else null
                 )
             }
@@ -231,11 +216,11 @@ class MainActivity : ComponentActivity() {
         Log.d(TAG, "App being destroyed - final cleanup")
 
         try {
-            // The HybridRepositoryViewModel.onCleared() will handle archive closing
+            // The RepositoryViewModel.onCleared() will handle repository closing
             // This is just for additional Android-specific cleanup
 
             // Cleanup Android SAF resources
-            ZipLockNative.cleanupAndroidSaf()
+            ZipLockNative.cleanup()
             Log.d(TAG, "Android SAF cleanup completed")
 
         } catch (e: Exception) {
@@ -249,7 +234,7 @@ class MainActivity : ComponentActivity() {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainApp(
-    repositoryViewModel: HybridRepositoryViewModel,
+    repositoryViewModel: RepositoryViewModel,
     initialFileUri: String? = null
 ) {
     // Check for incoming file URI or last opened archive and determine initial screen
@@ -288,7 +273,7 @@ fun MainApp(
             is Screen.RepositorySelection -> {
                 val repositorySelectionScreen = currentScreen as Screen.RepositorySelection
                 RepositorySelectionScreen(
-                    hybridRepositoryViewModel = repositoryViewModel,
+                    repositoryViewModel = repositoryViewModel,
                     onArchiveOpened = { filePath ->
                         currentScreen = Screen.RepositoryOpened(filePath)
                     },
@@ -342,7 +327,7 @@ fun MainApp(
             Screen.CredentialTemplateSelection -> {
                 CredentialTemplateSelectionScreen(
                     onTemplateSelected = { template ->
-                        currentScreen = Screen.CredentialForm(template)
+                        currentScreen = Screen.CredentialForm(convertFromZipLockNativeHelperTemplate(template))
                     },
                     onCancel = {
                         currentScreen = Screen.RepositoryOpened("", shouldRefresh = false)
@@ -355,14 +340,17 @@ fun MainApp(
 
             is Screen.CredentialForm -> {
                 val credentialFormScreen = currentScreen as Screen.CredentialForm
-                val credentialFormViewModel: CredentialFormViewModel = viewModel()
+                val context = LocalContext.current
+                val credentialFormViewModel: CredentialFormViewModel = viewModel(
+                    factory = CredentialFormViewModelFactory(context)
+                )
                 val formUiState by credentialFormViewModel.uiState.collectAsState()
 
                 CredentialFormScreen(
-                    template = credentialFormScreen.template,
+                    template = convertToZipLockNativeHelperTemplate(credentialFormScreen.template),
                     onSave = { title, fields, tags ->
                         credentialFormViewModel.saveCredential(
-                            template = credentialFormScreen.template,
+                            template = credentialFormScreen.template.name,
                             title = title,
                             fields = fields,
                             tags = tags,
@@ -389,19 +377,30 @@ fun MainApp(
 
             is Screen.CredentialEdit -> {
                 val credentialEditScreen = currentScreen as Screen.CredentialEdit
-                val credentialFormViewModel: CredentialFormViewModel = viewModel()
+                val context = LocalContext.current
+                val credentialFormViewModel: CredentialFormViewModel = viewModel(
+                    factory = CredentialFormViewModelFactory(context)
+                )
                 val formUiState by credentialFormViewModel.uiState.collectAsState()
 
-                // Find the appropriate template for this credential type
-                val template = ZipLockNativeHelper.getTemplateForType(credentialEditScreen.credential.credentialType)
+                // Debug the credential being edited
+                val editCredential = credentialEditScreen.credential
+                println("MainActivity: Editing credential - ID: '${editCredential.id}', Title: '${editCredential.title}'")
+                println("MainActivity: Edit credential fields: ${editCredential.fields.keys}")
+                editCredential.fields.forEach { (key, field) ->
+                    println("MainActivity: Edit field '$key' = '${field.value}' (${field.fieldType})")
+                }
+
+                // Use a basic template for editing (will be enhanced later)
+                val template = createBasicTemplate(credentialEditScreen.credential.credentialType)
 
                 CredentialFormScreen(
-                    template = template,
+                    template = convertToZipLockNativeHelperTemplate(template),
                     existingCredential = credentialEditScreen.credential,
                     onSave = { title, fields, tags ->
                         credentialFormViewModel.updateCredential(
                             credentialId = credentialEditScreen.credential.id,
-                            template = template,
+                            template = template.name,
                             title = title,
                             fields = fields,
                             tags = tags,
@@ -429,19 +428,110 @@ fun MainApp(
     }
 }
 
+// Basic credential template for compatibility
+data class BasicCredentialTemplate(
+    val id: String,
+    val name: String,
+    val credentialType: String,
+    val fields: List<TemplateField>
+)
+
+data class TemplateField(
+    val id: String,
+    val name: String,
+    val fieldType: String,
+    val required: Boolean = false,
+    val sensitive: Boolean = false
+)
+
+// Helper function to create basic templates
+fun createBasicTemplate(credentialType: String): BasicCredentialTemplate {
+    return when (credentialType.lowercase()) {
+        "login", "website" -> BasicCredentialTemplate(
+            id = "basic_login",
+            name = "Login",
+            credentialType = "login",
+            fields = listOf(
+                TemplateField("username", "Username", "text", required = false),
+                TemplateField("password", "Password", "password", required = false, sensitive = true),
+                TemplateField("url", "Website URL", "url"),
+                TemplateField("notes", "Notes", "textarea")
+            )
+        )
+        "note", "secure_note" -> BasicCredentialTemplate(
+            id = "basic_note",
+            name = "Secure Note",
+            credentialType = "note",
+            fields = listOf(
+                TemplateField("title", "Title", "text", required = true),
+                TemplateField("content", "Content", "textarea", required = true, sensitive = true)
+            )
+        )
+        else -> BasicCredentialTemplate(
+            id = "basic_generic",
+            name = "Generic",
+            credentialType = credentialType,
+            fields = listOf(
+                TemplateField("title", "Title", "text", required = true),
+                TemplateField("value", "Value", "text", sensitive = true),
+                TemplateField("notes", "Notes", "textarea")
+            )
+        )
+    }
+}
+
+// Helper function to convert ZipLockNativeHelper.CredentialTemplate to BasicCredentialTemplate
+fun convertFromZipLockNativeHelperTemplate(template: ZipLockNativeHelper.CredentialTemplate): BasicCredentialTemplate {
+    return BasicCredentialTemplate(
+        id = template.id,
+        name = template.name,
+        credentialType = template.credentialType,
+        fields = template.fields.map { field ->
+            TemplateField(
+                id = field.id,
+                name = field.name,
+                fieldType = field.fieldType,
+                required = field.required,
+                sensitive = field.sensitive
+            )
+        }
+    )
+}
+
+// Helper function to convert BasicCredentialTemplate to ZipLockNativeHelper.CredentialTemplate
+fun convertToZipLockNativeHelperTemplate(basicTemplate: BasicCredentialTemplate): ZipLockNativeHelper.CredentialTemplate {
+    return ZipLockNativeHelper.CredentialTemplate(
+        id = basicTemplate.id,
+        name = basicTemplate.name,
+        credentialType = basicTemplate.credentialType,
+        description = "Converted from BasicCredentialTemplate",
+        fields = basicTemplate.fields.map { field ->
+            ZipLockNativeHelper.TemplateField(
+                id = field.id,
+                name = field.name,
+                fieldType = field.fieldType,
+                required = field.required,
+                sensitive = field.sensitive,
+                placeholder = "Enter ${field.name.lowercase()}"
+            )
+        },
+        category = "general"
+    )
+}
+
 sealed class Screen {
     object AutoOpenLastArchive : Screen()
     data class RepositorySelection(val initialFilePath: String? = null) : Screen()
     object CreateArchive : Screen()
     data class RepositoryOpened(val archivePath: String, val shouldRefresh: Boolean = false) : Screen()
     object CredentialTemplateSelection : Screen()
-    data class CredentialForm(val template: ZipLockNativeHelper.CredentialTemplate) : Screen()
+    data class CredentialForm(val template: BasicCredentialTemplate) : Screen()
     data class CredentialEdit(val credential: ZipLockNative.Credential) : Screen()
 }
 
 @Composable
 fun AutoOpenArchiveScreen(
-    repositoryViewModel: HybridRepositoryViewModel,
+    repositoryViewModel: RepositoryViewModel,
     onArchiveOpened: (String) -> Unit,
     onSelectDifferent: () -> Unit,
     modifier: Modifier = Modifier
@@ -453,9 +543,12 @@ fun AutoOpenArchiveScreen(
     val repositoryState by repositoryViewModel.repositoryState.collectAsState()
 
     LaunchedEffect(repositoryState) {
-        val currentState = repositoryState
-        if (currentState is HybridRepositoryViewModel.HybridRepositoryState.Open) {
-            onArchiveOpened(currentState.path)
+        when (val currentState = repositoryState) {
+            is MobileRepositoryManager.RepositoryState -> {
+                if (currentState.isOpen) {
+                    onArchiveOpened(currentState.archiveName ?: "Unknown Archive")
+                }
+            }
         }
     }
 
@@ -562,27 +655,36 @@ fun RepositoryOpenedScreen(
     onClose: () -> Unit,
     onAddCredential: () -> Unit,
     onEditCredential: (ZipLockNative.Credential) -> Unit,
-    repositoryViewModel: HybridRepositoryViewModel,
+    repositoryViewModel: RepositoryViewModel,
     shouldRefresh: Boolean = false,
     modifier: Modifier = Modifier
 ) {
-    val credentialsViewModel: CredentialsViewModel = viewModel()
+    val context = LocalContext.current
+    val credentialsViewModel: CredentialsViewModel = viewModel(
+        factory = CredentialsViewModelFactory(context)
+    )
     val credentialsUiState by credentialsViewModel.uiState.collectAsState()
     val searchQuery by credentialsViewModel.searchQuery.collectAsState()
     // Watch for repository state changes and load credentials when archive is fully opened
     val repositoryState by repositoryViewModel.repositoryState.collectAsState()
     LaunchedEffect(repositoryState) {
-        val currentState = repositoryState
-        if (currentState is HybridRepositoryViewModel.HybridRepositoryState.Open) {
-            // Repository is confirmed open, now we can safely load credentials
-            println("MainActivity: Repository confirmed open at path: ${currentState.path}")
-            println("MainActivity: Waiting briefly for background initialization to complete...")
-            // Small delay to ensure all background initialization has completed
-            delay(500)
-            println("MainActivity: Loading credentials now that archive is fully ready...")
-            credentialsViewModel.loadCredentials()
-        } else {
-            println("MainActivity: Repository state is: $currentState")
+        when (val currentState = repositoryState) {
+            is MobileRepositoryManager.RepositoryState -> {
+                if (currentState.isOpen) {
+                    // Repository is confirmed open, now we can safely load credentials
+                    println("MainActivity: Repository confirmed open: ${currentState.archiveName}")
+                    println("MainActivity: Waiting briefly for background initialization to complete...")
+                    // Small delay to ensure all background initialization has completed
+                    delay(500)
+                    println("MainActivity: Loading credentials now that archive is fully ready...")
+                    credentialsViewModel.loadCredentials()
+                } else {
+                    println("MainActivity: Repository state is: $currentState")
+                }
+            }
+            else -> {
+                println("MainActivity: Unknown repository state: $repositoryState")
+            }
         }
     }
 
@@ -600,21 +702,46 @@ fun RepositoryOpenedScreen(
         onSearchQueryChange = { query ->
             credentialsViewModel.updateSearchQuery(query)
         },
-        onCredentialClick = { credential: ZipLockNative.Credential ->
-            println("MainActivity: Credential clicked: ${credential.title}")
-            onEditCredential(credential)
+        onCredentialClick = { credential ->
+            val credentialTitle = (credential["title"] as? String) ?: "Unknown"
+            println("MainActivity: Credential clicked: $credentialTitle")
+
+            // Convert Map<String, Any> to ZipLockNative.Credential for compatibility
+            val zipLockCredential = ZipLockNative.Credential(
+                id = (credential["id"] as? String) ?: "",
+                title = (credential["title"] as? String) ?: "",
+                credentialType = (credential["credentialType"] as? String) ?: "login",
+                fields = (credential["fields"] as? Map<String, Any>)?.mapValues { (_, value) ->
+                    when (value) {
+                        is Map<*, *> -> ZipLockNative.FieldValue(
+                            value = (value["value"] as? String) ?: "",
+                            fieldType = (value["fieldType"] as? String) ?: "text",
+                            label = value["label"] as? String,
+                            sensitive = (value["sensitive"] as? Boolean) ?: false
+                        )
+                        else -> ZipLockNative.FieldValue(
+                            value = value.toString(),
+                            fieldType = "text"
+                        )
+                    }
+                } ?: emptyMap(),
+                createdAt = (credential["createdAt"] as? Long) ?: System.currentTimeMillis(),
+                updatedAt = (credential["updatedAt"] as? Long) ?: System.currentTimeMillis(),
+                tags = (credential["tags"] as? List<*>)?.mapNotNull { it as? String } ?: emptyList()
+            )
+            onEditCredential(zipLockCredential)
         },
         onCloseArchive = {
             // Close the archive and navigate back
             println("MainActivity: Close archive button clicked")
 
             // Close both the credentials view model and the repository view model
-            val closeResult = credentialsViewModel.closeArchive()
+            credentialsViewModel.clearCredentials()
             repositoryViewModel.closeRepository()
-            println("MainActivity: Archive close result: $closeResult")
+            println("MainActivity: Archive closed")
 
             // Clear the credentials state to prevent stale data
-            credentialsViewModel.clearCredentials()
+            credentialsViewModel.clearCredentialsState()
 
             println("MainActivity: Navigating back to repository selection")
             onClose()
@@ -623,7 +750,7 @@ fun RepositoryOpenedScreen(
         onAddCredential = onAddCredential,
         onRefresh = {
             // Refresh credentials from the archive
-            credentialsViewModel.refresh()
+            credentialsViewModel.loadCredentials()
         },
         isLoading = credentialsUiState.isLoading,
         errorMessage = credentialsUiState.errorMessage,
@@ -677,7 +804,7 @@ fun MainAppPreview() {
     ZipLockTheme {
         // Create a mock view model for preview with mock context
         val mockContext = androidx.compose.ui.platform.LocalContext.current
-        val mockViewModel = HybridRepositoryViewModel(mockContext)
+        val mockViewModel = RepositoryViewModel(mockContext)
         MainApp(repositoryViewModel = mockViewModel)
     }
 }

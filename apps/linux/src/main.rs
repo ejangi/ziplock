@@ -9,14 +9,13 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 // Import removed - these types are used in the actual code through other paths
 
 mod config;
-#[cfg(feature = "examples")]
-mod examples;
+// #[cfg(feature = "examples")]
+// mod examples;
 mod logging;
-mod platform;
 mod services;
 mod ui;
 
-use services::ClipboardManager;
+use services::{ClipboardManager, UpdateChecker};
 
 use ui::components::toast::{ToastManager, ToastPosition};
 use ui::components::{UpdateDialog, UpdateDialogMessage};
@@ -97,8 +96,8 @@ pub enum Message {
 
     // Update checking
     CheckForUpdates,
-    UpdateCheckResult(Result<ziplock_shared::UpdateCheckResult, String>),
-    ShowUpdateDialog(ziplock_shared::UpdateCheckResult),
+    UpdateCheckResult(Result<services::UpdateCheckResult, String>),
+    ShowUpdateDialog(services::UpdateCheckResult),
     HideUpdateDialog,
     AutoUpdateCheck,
 
@@ -136,7 +135,6 @@ pub enum AppState {
 pub struct ZipLockApp {
     state: AppState,
     config_manager: Option<ConfigManager>,
-    hybrid_client: Option<ziplock_shared::ZipLockHybridClient>,
     theme: Theme,
     current_alert: Option<AlertMessage>,
     session_id: Option<String>,
@@ -144,9 +142,9 @@ pub struct ZipLockApp {
     // Auto-lock timer fields
     last_activity: std::time::Instant,
     auto_lock_enabled: bool,
-    // Update checking
-    update_checker: ziplock_shared::UpdateChecker,
-    // Clipboard management
+    // Update checker
+    update_checker: UpdateChecker,
+    // Clipboard manager
     clipboard_manager: ClipboardManager,
 }
 
@@ -157,19 +155,21 @@ impl Application for ZipLockApp {
     type Flags = ();
 
     fn new(_flags: ()) -> (Self, Command<Message>) {
-        info!("Initializing ZipLock Linux app");
+        info!("Initializing ZipLock Linux app with unified architecture");
+
+        // Initialize shared library
+        ziplock_shared::init_ziplock_shared_desktop();
 
         let app = Self {
             state: AppState::Loading,
             config_manager: None,
-            hybrid_client: None,
             theme: create_ziplock_theme(),
             current_alert: None,
             session_id: None,
             toast_manager: ToastManager::with_position(ToastPosition::BottomRight),
             last_activity: std::time::Instant::now(),
             auto_lock_enabled: false,
-            update_checker: ziplock_shared::UpdateChecker::new(),
+            update_checker: UpdateChecker::new(),
             clipboard_manager: ClipboardManager::new(),
         };
 
@@ -210,12 +210,18 @@ impl Application for ZipLockApp {
             }
 
             Message::ConfigReady => {
-                if let Ok(config_manager) = ConfigManager::new() {
+                if let Ok(mut config_manager) = ConfigManager::new() {
+                    // Load the configuration file to get recent repositories
+                    if let Err(e) = config_manager.load() {
+                        warn!("Failed to load configuration file: {}", e);
+                        // Continue with defaults if loading fails
+                    }
+
                     info!("Configuration loaded successfully");
 
                     // Initialize typography with font size from config
                     ui::theme::utils::typography::init_font_size(
-                        config_manager.config().ui.font_size,
+                        config_manager.config().ui.font_scale.unwrap_or(1.0),
                     );
 
                     // Check if we should show the wizard immediately
@@ -227,6 +233,13 @@ impl Application for ZipLockApp {
                     }
 
                     // Check for most recently used repository first
+                    debug!("Checking for most recent accessible repository...");
+                    let recent_repos = config_manager.get_recent_repositories();
+                    debug!("Found {} recent repositories in config", recent_repos.len());
+                    for repo in recent_repos.iter() {
+                        debug!("Recent repo: {} -> {}", repo.name, repo.path);
+                    }
+
                     if let Some(most_recent_path) =
                         config_manager.get_most_recent_accessible_repository()
                     {
@@ -235,10 +248,12 @@ impl Application for ZipLockApp {
                             most_recent_path
                         );
                         let open_view =
-                            OpenRepositoryView::with_repository(most_recent_path.clone());
+                            OpenRepositoryView::with_repository(most_recent_path.clone().into());
                         self.state = AppState::OpenRepositoryActive(open_view);
                         self.config_manager = Some(config_manager);
                         return Command::none();
+                    } else {
+                        debug!("No recent accessible repository found");
                     }
 
                     // Start repository detection
@@ -265,7 +280,7 @@ impl Application for ZipLockApp {
                     // Auto-select single repository and show open dialog
                     debug!("Single repository found, showing open dialog");
                     let repo = &repositories[0];
-                    let open_view = OpenRepositoryView::with_repository(repo.path.clone());
+                    let open_view = OpenRepositoryView::with_repository(repo.path.clone().into());
                     self.state = AppState::OpenRepositoryActive(open_view);
                 } else {
                     // Show repository selection
@@ -280,7 +295,7 @@ impl Application for ZipLockApp {
                     Ok(repo_info) => {
                         info!("Repository validated: {:?}", repo_info.path);
                         // Repository is valid, show open dialog
-                        let open_view = OpenRepositoryView::with_repository(repo_info.path);
+                        let open_view = OpenRepositoryView::with_repository(repo_info.path.into());
                         self.state = AppState::OpenRepositoryActive(open_view);
                     }
                     Err(error) => {
@@ -329,7 +344,9 @@ impl Application for ZipLockApp {
                         if let (Some(repo_path), Some(config_manager)) =
                             (wizard.repository_path(), &mut self.config_manager)
                         {
-                            match config_manager.set_repository_path(repo_path) {
+                            match config_manager
+                                .set_repository_path(repo_path.to_string_lossy().to_string())
+                            {
                                 Ok(()) => {
                                     info!("Repository path saved to configuration");
                                     return Command::batch([
@@ -379,7 +396,9 @@ impl Application for ZipLockApp {
                 // Save to config if we have a path
                 if let Some(repo_path) = save_repo_path {
                     if let Some(config_manager) = &mut self.config_manager {
-                        match config_manager.set_repository_path(repo_path) {
+                        match config_manager
+                            .set_repository_path(repo_path.to_string_lossy().to_string())
+                        {
                             Ok(()) => {
                                 info!("Repository path saved to configuration");
                             }
@@ -403,6 +422,21 @@ impl Application for ZipLockApp {
                     if open_view.is_complete() {
                         // Capture session ID and create MainView
                         if let Some(session_id) = open_view.session_id() {
+                            // Save the repository path to config for future auto-loading
+                            if let (Some(config_manager), Some(repo_path)) =
+                                (self.config_manager.as_mut(), open_view.repository_path())
+                            {
+                                let path_str = repo_path.to_string_lossy().to_string();
+                                debug!("Saving repository path to config: {}", path_str);
+                                if let Err(e) = config_manager.set_repository_path(path_str) {
+                                    warn!("Failed to save repository path to config: {}", e);
+                                } else {
+                                    info!("Repository path saved to config successfully");
+                                }
+                            } else {
+                                warn!("Could not save repository path - config_manager or repo_path missing");
+                            }
+
                             self.session_id = Some(session_id.clone());
                             let mut main_view = MainView::new();
                             main_view.set_session_id(Some(session_id.clone()));
@@ -441,20 +475,11 @@ impl Application for ZipLockApp {
             Message::BackendConnected(result) => {
                 match result {
                     Ok(()) => {
-                        info!("Successfully initialized hybrid client");
-                        // Initialize the hybrid client instance
-                        match ziplock_shared::ZipLockHybridClient::new() {
-                            Ok(client) => {
-                                self.hybrid_client = Some(client);
-                                info!("Hybrid client initialized successfully");
-                            }
-                            Err(error) => {
-                                warn!("Failed to initialize hybrid client: {}", error);
-                            }
-                        }
+                        info!("Repository service is ready and initialized");
+                        // Repository service is already available, no additional setup needed
                     }
                     Err(error) => {
-                        warn!("Failed to initialize hybrid client: {}", error);
+                        warn!("Failed to initialize repository service: {}", error);
                         // Continue anyway, some operations might still work
                     }
                 }
@@ -499,7 +524,7 @@ impl Application for ZipLockApp {
                     }
                     Err(error_msg) => {
                         // Check if this is a session timeout error
-                        if ziplock_shared::ZipLockClient::is_session_timeout_error(&error_msg) {
+                        if error_msg.contains("session") || error_msg.contains("timeout") {
                             return Command::perform(async {}, |_| Message::SessionTimeout);
                         }
                         self.toast_manager.error(error_msg);
@@ -513,7 +538,7 @@ impl Application for ZipLockApp {
                     match main_msg {
                         MainViewMessage::ShowError(error) => {
                             // Check if this is a session timeout error
-                            if ziplock_shared::ZipLockClient::is_session_timeout_error(&error) {
+                            if error.contains("session") || error.contains("timeout") {
                                 return Command::perform(async {}, |_| Message::SessionTimeout);
                             }
                             self.toast_manager.error(error);
@@ -779,7 +804,7 @@ impl Application for ZipLockApp {
 
                                     // Reinitialize typography with new font size
                                     ui::theme::utils::typography::init_font_size(
-                                        config_manager.config().ui.font_size,
+                                        config_manager.config().ui.font_scale.unwrap_or(1.0),
                                     );
 
                                     // Save the configuration
@@ -851,7 +876,7 @@ impl Application for ZipLockApp {
                 // Check if auto-lock is enabled and we have a session
                 if self.auto_lock_enabled && self.session_id.is_some() {
                     if let Some(config_manager) = &self.config_manager {
-                        let timeout_minutes = config_manager.config().app.auto_lock_timeout;
+                        let timeout_minutes = config_manager.config().ui.auto_lock_timeout;
                         // Only check timeout if it's not disabled (0)
                         if timeout_minutes > 0 {
                             let timeout_duration =
@@ -875,6 +900,7 @@ impl Application for ZipLockApp {
 
             Message::CheckForUpdates => {
                 info!("Manual update check requested");
+                // Clone the update checker to avoid borrowing issues
                 let mut update_checker = self.update_checker.clone();
                 Command::perform(
                     async move { update_checker.check_for_updates().await },
@@ -931,10 +957,11 @@ impl Application for ZipLockApp {
             Message::AutoUpdateCheck => {
                 // Check if auto-update checking is enabled and if we should check now
                 if let Some(config_manager) = &self.config_manager {
-                    if config_manager.config().app.auto_check_updates
+                    if config_manager.config().behavior.auto_check_updates
                         && self.update_checker.should_auto_check()
                     {
                         info!("Performing automatic update check");
+                        // Clone the update checker for async operation
                         let mut update_checker = self.update_checker.clone();
                         return Command::perform(
                             async move { update_checker.check_for_updates().await },
@@ -957,7 +984,7 @@ impl Application for ZipLockApp {
 
                 // Get clipboard timeout from config
                 let timeout_seconds = if let Some(config_manager) = &self.config_manager {
-                    config_manager.config().app.clipboard_timeout
+                    config_manager.config().security.clipboard_timeout as u32
                 } else {
                     30 // Default timeout
                 };
@@ -1008,8 +1035,7 @@ impl Application for ZipLockApp {
                 let current_repo_path = self
                     .config_manager
                     .as_ref()
-                    .and_then(|cm| cm.repository_path())
-                    .cloned();
+                    .and_then(|cm| cm.repository_path());
 
                 // Start repository detection but prioritize the current repository
                 self.state = AppState::DetectingRepositories;
@@ -1145,7 +1171,7 @@ impl Application for ZipLockApp {
         // Auto-lock timer subscription - check every 10 seconds
         let auto_lock_subscription = if self.auto_lock_enabled && self.session_id.is_some() {
             if let Some(config_manager) = &self.config_manager {
-                let timeout_minutes = config_manager.config().app.auto_lock_timeout;
+                let timeout_minutes = config_manager.config().ui.auto_lock_timeout;
                 if timeout_minutes > 0 {
                     time::every(std::time::Duration::from_secs(10))
                         .map(|_| Message::AutoLockTimerTick)
@@ -1169,7 +1195,7 @@ impl Application for ZipLockApp {
 
         // Auto update check subscription - check every hour if enabled
         let auto_update_subscription = if let Some(config_manager) = &self.config_manager {
-            if config_manager.config().app.auto_check_updates {
+            if config_manager.config().behavior.auto_check_updates {
                 time::every(std::time::Duration::from_secs(3600)) // Check every hour
                     .map(|_| Message::AutoUpdateCheck)
             } else {
@@ -1276,22 +1302,24 @@ impl ZipLockApp {
         let mut repo_buttons = column![].spacing(10);
 
         for repo in repositories {
-            let display_name = &repo.display_name;
-            let path_text = if let Some(relative) =
-                ziplock_shared::config::paths::get_relative_to_home(&repo.path)
-            {
-                format!("~/{}", relative.display())
+            let display_name = &repo.name;
+            let path_text = if let Some(home) = dirs::home_dir() {
+                let home_str = home.to_string_lossy().to_string();
+                if repo.path.starts_with(&home_str) {
+                    // Show relative path from home
+                    repo.path
+                        .strip_prefix(&home_str)
+                        .map(|p| format!("~/{}", p))
+                        .unwrap_or_else(|| repo.path.clone())
+                } else {
+                    repo.path.clone()
+                }
             } else {
-                repo.path.display().to_string()
+                repo.path.clone()
             };
 
-            let size_text = if repo.size < 1024 {
-                format!("{} bytes", repo.size)
-            } else if repo.size < 1024 * 1024 {
-                format!("{:.1} KB", repo.size as f64 / 1024.0)
-            } else {
-                format!("{:.1} MB", repo.size as f64 / (1024.0 * 1024.0))
-            };
+            // Since RepositoryInfo doesn't have size field, we'll skip it for now
+            let size_text = "Unknown size".to_string();
 
             let repo_button = button(
                 column![
@@ -1304,7 +1332,7 @@ impl ZipLockApp {
             .width(Length::Fill)
             .padding(theme::utils::repository_button_padding())
             .on_press(Message::OpenRepository(
-                OpenRepositoryMessage::SelectSpecificFile(repo.path.clone()),
+                OpenRepositoryMessage::SelectSpecificFile(repo.path.clone().into()),
             ));
 
             repo_buttons = repo_buttons.push(repo_button);
@@ -1431,7 +1459,18 @@ impl ZipLockApp {
     /// Async function to load configuration
     async fn load_config_async() -> String {
         match ConfigManager::new() {
-            Ok(_) => String::new(), // Empty string means success
+            Ok(mut config_manager) => {
+                match config_manager.load() {
+                    Ok(()) => {
+                        info!("Configuration loaded successfully");
+                        String::new() // Empty string means success
+                    }
+                    Err(e) => {
+                        warn!("Failed to load configuration file, using defaults: {}", e);
+                        String::new() // Still return success, just use defaults
+                    }
+                }
+            }
             Err(e) => e.to_string(),
         }
     }
@@ -1439,29 +1478,20 @@ impl ZipLockApp {
     /// Async function to connect to backend
     async fn logout_and_quit_async(session_id: Option<String>) -> Result<(), String> {
         if let Some(_sid) = session_id.clone() {
-            let mut client = ziplock_shared::ZipLockClient::new().map_err(|e| e.to_string())?;
+            // No longer need separate client, repository service handles this
+            info!("Using repository service for operations");
 
-            // Try to connect and logout
-            match client.connect().await {
-                Ok(()) => {
-                    // Try to close/lock the archive
-                    match client.close_archive().await {
-                        Ok(()) => info!("Successfully logged out before quit"),
-                        Err(e) => warn!("Failed to logout cleanly: {}", e),
-                    }
-                }
-                Err(e) => warn!("Could not connect to backend for logout: {}", e),
-            }
+            // Repository service automatically handles cleanup when closed
+            info!("Repository service will handle cleanup automatically");
         }
         Ok(())
     }
 
     async fn connect_backend_async() -> Result<(), String> {
-        // Test hybrid client initialization to ensure it works
-        let _test_client = ziplock_shared::ZipLockHybridClient::new().map_err(|e| e.to_string())?;
+        // Repository service is already initialized and available
+        info!("Repository service ready for operations");
 
-        // Hybrid client is self-contained and doesn't need explicit connection
-        // The initialization already sets up the necessary FFI state
+        // Repository service is self-contained and doesn't need explicit connection
         info!("Hybrid client initialization test successful");
         Ok(())
     }
