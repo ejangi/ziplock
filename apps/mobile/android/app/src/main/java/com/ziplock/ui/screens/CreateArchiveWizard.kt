@@ -60,7 +60,7 @@ fun CreateArchiveWizard(
     viewModel: CreateArchiveViewModel = viewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    val passphraseStrength: ZipLockNative.PassphraseStrengthResult? by viewModel.passphraseStrength.collectAsStateWithLifecycle()
+    val passphraseStrength by viewModel.passphraseStrength.collectAsState()
     val context = LocalContext.current
 
     // File picker for destination directory
@@ -416,7 +416,7 @@ private fun ArchiveNameStep(
 private fun CreatePassphraseStep(
     passphrase: String,
     showPassphrase: Boolean,
-    passphraseStrength: ZipLockNative.PassphraseStrengthResult?,
+    passphraseStrength: com.ziplock.utils.PassphraseStrengthResult?,
     onPassphraseChange: (String) -> Unit,
     onToggleVisibility: () -> Unit,
     onNext: () -> Unit,
@@ -723,7 +723,7 @@ private fun WizardNavigationButtons(
 
 @Composable
 private fun PassphraseValidationDisplay(
-    passphraseStrength: ZipLockNative.PassphraseStrengthResult?
+    passphraseStrength: com.ziplock.utils.PassphraseStrengthResult?,
 ) {
     Column {
         // Strength indicator
@@ -734,14 +734,15 @@ private fun PassphraseValidationDisplay(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "Strength: ${strength.strength}",
+                    text = "Strength: ${strength.getLevelText()}",
                     style = ZipLockTypography.Medium,
-                    color = when (strength.strength) {
-                        "Very Weak", "Weak" -> ZipLockColors.ErrorRed
-                        "Fair" -> ZipLockColors.WarningYellow
-                        "Good", "Strong" -> ZipLockColors.SuccessGreen
-                        "Very Strong" -> ZipLockColors.LogoPurple
-                        else -> ZipLockColors.LightGrayText
+                    color = when (strength.level) {
+                        com.ziplock.utils.PassphraseStrengthResult.StrengthLevel.VERY_WEAK,
+                        com.ziplock.utils.PassphraseStrengthResult.StrengthLevel.WEAK -> ZipLockColors.ErrorRed
+                        com.ziplock.utils.PassphraseStrengthResult.StrengthLevel.FAIR -> ZipLockColors.WarningYellow
+                        com.ziplock.utils.PassphraseStrengthResult.StrengthLevel.GOOD,
+                        com.ziplock.utils.PassphraseStrengthResult.StrengthLevel.STRONG -> ZipLockColors.SuccessGreen
+                        com.ziplock.utils.PassphraseStrengthResult.StrengthLevel.VERY_STRONG -> ZipLockColors.LogoPurple
                     }
                 )
 
@@ -756,13 +757,15 @@ private fun PassphraseValidationDisplay(
 
             // Progress bar for strength
             LinearProgressIndicator(
-                progress = strength.score / 100f,
+                progress = passphraseStrength?.getProgress() ?: 0f,
                 modifier = Modifier.fillMaxWidth(),
-                color = when (strength.strength) {
-                    "Very Weak", "Weak" -> ZipLockColors.ErrorRed
-                    "Fair" -> ZipLockColors.WarningYellow
-                    "Good", "Strong" -> ZipLockColors.SuccessGreen
-                    "Very Strong" -> ZipLockColors.LogoPurple
+                color = when (passphraseStrength?.level) {
+                    com.ziplock.utils.PassphraseStrengthResult.StrengthLevel.VERY_WEAK,
+                    com.ziplock.utils.PassphraseStrengthResult.StrengthLevel.WEAK -> ZipLockColors.ErrorRed
+                    com.ziplock.utils.PassphraseStrengthResult.StrengthLevel.FAIR -> ZipLockColors.WarningYellow
+                    com.ziplock.utils.PassphraseStrengthResult.StrengthLevel.GOOD,
+                    com.ziplock.utils.PassphraseStrengthResult.StrengthLevel.STRONG -> ZipLockColors.SuccessGreen
+                    com.ziplock.utils.PassphraseStrengthResult.StrengthLevel.VERY_STRONG -> ZipLockColors.LogoPurple
                     else -> ZipLockColors.LightGrayText
                 },
                 trackColor = ZipLockColors.VeryLightGray
@@ -782,45 +785,28 @@ private fun PassphraseValidationDisplay(
 
         passphraseStrength?.let { strength ->
             // Show violations
-            strength.requirements.forEach { requirement: String ->
+            // Show feedback
+            strength.feedback.forEach { feedback ->
+                val isPositive = feedback.startsWith("✓")
                 Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(vertical = 2.dp)
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 2.dp),
+                    horizontalArrangement = Arrangement.Start,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "✗",
+                        text = if (isPositive) "✓" else "⚠",
                         style = ZipLockTypography.Small,
-                        color = ZipLockColors.ErrorRed
+                        color = if (isPositive) ZipLockColors.SuccessGreen else ZipLockColors.WarningYellow
                     )
 
-                    Spacer(modifier = Modifier.width(ZipLockSpacing.Small))
+                    Spacer(modifier = Modifier.width(8.dp))
 
                     Text(
-                        text = requirement,
+                        text = feedback,
                         style = ZipLockTypography.Small,
-                        color = ZipLockColors.ErrorRed
-                    )
-                }
-            }
-
-            // Show satisfied requirements
-            strength.satisfied.forEach { satisfaction: String ->
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(vertical = 2.dp)
-                ) {
-                    Text(
-                        text = "✓",
-                        style = ZipLockTypography.Small,
-                        color = ZipLockColors.SuccessGreen
-                    )
-
-                    Spacer(modifier = Modifier.width(ZipLockSpacing.Small))
-
-                    Text(
-                        text = satisfaction,
-                        style = ZipLockTypography.Small,
-                        color = ZipLockColors.SuccessGreen
+                        color = if (isPositive) ZipLockColors.SuccessGreen else ZipLockColors.WarningYellow
                     )
                 }
             }

@@ -3,12 +3,12 @@
 //! This component displays information about available updates and provides
 //! appropriate installation instructions based on the detected installation method.
 
+use crate::services::{InstallationMethod, UpdateCheckResult};
 use iced::{
     alignment::Horizontal,
     widget::{button, column, container, row, scrollable, text, Space},
     Alignment, Element, Length,
 };
-use ziplock_shared::{InstallationMethod, UpdateCheckResult};
 
 use crate::ui::theme::{button_styles, container_styles, utils};
 
@@ -114,18 +114,20 @@ impl UpdateDialog {
             .horizontal_alignment(Horizontal::Left);
 
         let notes_content = if let Some(release) = &self.update_result.latest_release {
-            let body = if release.body.is_empty() {
-                "No release notes available.".to_string()
+            let body = if let Some(body_text) = &release.body {
+                if body_text.is_empty() {
+                    "No release notes available.".to_string()
+                } else {
+                    // Simple markdown-to-text conversion for display
+                    body_text
+                        .lines()
+                        .filter(|line| !line.trim().starts_with('#'))
+                        .map(|line| line.trim_start_matches("- ").trim())
+                        .collect::<Vec<&str>>()
+                        .join("\n")
+                }
             } else {
-                // Simple markdown-to-text conversion for display
-                release
-                    .body
-                    .lines()
-                    .filter(|line| !line.trim().starts_with('#'))
-                    .map(|line| line.trim_start_matches("- ").trim())
-                    .filter(|line| !line.is_empty())
-                    .collect::<Vec<_>>()
-                    .join("\n")
+                "No release notes available.".to_string()
             };
 
             text(body).size(utils::typography::normal_text_size())
@@ -158,13 +160,13 @@ impl UpdateDialog {
 
         let installation_method = &self.update_result.installation_method;
         let default_version = "latest".to_string();
-        let latest_version = self
+        let _latest_version = self
             .update_result
             .latest_version
             .as_ref()
             .unwrap_or(&default_version);
 
-        let instructions_text = installation_method.update_instructions(latest_version);
+        let instructions_text = installation_method.update_instructions();
 
         let method_label = match installation_method {
             InstallationMethod::DebianPackage => "Detected: Debian/Ubuntu Package",
@@ -216,15 +218,16 @@ impl UpdateDialog {
 
         // Add "View Release" button if we have a release URL
         if let Some(release) = &self.update_result.latest_release {
-            if !release.html_url.is_empty() {
-                let release_button =
-                    button(text("View Release").horizontal_alignment(Horizontal::Center))
-                        .on_press(UpdateDialogMessage::OpenReleasePage)
-                        .padding(12)
-                        .style(button_styles::primary())
-                        .width(Length::Fixed(120.0));
+            if let Some(url) = &release.html_url {
+                if !url.is_empty() {
+                    let release_button =
+                        button(text("View Release").horizontal_alignment(Horizontal::Center))
+                            .on_press(UpdateDialogMessage::OpenReleasePage)
+                            .padding(12)
+                            .width(Length::Fixed(120.0));
 
-                buttons.insert(0, release_button);
+                    buttons.insert(0, release_button);
+                }
             }
         }
 
@@ -274,7 +277,7 @@ impl UpdateDialog {
         update_result
             .latest_release
             .as_ref()
-            .map(|release| release.html_url.clone())
+            .and_then(|release| release.html_url.clone())
             .filter(|url| !url.is_empty())
     }
 

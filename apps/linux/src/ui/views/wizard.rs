@@ -13,20 +13,19 @@ use rfd::AsyncFileDialog;
 use std::path::PathBuf;
 use tracing::{debug, error, info, warn};
 
-use crate::platform::LinuxFileOperationsHandler;
 use crate::ui::theme::{utils, LIGHT_GRAY_TEXT, MEDIUM_GRAY, WARNING_YELLOW};
 use crate::ui::{button_styles, progress_bar_styles, theme};
-use ziplock_shared::{PassphraseValidator, ValidationUtils};
+use ziplock_shared::{PasswordAnalyzer, PasswordStrength};
 
 /// Helper function to get theme color for strength level
-fn get_strength_color(level: &ziplock_shared::StrengthLevel) -> Color {
+fn get_strength_color(level: &PasswordStrength) -> Color {
     match level {
-        ziplock_shared::StrengthLevel::VeryWeak => theme::ERROR_RED,
-        ziplock_shared::StrengthLevel::Weak => theme::ERROR_RED,
-        ziplock_shared::StrengthLevel::Fair => WARNING_YELLOW,
-        ziplock_shared::StrengthLevel::Good => theme::SUCCESS_GREEN,
-        ziplock_shared::StrengthLevel::Strong => theme::SUCCESS_GREEN,
-        ziplock_shared::StrengthLevel::VeryStrong => theme::LOGO_PURPLE,
+        PasswordStrength::VeryWeak => theme::ERROR_RED,
+        PasswordStrength::Weak => theme::ERROR_RED,
+        PasswordStrength::Fair => WARNING_YELLOW,
+        PasswordStrength::Good => theme::SUCCESS_GREEN,
+        PasswordStrength::Strong => theme::SUCCESS_GREEN,
+        PasswordStrength::VeryStrong => theme::LOGO_PURPLE,
     }
 }
 
@@ -91,7 +90,6 @@ pub struct RepositoryWizard {
     passphrase: String,
     confirm_passphrase: String,
     show_passphrase: bool,
-    passphrase_validator: PassphraseValidator,
 
     // Creation progress
     creation_progress: f32,
@@ -113,7 +111,6 @@ impl Default for RepositoryWizard {
             passphrase: String::new(),
             confirm_passphrase: String::new(),
             show_passphrase: false,
-            passphrase_validator: ValidationUtils::for_creation(),
             creation_progress: 0.0,
             creation_error: None,
             is_loading: false,
@@ -457,7 +454,7 @@ impl RepositoryWizard {
 
     /// View passphrase setup step
     fn view_passphrase_setup(&self) -> Element<'_, WizardMessage> {
-        let passphrase_strength = self.passphrase_validator.validate(&self.passphrase);
+        let passphrase_analysis = PasswordAnalyzer::analyze(&self.passphrase);
         let passphrases_match =
             !self.confirm_passphrase.is_empty() && self.passphrase == self.confirm_passphrase;
 
@@ -486,9 +483,9 @@ impl RepositoryWizard {
                 Space::with_height(Length::Fixed(5.0)),
 
                 row![
-                    text(format!("Strength: {}", passphrase_strength.level.as_str()))
+                    text(format!("Strength: {:?}", passphrase_analysis.strength))
                         .size(crate::ui::theme::utils::typography::small_text_size())
-                        .style(iced::theme::Text::Color(get_strength_color(&passphrase_strength.level))),
+                        .style(iced::theme::Text::Color(get_strength_color(&passphrase_analysis.strength))),
                     Space::with_width(Length::Fill),
                     utils::password_visibility_toggle(
                         self.show_passphrase,
@@ -538,16 +535,16 @@ impl RepositoryWizard {
                     text("Passphrase Requirements:").size(crate::ui::theme::utils::typography::small_text_size()).style(iced::theme::Text::Color(MEDIUM_GRAY)),
                     Space::with_height(Length::Fixed(5.0)),
 
-                    // Show violations if any
-                    if !passphrase_strength.violations.is_empty() {
+                    // Show feedback if any
+                    if !passphrase_analysis.feedback.is_empty() {
                         column(
-                            passphrase_strength.violations
+                            passphrase_analysis.feedback
                                 .iter()
-                                .map(|violation| {
+                                .map(|feedback_msg| {
                                     row![
-                                        text("✗").style(iced::theme::Text::Color(theme::ERROR_RED)),
+                                        text("ℹ").style(iced::theme::Text::Color(WARNING_YELLOW)),
                                         Space::with_width(Length::Fixed(5.0)),
-                                        text(violation).size(crate::ui::theme::utils::typography::small_text_size()).style(iced::theme::Text::Color(theme::ERROR_RED))
+                                        text(feedback_msg).size(crate::ui::theme::utils::typography::small_text_size()).style(iced::theme::Text::Color(LIGHT_GRAY_TEXT))
                                     ].into()
                                 })
                                 .collect::<Vec<Element<WizardMessage>>>()
@@ -556,23 +553,16 @@ impl RepositoryWizard {
                         column![]
                     },
 
-                    // Show satisfied requirements
-                    if !passphrase_strength.satisfied.is_empty() {
-                        column(
-                            passphrase_strength.satisfied
-                                .iter()
-                                .map(|satisfied| {
-                                    row![
-                                        text("✓").style(iced::theme::Text::Color(theme::SUCCESS_GREEN)),
-                                        Space::with_width(Length::Fixed(5.0)),
-                                        text(satisfied).size(crate::ui::theme::utils::typography::small_text_size()).style(iced::theme::Text::Color(theme::SUCCESS_GREEN))
-                                    ].into()
-                                })
-                                .collect::<Vec<Element<WizardMessage>>>()
-                        ).spacing(3)
-                    } else {
-                        column![]
-                    },
+                    // Show score and entropy info
+                    row![
+                        text(format!("Score: {}/100", passphrase_analysis.score))
+                            .size(crate::ui::theme::utils::typography::small_text_size())
+                            .style(iced::theme::Text::Color(MEDIUM_GRAY)),
+                        Space::with_width(Length::Fixed(10.0)),
+                        text(format!("Entropy: {:.1} bits", passphrase_analysis.entropy))
+                            .size(crate::ui::theme::utils::typography::small_text_size())
+                            .style(iced::theme::Text::Color(MEDIUM_GRAY))
+                    ].align_items(Alignment::Center),
                 ]
                 .spacing(8)
             } else {
@@ -764,9 +754,11 @@ impl RepositoryWizard {
 
     /// Check if we can create the repository
     fn can_create_repository(&self) -> bool {
-        let passphrase_valid = self
-            .passphrase_validator
-            .meets_requirements(&self.passphrase);
+        let analysis = PasswordAnalyzer::analyze(&self.passphrase);
+        let passphrase_valid = matches!(
+            analysis.strength,
+            PasswordStrength::Good | PasswordStrength::Strong | PasswordStrength::VeryStrong
+        );
         let passphrases_match =
             !self.confirm_passphrase.is_empty() && self.passphrase == self.confirm_passphrase;
 
@@ -820,38 +812,19 @@ impl RepositoryWizard {
 
         info!("Creating repository: {}", repo_path.display());
 
-        // For now, bypass the hanging hybrid client and use direct external file operations
-        // This prevents the async runtime conflicts that cause hanging
-        info!("Using external file operations approach to avoid runtime conflicts");
+        // Use the unified repository service instead of legacy file operations
+        info!("Using unified repository service for repository creation");
 
-        let mut file_handler = LinuxFileOperationsHandler::new();
+        let repository_service = crate::services::get_repository_service();
 
-        // Create file operations JSON for archive creation
-        let file_operations = serde_json::json!({
-            "operations": [
-                {
-                    "type": "create_archive",
-                    "path": repo_path.to_string_lossy(),
-                    "password": passphrase,
-                    "format": "7z"
-                }
-            ]
-        })
-        .to_string();
-
-        // Execute the file operations
-        file_handler
-            .execute_file_operations(&file_operations)
+        // Create repository using unified architecture
+        repository_service
+            .create_repository(repo_path.to_string_lossy().to_string(), passphrase)
             .await
             .map_err(|e| {
-                error!("Failed to execute file operations: {}", e);
-                format!("Failed to create repository via file operations: {}", e)
+                error!("Failed to create repository: {}", e);
+                format!("Failed to create repository: {}", e)
             })?;
-
-        // Log successful creation - avoid hybrid client initialization in async context
-        // to prevent FFI deadlocks
-
-        info!("Repository created successfully via external file operations");
 
         info!("Repository created successfully at {:?}", repo_path);
         Ok(())
@@ -907,8 +880,11 @@ impl RepositoryWizard {
         if self.passphrase.is_empty() {
             theme::text_input_styles::standard()
         } else {
-            let strength = self.passphrase_validator.validate(&self.passphrase);
-            if strength.meets_requirements && strength.level.is_acceptable() {
+            let analysis = PasswordAnalyzer::analyze(&self.passphrase);
+            if matches!(
+                analysis.strength,
+                PasswordStrength::Good | PasswordStrength::Strong | PasswordStrength::VeryStrong
+            ) {
                 // Green border for strong passphrase
                 theme::text_input_styles::valid()
             } else {

@@ -7,7 +7,9 @@ use std::path::PathBuf;
 use tracing::info;
 
 use crate::ui::theme::{self, button_styles, text_input_styles, utils};
-use ziplock_shared::config::{AppConfig, FrontendConfig, RepositoryConfig, UiConfig};
+use ziplock_shared::config::{
+    AppBehaviorConfig, AppConfig, RepositoryManagementConfig, SecurityConfig, UiConfig,
+};
 
 #[derive(Debug, Clone)]
 pub enum SettingsMessage {
@@ -97,7 +99,7 @@ pub struct SettingsView {
     current_tab: SettingsTab,
 
     // Store original config for comparison
-    original_config: FrontendConfig,
+    original_config: AppConfig,
 
     // UI Settings
     font_size: String,
@@ -146,30 +148,31 @@ pub struct SettingsView {
 }
 
 impl SettingsView {
-    pub fn new(config: FrontendConfig) -> Self {
+    pub fn new(config: AppConfig) -> Self {
         let mut result = Self {
             current_tab: SettingsTab::Interface,
             original_config: config.clone(),
 
             // Initialize form fields from config
-            font_size: config.ui.font_size.to_string(),
+            font_size: config.ui.font_scale.unwrap_or(1.0).to_string(),
             show_wizard_on_startup: config.ui.show_wizard_on_startup,
 
-            auto_lock_timeout: config.app.auto_lock_timeout.to_string(),
-            clipboard_timeout: config.app.clipboard_timeout.to_string(),
-            enable_backup: config.app.enable_backup,
-            backup_count: "3".to_string(), // Default backup count (not from config yet)
-            show_password_strength: config.app.show_password_strength,
-            minimize_to_tray: config.app.minimize_to_tray,
-            start_minimized: config.app.start_minimized,
-            auto_check_updates: config.app.auto_check_updates,
+            auto_lock_timeout: config.ui.auto_lock_timeout.to_string(),
+            clipboard_timeout: config.security.clipboard_timeout.to_string(),
+            enable_backup: config.behavior.enable_backup,
+            backup_count: config.behavior.backup_count.to_string(),
+            show_password_strength: config.ui.show_password_strength,
+            minimize_to_tray: config.ui.minimize_to_tray,
+            start_minimized: config.ui.start_minimized,
+            auto_check_updates: config.behavior.auto_check_updates,
 
             default_directory: config
-                .repository
+                .repository_settings
                 .default_directory
+                .as_ref()
                 .map(|p| p.to_string_lossy().to_string())
                 .unwrap_or_default(),
-            auto_detect: config.repository.auto_detect,
+            auto_detect: config.repository_settings.auto_detect,
 
             // Default security settings
             min_password_length: "12".to_string(),
@@ -181,7 +184,7 @@ impl SettingsView {
             min_unique_chars: "8".to_string(),
 
             // Store original values for change detection
-            original_backup_count: "3".to_string(),
+            original_backup_count: config.behavior.backup_count.to_string(),
             original_min_password_length: "12".to_string(),
             original_require_lowercase: true,
             original_require_uppercase: true,
@@ -1138,16 +1141,19 @@ impl SettingsView {
         if !self.default_directory.is_empty() {
             let path = std::path::Path::new(&self.default_directory);
             // Only validate if the directory field has been manually changed from the original
-            let dir_changed = self.default_directory
+            // Repository settings change detection
+            let default_dir_changed = self.default_directory
                 != self
                     .original_config
-                    .repository
+                    .repository_settings
                     .default_directory
                     .as_ref()
                     .map(|p| p.to_string_lossy().to_string())
                     .unwrap_or_default();
+            let _auto_detect_changed =
+                self.auto_detect != self.original_config.repository_settings.auto_detect;
 
-            if dir_changed {
+            if default_dir_changed {
                 if !path.exists() {
                     let error = "Default directory does not exist".to_string();
                     info!(
@@ -1195,16 +1201,24 @@ impl SettingsView {
         let _old_has_changes = self.has_changes;
 
         // Direct comparison of individual fields with detailed logging
-        let font_size_changed = self.font_size != self.original_config.ui.font_size.to_string();
+        let font_size_changed = self.font_size
+            != self
+                .original_config
+                .ui
+                .font_scale
+                .unwrap_or(1.0)
+                .to_string();
         let show_wizard_changed =
             self.show_wizard_on_startup != self.original_config.ui.show_wizard_on_startup;
 
         info!(
             "Font size: '{}' vs '{}' = {}",
-            self.font_size, self.original_config.ui.font_size, font_size_changed
+            self.font_size,
+            self.original_config.ui.font_scale.unwrap_or(1.0),
+            font_size_changed
         );
         info!(
-            "Show wizard: {} vs {} = {}",
+            "show_wizard_changed: {} != {} = {}",
             self.show_wizard_on_startup,
             self.original_config.ui.show_wizard_on_startup,
             show_wizard_changed
@@ -1213,49 +1227,52 @@ impl SettingsView {
         let ui_changed = font_size_changed || show_wizard_changed;
 
         let auto_lock_changed =
-            self.auto_lock_timeout != self.original_config.app.auto_lock_timeout.to_string();
+            self.auto_lock_timeout != self.original_config.ui.auto_lock_timeout.to_string();
         let clipboard_changed =
-            self.clipboard_timeout != self.original_config.app.clipboard_timeout.to_string();
-        let backup_enabled_changed = self.enable_backup != self.original_config.app.enable_backup;
+            self.clipboard_timeout != self.original_config.security.clipboard_timeout.to_string();
+        let backup_enabled_changed =
+            self.enable_backup != self.original_config.behavior.enable_backup;
         let password_strength_changed =
-            self.show_password_strength != self.original_config.app.show_password_strength;
+            self.show_password_strength != self.original_config.ui.show_password_strength;
         let minimize_tray_changed =
-            self.minimize_to_tray != self.original_config.app.minimize_to_tray;
+            self.minimize_to_tray != self.original_config.ui.minimize_to_tray;
         let start_minimized_changed =
-            self.start_minimized != self.original_config.app.start_minimized;
+            self.start_minimized != self.original_config.ui.start_minimized;
         let auto_updates_changed =
-            self.auto_check_updates != self.original_config.app.auto_check_updates;
+            self.auto_check_updates != self.original_config.behavior.auto_check_updates;
 
         info!(
             "Auto lock: '{}' vs '{}' = {}",
-            self.auto_lock_timeout, self.original_config.app.auto_lock_timeout, auto_lock_changed
+            self.auto_lock_timeout, self.original_config.ui.auto_lock_timeout, auto_lock_changed
         );
         info!(
             "Clipboard: '{}' vs '{}' = {}",
-            self.clipboard_timeout, self.original_config.app.clipboard_timeout, clipboard_changed
+            self.clipboard_timeout,
+            self.original_config.security.clipboard_timeout,
+            clipboard_changed
         );
         info!(
             "Enable backup: {} vs {} = {}",
-            self.enable_backup, self.original_config.app.enable_backup, backup_enabled_changed
+            self.enable_backup, self.original_config.behavior.enable_backup, backup_enabled_changed
         );
         info!(
             "Show password strength: {} vs {} = {}",
             self.show_password_strength,
-            self.original_config.app.show_password_strength,
+            self.original_config.ui.show_password_strength,
             password_strength_changed
         );
         info!(
             "Minimize to tray: {} vs {} = {}",
-            self.minimize_to_tray, self.original_config.app.minimize_to_tray, minimize_tray_changed
+            self.minimize_to_tray, self.original_config.ui.minimize_to_tray, minimize_tray_changed
         );
         info!(
             "Start minimized: {} vs {} = {}",
-            self.start_minimized, self.original_config.app.start_minimized, start_minimized_changed
+            self.start_minimized, self.original_config.ui.start_minimized, start_minimized_changed
         );
         info!(
             "Auto check updates: {} vs {} = {}",
             self.auto_check_updates,
-            self.original_config.app.auto_check_updates,
+            self.original_config.behavior.auto_check_updates,
             auto_updates_changed
         );
 
@@ -1269,13 +1286,14 @@ impl SettingsView {
 
         let original_default_dir = self
             .original_config
-            .repository
+            .repository_settings
             .default_directory
             .as_ref()
             .map(|p| p.to_string_lossy().to_string())
             .unwrap_or_default();
         let default_dir_changed = self.default_directory != original_default_dir;
-        let auto_detect_changed = self.auto_detect != self.original_config.repository.auto_detect;
+        let auto_detect_changed =
+            self.auto_detect != self.original_config.repository_settings.auto_detect;
 
         info!(
             "Default dir: '{}' vs '{}' = {}",
@@ -1283,12 +1301,13 @@ impl SettingsView {
         );
         info!(
             "Auto detect: {} vs {} = {}",
-            self.auto_detect, self.original_config.repository.auto_detect, auto_detect_changed
+            self.auto_detect,
+            self.original_config.repository_settings.auto_detect,
+            auto_detect_changed
         );
 
         let repo_changed = default_dir_changed || auto_detect_changed;
 
-        // Check security settings and backup count since they're not in FrontendConfig
         let min_len_changed = self.min_password_length != self.original_min_password_length;
         let lowercase_changed = self.require_lowercase != self.original_require_lowercase;
         let uppercase_changed = self.require_uppercase != self.original_require_uppercase;
@@ -1358,27 +1377,27 @@ impl SettingsView {
         let config = &self.original_config;
 
         // Reset UI settings
-        self.font_size = config.ui.font_size.to_string();
+        self.font_size = config.ui.font_scale.unwrap_or(1.0).to_string();
         self.show_wizard_on_startup = config.ui.show_wizard_on_startup;
 
         // Reset app settings
-        self.auto_lock_timeout = config.app.auto_lock_timeout.to_string();
-        self.clipboard_timeout = config.app.clipboard_timeout.to_string();
-        self.enable_backup = config.app.enable_backup;
+        self.auto_lock_timeout = config.ui.auto_lock_timeout.to_string();
+        self.clipboard_timeout = config.security.clipboard_timeout.to_string();
+        self.enable_backup = config.behavior.enable_backup;
         self.backup_count = self.original_backup_count.clone();
-        self.show_password_strength = config.app.show_password_strength;
-        self.minimize_to_tray = config.app.minimize_to_tray;
-        self.start_minimized = config.app.start_minimized;
-        self.auto_check_updates = config.app.auto_check_updates;
+        self.show_password_strength = config.ui.show_password_strength;
+        self.minimize_to_tray = config.ui.minimize_to_tray;
+        self.start_minimized = config.ui.start_minimized;
+        self.auto_check_updates = config.behavior.auto_check_updates;
 
         // Reset repository settings
         self.default_directory = config
-            .repository
+            .repository_settings
             .default_directory
             .as_ref()
             .map(|p| p.to_string_lossy().to_string())
             .unwrap_or_default();
-        self.auto_detect = config.repository.auto_detect;
+        self.auto_detect = config.repository_settings.auto_detect;
 
         // Reset security settings to originals
         self.min_password_length = self.original_min_password_length.clone();
@@ -1394,52 +1413,66 @@ impl SettingsView {
         self.is_saving = false;
     }
 
-    fn build_current_config(&self) -> FrontendConfig {
-        FrontendConfig {
-            repository: RepositoryConfig {
-                path: self.original_config.repository.path.clone(),
-                default_directory: if self.default_directory.is_empty() {
-                    None
-                } else {
-                    Some(PathBuf::from(&self.default_directory))
-                },
-                recent_repositories: self.original_config.repository.recent_repositories.clone(),
-                max_recent: self.original_config.repository.max_recent,
-                auto_detect: self.auto_detect,
-                search_directories: self.original_config.repository.search_directories.clone(),
-            },
+    fn build_current_config(&self) -> AppConfig {
+        AppConfig {
             ui: UiConfig {
-                window_width: self.original_config.ui.window_width,
-                window_height: self.original_config.ui.window_height,
                 theme: self.original_config.ui.theme.clone(),
-                show_wizard_on_startup: self.show_wizard_on_startup,
-                font_size: self
-                    .font_size
-                    .parse()
-                    .unwrap_or(self.original_config.ui.font_size),
                 language: self.original_config.ui.language.clone(),
-            },
-            app: AppConfig {
                 auto_lock_timeout: self
                     .auto_lock_timeout
                     .parse()
-                    .unwrap_or(self.original_config.app.auto_lock_timeout),
+                    .unwrap_or(self.original_config.ui.auto_lock_timeout),
+                window_width: self.original_config.ui.window_width,
+                window_height: self.original_config.ui.window_height,
+                font_scale: Some(
+                    self.font_size
+                        .parse()
+                        .unwrap_or(self.original_config.ui.font_scale.unwrap_or(1.0)),
+                ),
+                show_password_strength: self.show_password_strength,
+                start_minimized: self.start_minimized,
+                show_wizard_on_startup: self.show_wizard_on_startup,
+                minimize_to_tray: self.minimize_to_tray,
+            },
+            security: SecurityConfig {
+                password_timeout: self.original_config.security.password_timeout,
                 clipboard_timeout: self
                     .clipboard_timeout
                     .parse()
-                    .unwrap_or(self.original_config.app.clipboard_timeout),
-                enable_backup: self.enable_backup,
-                show_passwords_default: self.original_config.app.show_passwords_default,
-                show_password_strength: self.show_password_strength,
-                minimize_to_tray: self.minimize_to_tray,
-                start_minimized: self.start_minimized,
-                auto_check_updates: self.auto_check_updates,
+                    .unwrap_or(self.original_config.security.clipboard_timeout),
+                biometric_enabled: self.original_config.security.biometric_enabled,
+                lock_on_suspend: self.original_config.security.lock_on_suspend,
+                clear_clipboard_on_lock: self.original_config.security.clear_clipboard_on_lock,
+                max_auth_attempts: self.original_config.security.max_auth_attempts,
+                lockout_duration: self.original_config.security.lockout_duration,
             },
-            version: self.original_config.version.clone(),
+            behavior: AppBehaviorConfig {
+                auto_check_updates: self.auto_check_updates,
+                enable_backup: self.enable_backup,
+                backup_count: self
+                    .backup_count
+                    .parse()
+                    .unwrap_or(self.original_config.behavior.backup_count),
+            },
+            repository_settings: RepositoryManagementConfig {
+                default_directory: if self.default_directory.is_empty() {
+                    None
+                } else {
+                    Some(std::path::PathBuf::from(&self.default_directory))
+                },
+                auto_detect: self.auto_detect,
+                max_recent: self.original_config.repository_settings.max_recent,
+                search_directories: self
+                    .original_config
+                    .repository_settings
+                    .search_directories
+                    .clone(),
+            },
+            repositories: self.original_config.repositories.clone(),
         }
     }
 
-    pub fn get_updated_config(&self) -> FrontendConfig {
+    pub fn get_updated_config(&self) -> AppConfig {
         self.build_current_config()
     }
 

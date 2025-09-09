@@ -38,11 +38,13 @@ Unlike cloud-based password managers, ZipLock gives you full ownership of your d
 - **🛡️ Zero Knowledge**: Your master key never leaves your device
 - **🔓 Open Source**: Fully auditable code under Apache 2.0 license
 - **🌐 Cross-Platform**: Native apps for all major platforms
+- **⚡ Pure Memory Operations**: Uses sevenz-rust2 for in-memory AES-256 encryption
 
 ## ✨ Key Features
 
 ### Security First
-- **AES-256 Encryption**: Military-grade encryption with robust key derivation using Argon2
+- **AES-256 Encryption**: Military-grade encryption using sevenz-rust2 with robust key derivation
+- **In-Memory Operations**: All cryptographic operations happen in memory - no temporary files
 - **Secure Memory Management**: Master key stored only in memory, never persisted to disk
 - **Auto-Lock Protection**: Configurable timeout to automatically lock your vault
 - **File Locking**: Prevents concurrent access and data corruption during sync operations
@@ -87,46 +89,79 @@ ZipLock is designed to be intuitive and efficient for both new users and power u
 
 ## 📱 Platform Support
 
-ZipLock follows a unified architecture with native applications calling a shared core library directly:
+ZipLock follows a unified architecture with pure separation of concerns:
 
-| Platform | Status | Technology | Features |
-|----------|--------|------------|----------|
-| **Linux** | ✅ Stable | Rust + iced/GTK4 | Full desktop experience, Wayland support |
-| **Windows** | 📋 Planned | Rust + Tauri | Native Windows integration |
-| **iOS** | 📋 Planned | Swift + SwiftUI | Direct FFI integration with shared core |
-| **Android** | 🚧 In Development | Kotlin + Jetpack Compose | Direct FFI integration with shared core |
-| **macOS** | 📋 Planned | Swift + SwiftUI | Native macOS experience |
+| Platform | Status | Technology | File Operations | Memory Operations |
+|----------|--------|------------|----------------|------------------|
+| **Linux** | ✅ Stable | Rust + iced/GTK4 | Shared library direct access | Unified FFI |
+| **Windows** | 📋 Planned | Rust + iced | Shared library direct access | Unified FFI |
+| **iOS** | 📋 Planned | Swift + SwiftUI | Native iOS file APIs + 7z | Memory-only FFI |
+| **Android** | 🚧 In Development | Kotlin + Jetpack Compose | Native Android file APIs + 7z | Memory-only FFI |
+| **macOS** | 📋 Planned | Swift + SwiftUI | Native macOS file APIs + 7z | Memory-only FFI |
 
 ### Architecture Benefits
-- **Direct Integration**: Lightweight apps with direct access to core functionality
-- **Secure Core**: All cryptographic operations handled by memory-safe Rust library
-- **Consistent Experience**: Single implementation ensures identical behavior across platforms
-- **Platform Native**: Each client uses platform-specific UI technologies with shared business logic
+- **Pure Separation**: Memory operations in shared core, file operations via platform callbacks
+- **Platform Optimized**: Mobile uses native file APIs, desktop can use direct or callback approach
+- **Secure Core**: All credential operations handled by memory-safe Rust library in memory only
+- **Consistent Behavior**: Single memory repository ensures identical data operations across platforms
+- **No Runtime Complexity**: Clean boundaries eliminate detection logic and fallback mechanisms
 
 ## 🏗️ Architecture
 
-ZipLock follows a unified architecture with direct FFI integration for maximum portability and simplicity:
+ZipLock implements a unified architecture with pure separation of concerns:
 
 ```
-┌─────────────────┐    Direct   ┌─────────────────┐    File I/O   ┌─────────────────┐
-│  Application    │    FFI      │   Shared Core   │ ◄───────────► │ Encrypted 7z    │
-│                 │ ◄─────────► │    Library      │               │ Archive         │
-│ • Linux (Rust)  │             │     (Rust)      │               │                 │
-│ • Windows(Rust) │             │                 │               │                 │
-│ • iOS (Swift)   │             │ • Archive Ops   │               │                 │
-│ • Android(Kotlin│             │ • Cryptography  │               │                 │
-│ • macOS (Swift) │             │ • Validation    │               │                 │
-│                 │             │ • C FFI API     │               │                 │
-└─────────────────┘             │ • Data Models   │               └─────────────────┘
-                                │ • Session Mgmt  │
-                                └─────────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│                    Shared Library Core                          │
+│                                                                 │
+│  ┌─────────────────────────────────────────────────────────────┐│
+│  │              Pure Memory Repository                         ││
+│  │  • Credential CRUD operations                              ││
+│  │  • Data validation & cryptography                          ││
+│  │  • Business logic & rules                                  ││
+│  │  • YAML serialization/deserialization                     ││
+│  │  • NO file I/O operations                                  ││
+│  └─────────────────────────────────────────────────────────────┘│
+│                                                                 │
+│  ┌─────────────────────────────────────────────────────────────┐│
+│  │            File Operation Callbacks                         ││
+│  │                                                             ││
+│  │  trait FileOperationProvider {                             ││
+│  │      fn read_archive(path) -> Vec<u8>;                     ││
+│  │      fn write_archive(path, data);                         ││
+│  │      fn extract_archive(data, password) -> FileMap;        ││
+│  │      fn create_archive(files, password) -> Vec<u8>;        ││
+│  │  }                                                          ││
+│  └─────────────────────────────────────────────────────────────┘│
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              │ FFI + Callback Interface
+                              │
+            ┌─────────────────┴─────────────────┐
+            │                                   │
+            ▼                                   ▼
+  ┌─────────────────┐                 ┌─────────────────┐
+  │  Mobile Apps    │                 │  Desktop Apps   │
+  │  (Android/iOS)  │                 │ (Linux/Mac/Win) │
+  │                 │                 │                 │
+  │ ┌─────────────┐ │                 │ ┌─────────────┐ │
+  │ │File I/O     │ │                 │ │File I/O     │ │
+  │ │Provider     │ │                 │ │Provider     │ │
+  │ │(Native)     │ │                 │ │(Optional)   │ │
+  │ │• SAF/Docs   │ │                 │ │• Direct FS  │ │
+  │ │• Cloud APIs │ │                 │ │• Or callback│ │
+  │ │• 7z native  │ │                 │ │• 7z direct  │ │
+  │ │• Memory FFI │ │                 │ │• Full FFI   │ │
+  │ └─────────────┘ │                 │ └─────────────┘ │
+  └─────────────────┘                 └─────────────────┘
 ```
 
 ### Key Architectural Principles
-- **Unified Implementation**: Single core library serves all platforms through FFI
-- **Direct Integration**: No IPC overhead, direct function calls for optimal performance
-- **Memory Safety**: Rust's guarantees protect against common security vulnerabilities
-- **Platform Native UI**: Each platform uses native UI technologies with shared business logic
+- **Pure Memory Operations**: All credential operations happen in shared library memory using sevenz-rust2
+- **Clean Separation**: File I/O handled through callbacks, never mixed with data operations
+- **Platform Flexibility**: Mobile uses native file APIs, desktop uses sevenz-rust2 for in-memory operations
+- **No Runtime Detection**: Simple, predictable behavior without complex fallback mechanisms
+- **Synchronous Core**: Pure synchronous operations with async wrappers where needed
 
 ## 🚀 Getting Started
 
@@ -197,12 +232,13 @@ For complete configuration documentation and examples, see the [Configuration Gu
 - [FAQ](docs/TODO.md#faq) - Frequently asked questions (planned)
 
 ### Technical Documentation
-- [Architecture Overview](docs/architecture.md) - Detailed system architecture
-- [Design Guidelines](docs/design.md) - UI/UX design principles
-- [Mobile Integration](docs/technical/mobile-integration.md) - iOS and Android integration examples
+- [Architecture Overview](docs/architecture.md) - Detailed unified system architecture
+- [Unified Architecture Proposal](docs/technical/unified-architecture-proposal.md) - Complete architectural design and rationale
+- [Implementation Roadmap](docs/technical/implementation-roadmap.md) - Detailed implementation plan with concrete steps
+- [Starter Implementation Guide](docs/technical/starter-implementation.md) - Production-ready code examples
+- [Design Guidelines](docs/design.md) - UI/UX design principles and validation feedback
+- [FFI Integration Guide](docs/technical/ffi-integration.md) - Platform-specific FFI implementation details
 - [Configuration Guide](docs/technical/configuration.md) - Complete configuration reference with examples
-- [Repository Detection Implementation](docs/technical/repository-detection-implementation.md) - Technical implementation details
-- [Validation Implementation](docs/technical/validation-implementation.md) - Comprehensive validation system details
 
 ### Developer Documentation
 - [Development Guide](docs/TODO.md#development-guide) - Setting up the development environment (planned)
@@ -256,7 +292,7 @@ The Apache 2.0 license provides strong protection for both users and contributor
 ZipLock is built on the shoulders of giants:
 
 - **[7-Zip](https://www.7-zip.org/)** - For the excellent archive format and compression algorithms
-- **[sevenz-rust2](https://github.com/hasenbanck/sevenz-rust2)** - Pure Rust implementation of 7z format
+- **[sevenz-rust2](https://github.com/hasenbanck/sevenz-rust2)** - Pure Rust implementation enabling in-memory 7z operations with AES-256 encryption
 - **[Iconoir](https://iconoir.com/)** - Beautiful free SVG icons used throughout the UI
 - **Rust Community** - For excellent cryptography and systems programming crates
 - **Contributors** - Everyone who has contributed code, documentation, and feedback

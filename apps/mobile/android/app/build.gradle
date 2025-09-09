@@ -54,22 +54,14 @@ android {
         }
     }
 
-    // Temporarily disabled for Kotlin compilation focus
-    // externalNativeBuild {
-    //     cmake {
-    //         path file('src/main/cpp/CMakeLists.txt')
-    //         version '3.22.1'
-    //     }
-    // }
+    // Native library handling for unified architecture
+    // The shared library (libziplock_shared.so) should be placed in src/main/jniLibs/
 
     defaultConfig {
-        // Temporarily disabled for Kotlin compilation focus
-        // externalNativeBuild {
-        //     cmake {
-        //         cppFlags '-std=c++17'
-        //         abiFilters 'arm64-v8a', 'armeabi-v7a', 'x86_64', 'x86'
-        //     }
-        // }
+        // Target architectures for native library
+        ndk {
+            abiFilters 'arm64-v8a', 'armeabi-v7a', 'x86_64', 'x86'
+        }
     }
 
     ndkVersion "25.2.9519653"
@@ -79,6 +71,7 @@ android {
         }
         jniLibs {
             useLegacyPackaging = true
+            keepDebugSymbols += "**/*.so"
         }
     }
 }

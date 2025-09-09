@@ -7,6 +7,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ziplock.ffi.ZipLockNative
 import com.ziplock.ffi.ZipLockNativeHelper
+import com.ziplock.utils.PassphraseStrengthResult
 
 import com.ziplock.utils.FileUtils
 import com.ziplock.utils.WritableArchiveInfo
@@ -28,8 +29,8 @@ class CreateArchiveViewModel : ViewModel() {
     private val _uiState = MutableStateFlow(CreateArchiveUiState())
     val uiState: StateFlow<CreateArchiveUiState> = _uiState.asStateFlow()
 
-    private val _passphraseStrength = MutableStateFlow<ZipLockNative.PassphraseStrengthResult?>(null)
-    val passphraseStrength: StateFlow<ZipLockNative.PassphraseStrengthResult?> = _passphraseStrength.asStateFlow()
+    private val _passphraseStrength = MutableStateFlow<PassphraseStrengthResult?>(null)
+    val passphraseStrength: StateFlow<PassphraseStrengthResult?> = _passphraseStrength.asStateFlow()
 
     init {
         // Initialize gracefully without crashing
@@ -125,8 +126,8 @@ class CreateArchiveViewModel : ViewModel() {
             try {
                 // Check if FFI library is available before using it
                 if (isFFIAvailable()) {
-                    val strength = ZipLockNative.validatePassphraseStrength(passphrase)
-                    _passphraseStrength.value = strength
+                    val result = PassphraseStrengthResult.analyze(passphrase)
+                    _passphraseStrength.value = result
                 } else {
                     // Use fallback validation when FFI is not available
                     val fallbackStrength = createFallbackValidation(passphrase)
@@ -143,73 +144,9 @@ class CreateArchiveViewModel : ViewModel() {
     /**
      * Create fallback passphrase validation when FFI is not available
      */
-    private fun createFallbackValidation(passphrase: String): ZipLockNative.PassphraseStrengthResult {
-        val requirements = mutableListOf<String>()
-        val satisfied = mutableListOf<String>()
-        var score = 0
-
-        // Length check
-        if (passphrase.length < 12) {
-            requirements.add("Must be at least 12 characters long")
-        } else {
-            satisfied.add("Length requirement met (${passphrase.length} chars)")
-            score += 20
-        }
-
-        // Character type checks
-        val hasLowercase = passphrase.any { it.isLowerCase() }
-        val hasUppercase = passphrase.any { it.isUpperCase() }
-        val hasDigit = passphrase.any { it.isDigit() }
-        val hasSpecial = passphrase.any { !it.isLetterOrDigit() }
-
-        if (!hasLowercase) {
-            requirements.add("Must contain lowercase letters")
-        } else {
-            satisfied.add("Contains lowercase letters")
-            score += 15
-        }
-
-        if (!hasUppercase) {
-            requirements.add("Must contain uppercase letters")
-        } else {
-            satisfied.add("Contains uppercase letters")
-            score += 15
-        }
-
-        if (!hasDigit) {
-            requirements.add("Must contain numbers")
-        } else {
-            satisfied.add("Contains numbers")
-            score += 15
-        }
-
-        if (!hasSpecial) {
-            requirements.add("Must contain special characters")
-        } else {
-            satisfied.add("Contains special characters")
-            score += 15
-        }
-
-        // Bonus points for length
-        if (passphrase.length > 16) score += 10
-        if (passphrase.length > 20) score += 10
-
-        val strength = when (score) {
-            in 0..20 -> "Very Weak"
-            in 21..40 -> "Weak"
-            in 41..60 -> "Fair"
-            in 61..80 -> "Good"
-            in 81..95 -> "Strong"
-            else -> "Very Strong"
-        }
-
-        return ZipLockNative.PassphraseStrengthResult(
-            score = score.coerceAtMost(100),
-            strength = strength,
-            requirements = requirements,
-            satisfied = satisfied,
-            isValid = requirements.isEmpty() && score >= 60
-        )
+    private fun createFallbackValidation(passphrase: String): PassphraseStrengthResult {
+        // Use the PassphraseStrengthResult.analyze method instead of custom logic
+        return PassphraseStrengthResult.analyze(passphrase)
     }
 
     /**
@@ -319,6 +256,14 @@ class CreateArchiveViewModel : ViewModel() {
         )
 
         viewModelScope.launch {
+            // CRITICAL DEBUG: Log passphrase at the start of archive creation
+            Log.d("CreateArchiveViewModel", "ENCRYPTION DEBUG: Starting archive creation")
+            Log.d("CreateArchiveViewModel", "ENCRYPTION DEBUG: UI passphrase length: ${currentState.passphrase.length}")
+            Log.d("CreateArchiveViewModel", "ENCRYPTION DEBUG: UI passphrase empty: ${currentState.passphrase.isEmpty()}")
+            if (currentState.passphrase.isEmpty()) {
+                Log.e("CreateArchiveViewModel", "🚨 CRITICAL: UI passphrase is empty! Archive will be unencrypted!")
+            }
+
             createArchive(
                 context = context,
                 destinationPath = currentState.destinationPath!!,
@@ -351,13 +296,29 @@ class CreateArchiveViewModel : ViewModel() {
                     Log.d("CreateArchiveViewModel", "Will copy back to: ${archiveInfo.finalDestinationUri}")
                 }
 
-                // Create the archive using the FFI library with the real file path
-                val result = ZipLockNative.createArchive(archiveInfo.workingPath, passphrase)
-                Log.d("CreateArchiveViewModel", "Archive creation result: success=${result.success}, error=${result.errorMessage}")
+                // CRITICAL DEBUG: Log passphrase details for encryption verification
+                Log.d("CreateArchiveViewModel", "ENCRYPTION DEBUG: Passphrase provided: ${passphrase.isNotEmpty()}")
+                Log.d("CreateArchiveViewModel", "ENCRYPTION DEBUG: Passphrase length: ${passphrase.length}")
+                if (passphrase.isEmpty()) {
+                    Log.w("CreateArchiveViewModel", "⚠️ WARNING: Empty passphrase - archive will be UNENCRYPTED!")
+                } else {
+                    Log.d("CreateArchiveViewModel", "✓ Non-empty passphrase - archive should be encrypted")
+                }
+
+                // Create the archive using the repository manager
+                val workingFileUri = Uri.fromFile(java.io.File(archiveInfo.workingPath))
+                val repositoryManager = com.ziplock.repository.MobileRepositoryManager.getInstance(context)
+                Log.d("CreateArchiveViewModel", "Calling createRepository with URI: $workingFileUri")
+                Log.d("CreateArchiveViewModel", "ENCRYPTION DEBUG: Calling createRepository with passphrase length: ${passphrase.length}")
+                val result = repositoryManager.createRepository(workingFileUri, passphrase)
 
                 updateProgress(0.5f)
+                Log.d("CreateArchiveViewModel", "Repository creation result: ${result::class.simpleName}")
 
-                if (result.success) {
+                when (result) {
+                    is com.ziplock.repository.MobileRepositoryManager.RepositoryResult.Success<*> -> {
+                        Log.d("CreateArchiveViewModel", "Archive creation successful")
+                        repositoryManager.closeRepository() // Close the new empty repository
                     // If we need to copy back to the original location, do it now
                     if (archiveInfo.needsCopyBack && archiveInfo.finalDestinationUri != null) {
                         updateProgress(0.7f)
@@ -388,24 +349,30 @@ class CreateArchiveViewModel : ViewModel() {
                         createdArchivePath = finalPath,
                         errorMessage = null
                     )
-                } else {
-                    // Map specific error codes to better messages
-                    val userMessage = when (result.errorMessage) {
-                        "Internal error" -> "Failed to create archive. The selected location may not be writable or the filename may be invalid."
-                        "Permission denied" -> "Permission denied. Please check that you have write access to the selected folder."
-                        "Invalid parameter provided" -> "Invalid archive name or destination. Please check your inputs and try again."
-                        else -> result.errorMessage ?: "Failed to create archive"
                     }
-                    throw Exception(userMessage)
+
+                    is com.ziplock.repository.MobileRepositoryManager.RepositoryResult.Error<*> -> {
+                        Log.e("CreateArchiveViewModel", "Repository creation failed: ${result.message}")
+                        // Map specific error codes to better messages
+                        val userMessage = when {
+                            result.message.contains("Internal error", ignoreCase = true) -> "Failed to create archive. The selected location may not be writable or the filename may be invalid."
+                            result.message.contains("permission", ignoreCase = true) -> "Permission denied. Please check that you have write access to the selected folder."
+                            result.message.contains("Invalid parameter", ignoreCase = true) -> "Invalid archive name or destination. Please check your inputs and try again."
+                            else -> result.message
+                        }
+                        throw Exception(userMessage)
+                    }
                 }
 
             } catch (e: Exception) {
+                Log.e("CreateArchiveViewModel", "Archive creation failed with exception", e)
                 // Clean up working file if creation failed
                 archiveInfo?.let { info ->
                     try {
                         java.io.File(info.workingPath).delete()
-                    } catch (cleanupException: Exception) {
-                        // Ignore cleanup errors
+                        Log.d("CreateArchiveViewModel", "Cleaned up working file: ${info.workingPath}")
+                    } catch (deleteException: Exception) {
+                        Log.w("CreateArchiveViewModel", "Failed to clean up working file", deleteException)
                     }
                 }
 
@@ -494,7 +461,7 @@ class CreateArchiveViewModel : ViewModel() {
      */
     private fun isFFIAvailable(): Boolean {
         return try {
-            ZipLockNative.validateLibrary()
+            ZipLockNative.init() == 0
         } catch (e: UnsatisfiedLinkError) {
             false
         } catch (e: Exception) {

@@ -23,10 +23,10 @@ import com.ziplock.ui.theme.*
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CredentialsListScreen(
-    credentials: List<ZipLockNative.Credential>,
+    credentials: List<Map<String, Any>>,
     searchQuery: String,
     onSearchQueryChange: (String) -> Unit,
-    onCredentialClick: (ZipLockNative.Credential) -> Unit,
+    onCredentialClick: (Map<String, Any>) -> Unit,
     onCloseArchive: () -> Unit,
     onAddCredential: () -> Unit,
     onRefresh: () -> Unit,
@@ -39,12 +39,24 @@ fun CredentialsListScreen(
         if (searchQuery.isBlank()) {
             credentials
         } else {
-            credentials.filter { credential: ZipLockNative.Credential ->
-                credential.title.contains(searchQuery, ignoreCase = true) ||
-                credential.credentialType.contains(searchQuery, ignoreCase = true) ||
-                credential.username.contains(searchQuery, ignoreCase = true) ||
-                credential.url.contains(searchQuery, ignoreCase = true) ||
-                credential.tags.any { tag: String -> tag.contains(searchQuery, ignoreCase = true) }
+            credentials.filter { credential ->
+                val title = credential["title"] as? String ?: ""
+                val credentialType = credential["credentialType"] as? String ?: ""
+                val tags = credential["tags"] as? List<*> ?: emptyList<String>()
+                val fields = credential["fields"] as? Map<String, Any> ?: emptyMap()
+
+                title.contains(searchQuery, ignoreCase = true) ||
+                credentialType.contains(searchQuery, ignoreCase = true) ||
+                tags.any { tag -> tag.toString().contains(searchQuery, ignoreCase = true) } ||
+                fields.values.any { field ->
+                    when (field) {
+                        is Map<*, *> -> {
+                            val value = field["value"] as? String ?: ""
+                            value.contains(searchQuery, ignoreCase = true)
+                        }
+                        else -> field.toString().contains(searchQuery, ignoreCase = true)
+                    }
+                }
             }
         }
     }
@@ -295,7 +307,7 @@ private fun CredentialsSearchBar(
 
 @Composable
 private fun CredentialListItem(
-    credential: ZipLockNative.Credential,
+    credential: Map<String, Any>,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -321,8 +333,8 @@ private fun CredentialListItem(
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    imageVector = getCredentialTypeIcon(credential.credentialType),
-                    contentDescription = "Credential type: ${credential.credentialType}",
+                    imageVector = getCredentialTypeIcon(credential["credentialType"] as? String ?: "login"),
+                    contentDescription = "Credential type: ${credential["credentialType"] as? String ?: "login"}",
                     tint = ZipLockColors.LogoPurple,
                     modifier = Modifier.size(24.dp)
                 )
@@ -336,7 +348,7 @@ private fun CredentialListItem(
             ) {
                 // Title
                 Text(
-                    text = credential.title,
+                    text = credential["title"] as? String ?: "Unknown",
                     style = ZipLockTypography.Medium,
                     color = ZipLockColors.DarkText,
                     fontWeight = FontWeight.Medium,
@@ -347,10 +359,17 @@ private fun CredentialListItem(
                 Spacer(modifier = Modifier.height(4.dp))
 
                 // Subtitle (username, URL, or credential type)
+                val fields = credential["fields"] as? Map<String, Any> ?: emptyMap()
+                val usernameField = fields["username"] as? Map<String, Any>
+                val urlField = fields["url"] as? Map<String, Any>
+                val username = usernameField?.get("value") as? String ?: ""
+                val url = urlField?.get("value") as? String ?: ""
+                val credentialType = credential["credentialType"] as? String ?: ""
+
                 val subtitle = when {
-                    credential.username.isNotBlank() -> credential.username
-                    credential.url.isNotBlank() -> credential.url
-                    else -> credential.credentialType.replaceFirstChar { it.uppercase() }
+                    username.isNotBlank() -> username
+                    url.isNotBlank() -> url
+                    else -> credentialType.replaceFirstChar { it.uppercase() }
                 }
 
                 Text(
@@ -362,14 +381,15 @@ private fun CredentialListItem(
                 )
 
                 // Tags (if any)
-                if (credential.tags.isNotEmpty()) {
+                val tags = credential["tags"] as? List<*> ?: emptyList<String>()
+                if (tags.isNotEmpty()) {
                     Spacer(modifier = Modifier.height(4.dp))
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
-                        credential.tags.take(2).forEach { tag: String ->
+                        tags.take(2).forEach { tag ->
                             Text(
-                                text = "#$tag",
+                                text = "#${tag.toString()}",
                                 style = ZipLockTypography.Small.copy(fontSize = 10.sp),
                                 color = ZipLockColors.LogoPurple,
                                 modifier = Modifier
@@ -380,9 +400,9 @@ private fun CredentialListItem(
                                     .padding(horizontal = 6.dp, vertical = 2.dp)
                             )
                         }
-                        if (credential.tags.size > 2) {
+                        if (tags.size > 2) {
                             Text(
-                                text = "+${credential.tags.size - 2}",
+                                text = "+${tags.size - 2}",
                                 style = ZipLockTypography.Small.copy(fontSize = 10.sp),
                                 color = ZipLockColors.LightGrayText
                             )

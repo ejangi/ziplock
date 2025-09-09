@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::time::SystemTime;
 
-use super::{CommonTemplates, CredentialField, CredentialRecord};
+use super::{CredentialField, CredentialRecord};
 
 /// Credential import/export format
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -211,55 +211,34 @@ impl CredentialUtils {
 
     /// Create a credential from common patterns
     pub fn create_from_pattern(pattern: &str, title: String) -> Option<CredentialRecord> {
+        use crate::models::template::CommonTemplates;
+
         match pattern.to_lowercase().as_str() {
-            "login" | "website" => Some(CredentialRecord::from_template(
-                &CommonTemplates::login(),
-                title,
-            )),
-            "credit_card" | "card" => Some(CredentialRecord::from_template(
-                &CommonTemplates::credit_card(),
-                title,
-            )),
-            "note" | "secure_note" => Some(CredentialRecord::from_template(
-                &CommonTemplates::secure_note(),
-                title,
-            )),
-            "identity" | "personal" => Some(CredentialRecord::from_template(
-                &CommonTemplates::identity(),
-                title,
-            )),
-            "password" => Some(CredentialRecord::from_template(
-                &CommonTemplates::password(),
-                title,
-            )),
-            "document" | "file" => Some(CredentialRecord::from_template(
-                &CommonTemplates::document(),
-                title,
-            )),
-            "ssh_key" | "ssh" => Some(CredentialRecord::from_template(
-                &CommonTemplates::ssh_key(),
-                title,
-            )),
-            "bank_account" | "bank" => Some(CredentialRecord::from_template(
-                &CommonTemplates::bank_account(),
-                title,
-            )),
-            "api_credentials" | "api" => Some(CredentialRecord::from_template(
-                &CommonTemplates::api_credentials(),
-                title,
-            )),
-            "crypto_wallet" | "wallet" | "crypto" => Some(CredentialRecord::from_template(
-                &CommonTemplates::crypto_wallet(),
-                title,
-            )),
-            "database" | "db" => Some(CredentialRecord::from_template(
-                &CommonTemplates::database(),
-                title,
-            )),
-            "software_license" | "license" => Some(CredentialRecord::from_template(
-                &CommonTemplates::software_license(),
-                title,
-            )),
+            "login" | "website" => CommonTemplates::login().create_credential(title).ok(),
+            "credit_card" | "card" => CommonTemplates::credit_card().create_credential(title).ok(),
+            "note" | "secure_note" => CommonTemplates::secure_note().create_credential(title).ok(),
+            "identity" | "personal" => CommonTemplates::identity().create_credential(title).ok(),
+            "password" => CommonTemplates::password().create_credential(title).ok(),
+            "document" | "file" => CommonTemplates::document().create_credential(title).ok(),
+            "ssh_key" | "ssh" => CommonTemplates::ssh_key().create_credential(title).ok(),
+            "bank_account" | "bank" => CommonTemplates::bank_account()
+                .create_credential(title)
+                .ok(),
+            "api_credentials" => CommonTemplates::api_credentials()
+                .create_credential(title)
+                .ok(),
+            "crypto_wallet" | "wallet" | "crypto" => CommonTemplates::crypto_wallet()
+                .create_credential(title)
+                .ok(),
+            "software_license" | "license" => CommonTemplates::software_license()
+                .create_credential(title)
+                .ok(),
+            "wifi" => CommonTemplates::wifi().create_credential(title).ok(),
+            "database" | "db" => CommonTemplates::database().create_credential(title).ok(),
+            "api" => CommonTemplates::api_credentials()
+                .create_credential(title)
+                .ok(),
+            "api_key" => CommonTemplates::api_key().create_credential(title).ok(),
             _ => None,
         }
     }

@@ -3,6 +3,7 @@
 //! This module provides the view for editing existing credentials.
 //! It reuses the credential form component and handles loading existing data.
 
+use crate::services::get_repository_service;
 use iced::{
     widget::{column, container, text, Space},
     Command, Element, Length,
@@ -554,13 +555,13 @@ impl EditCredentialView {
         credential_id: String,
     ) -> Result<CredentialRecord, String> {
         // Use hybrid client for unified architecture
-        let hybrid_client =
-            ziplock_shared::ZipLockHybridClient::new().map_err(|e| e.to_string())?;
+        let repo_service = get_repository_service();
 
-        hybrid_client
-            .get_credential(&credential_id)
+        repo_service
+            .get_credential(credential_id)
             .await
-            .map_err(|e| e.to_string())
+            .map_err(|e| e.to_string())?
+            .ok_or_else(|| "Credential not found".to_string())
     }
 
     /// Update a credential asynchronously
@@ -572,18 +573,19 @@ impl EditCredentialView {
         tracing::debug!("Starting credential deletion for ID: {}", credential_id);
 
         // Use hybrid client for unified architecture
-        let hybrid_client =
-            ziplock_shared::ZipLockHybridClient::new().map_err(|e| e.to_string())?;
+        let repo_service = get_repository_service();
 
         tracing::debug!(
             "Calling hybrid client to delete credential with ID: {}",
             credential_id
         );
 
-        hybrid_client
-            .delete_credential(&credential_id)
+        repo_service
+            .delete_credential(credential_id)
             .await
-            .map_err(|e| e.to_string())
+            .map_err(|e| e.to_string())?;
+
+        Ok(())
     }
 
     async fn update_credential_async(
@@ -594,8 +596,7 @@ impl EditCredentialView {
         credential_type: String,
     ) -> Result<(), String> {
         // Use hybrid client for unified architecture
-        let hybrid_client =
-            ziplock_shared::ZipLockHybridClient::new().map_err(|e| e.to_string())?;
+        let repo_service = get_repository_service();
 
         // Get the template to properly map field types and sensitivity
         let template = match credential_type.as_str() {
@@ -647,7 +648,7 @@ impl EditCredentialView {
             })
             .collect();
 
-        tracing::debug!("Updating credential with hybrid client, ID: {}", id);
+        tracing::debug!("Updating credential with repository service, ID: {}", id);
         tracing::debug!("Title: {}", title);
         tracing::debug!("Credential type: {}", credential_type);
         tracing::debug!("Fields: {:?}", fields);
@@ -659,7 +660,7 @@ impl EditCredentialView {
         credential.tags = Vec::new(); // tags
         credential.notes = None; // notes
 
-        hybrid_client
+        repo_service
             .update_credential(credential)
             .await
             .map_err(|e| e.to_string())

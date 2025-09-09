@@ -1,236 +1,422 @@
 #!/bin/bash
 
 # ZipLock Android Docker Build Script
-# Builds Android libraries in a consistent Docker environment
+# Builds Android libraries using Docker containers with pre-configured NDK and toolchains
 
-set -e
+set -euo pipefail
 
-# Colors for output
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+
+# Configuration
+REGISTRY="${REGISTRY:-ghcr.io}"
+IMAGE_NAME="${IMAGE_NAME:-ejangi/ziplock/android-builder}"
+USE_REGISTRY="${USE_REGISTRY:-true}"
+DOCKER_IMAGE="$REGISTRY/$IMAGE_NAME:latest"
+LOCAL_IMAGE="ziplock-android-builder:local"
+
+# Logging functions
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
-print_status() { echo -e "${BLUE}[INFO]${NC} $1"; }
-print_success() { echo -e "${GREEN}[SUCCESS]${NC} $1"; }
-print_warning() { echo -e "${YELLOW}[WARNING]${NC} $1"; }
-print_error() { echo -e "${RED}[ERROR]${NC} $1"; }
+log_info() {
+    echo -e "${BLUE}[INFO]${NC} $1"
+}
 
-# Configuration
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(dirname "$(dirname "$SCRIPT_DIR")")"
-DOCKER_FILE="$PROJECT_ROOT/.github/docker/android-builder.Dockerfile"
-IMAGE_NAME="ziplock-android-builder"
-REGISTRY_IMAGE="ghcr.io/ejangi/ziplock/android-builder:latest"
-OUTPUT_DIR="$PROJECT_ROOT/target/android"
-USE_REGISTRY="${USE_REGISTRY:-true}"
+log_success() {
+    echo -e "${GREEN}[SUCCESS]${NC} $1"
+}
 
-# Function to get or build Docker image
-get_image() {
+log_warning() {
+    echo -e "${YELLOW}[WARNING]${NC} $1"
+}
+
+log_error() {
+    echo -e "${RED}[ERROR]${NC} $1"
+}
+
+show_usage() {
+    cat << EOF
+Usage: $0 <command> [options]
+
+Build Android libraries using Docker containers with pre-configured Android NDK.
+
+COMMANDS:
+    build [arch]       Build libraries (all architectures or specific: arm64, arm7, x86, x86_64)
+    test              Run basic library tests
+    clean             Clean build artifacts
+    shell             Open interactive shell in Android builder container
+    verify            Verify build environment and tools
+    pull              Pull latest Android builder image
+
+ENVIRONMENT VARIABLES:
+    USE_REGISTRY   Use registry image if 'true', build local if 'false' (default: true)
+    REGISTRY       Container registry to use (default: ghcr.io)
+    IMAGE_NAME     Image name to use (default: ejangi/ziplock/android-builder)
+
+Examples:
+    $0 build                    # Build all Android architectures
+    $0 build arm64              # Build only ARM64
+    $0 test                     # Test built libraries
+    $0 shell                    # Open interactive shell
+    $0 verify                   # Verify build environment
+
+Environment Setup:
+    # Use registry image (default)
+    $0 build
+
+    # Force local image build
+    USE_REGISTRY=false $0 build
+
+    # Use custom registry
+    REGISTRY=my-registry.com $0 build
+EOF
+}
+
+# Check if Docker is available
+check_docker() {
+    if ! command -v docker &> /dev/null; then
+        log_error "Docker is not installed or not in PATH"
+        exit 1
+    fi
+
+    if ! docker info &> /dev/null; then
+        log_error "Docker is not running or not accessible"
+        exit 1
+    fi
+}
+
+# Pull or build Docker image
+setup_image() {
+    local image_to_use=""
+
     if [ "$USE_REGISTRY" = "true" ]; then
-        print_status "Using pre-built Android builder image from registry..."
+        log_info "Using registry image: $DOCKER_IMAGE" >&2
 
         # Try to pull the latest image
-        if docker pull "$REGISTRY_IMAGE" 2>/dev/null; then
-            # Tag it locally for convenience
-            docker tag "$REGISTRY_IMAGE" "$IMAGE_NAME"
-            print_success "Using registry image: $REGISTRY_IMAGE"
-            return 0
+        if docker pull "$DOCKER_IMAGE" >&2 2>/dev/null; then
+            log_success "Successfully pulled $DOCKER_IMAGE" >&2
+            image_to_use="$DOCKER_IMAGE"
         else
-            print_warning "Failed to pull registry image, falling back to local build"
+            log_warning "Failed to pull registry image, falling back to local build" >&2
             USE_REGISTRY="false"
         fi
     fi
 
     if [ "$USE_REGISTRY" = "false" ]; then
-        print_status "Building Android builder Docker image locally..."
+        log_info "Building local Android builder image..." >&2
 
-        if [ ! -f "$DOCKER_FILE" ]; then
-            print_error "Docker file not found: $DOCKER_FILE"
+        # Build local image from Dockerfile
+        if docker build -f ".github/docker/android-builder.Dockerfile" -t "$LOCAL_IMAGE" . >&2; then
+            log_success "Successfully built local image: $LOCAL_IMAGE" >&2
+            image_to_use="$LOCAL_IMAGE"
+        else
+            log_error "Failed to build local Android builder image" >&2
+            exit 1
+        fi
+    fi
+
+    echo "$image_to_use"
+}
+
+# Run Docker container with proper volume mounts
+run_docker() {
+    local image="$1"
+    local cmd="$2"
+
+    docker run --rm \
+        -v "$PROJECT_ROOT:/workspace" \
+        -w /workspace \
+        -u root \
+        -e CARGO_TARGET_DIR=/workspace/target \
+        -e RUSTFLAGS="-C link-arg=-static-libgcc -C link-arg=-Wl,--as-needed" \
+        "$image" \
+        bash -c "$cmd"
+}
+
+# Build Android libraries
+build_android() {
+    local target_arch="${1:-all}"
+    local image
+
+    log_info "Starting Android build process..."
+    log_info "Target architecture: $target_arch"
+
+    image=$(setup_image)
+
+    # Map architecture names to Rust targets
+    local targets=()
+    case "$target_arch" in
+        "all")
+            targets=("aarch64-linux-android" "armv7-linux-androideabi" "x86_64-linux-android" "i686-linux-android")
+            ;;
+        "arm64")
+            targets=("aarch64-linux-android")
+            ;;
+        "arm7"|"armv7")
+            targets=("armv7-linux-androideabi")
+            ;;
+        "x86_64")
+            targets=("x86_64-linux-android")
+            ;;
+        "x86")
+            targets=("i686-linux-android")
+            ;;
+        *)
+            log_error "Invalid architecture: $target_arch"
+            log_error "Valid options: all, arm64, arm7, x86_64, x86"
+            exit 1
+            ;;
+    esac
+
+    # Create output directories
+    log_info "Creating output directories..."
+    run_docker "$image" "mkdir -p /workspace/target/android/jniLibs/{arm64-v8a,armeabi-v7a,x86_64,x86}"
+
+    # Build for each target
+    for target in "${targets[@]}"; do
+        log_info "Building for target: $target"
+
+        # Map target to Android architecture directory
+        local arch_dir=""
+        case "$target" in
+            "aarch64-linux-android")
+                arch_dir="arm64-v8a"
+                ;;
+            "armv7-linux-androideabi")
+                arch_dir="armeabi-v7a"
+                ;;
+            "x86_64-linux-android")
+                arch_dir="x86_64"
+                ;;
+            "i686-linux-android")
+                arch_dir="x86"
+                ;;
+        esac
+
+        # Build command
+        local build_cmd="cd /workspace/shared && \
+            RUSTFLAGS=\"-C link-arg=-static-libgcc -C link-arg=-Wl,--as-needed\" \
+            cargo build --release --target $target --lib --features c-api && \
+            cp /workspace/target/$target/release/libziplock_shared.so /workspace/target/android/jniLibs/$arch_dir/"
+
+        if ! run_docker "$image" "$build_cmd"; then
+            log_error "Build failed for target: $target"
             exit 1
         fi
 
-        docker build -f "$DOCKER_FILE" -t "$IMAGE_NAME" "$PROJECT_ROOT"
-        print_success "Docker image built successfully"
-    fi
-}
-
-# Function to run Android build in container
-run_build() {
-    local targets="${1:-all}"
-
-    print_status "Running Android build in container..."
-
-    # Create output directory
-    mkdir -p "$OUTPUT_DIR"
-
-    # Run build in container
-    docker run --rm \
-        -v "$PROJECT_ROOT:/workspace" \
-        -v "$OUTPUT_DIR:/output" \
-        -w /workspace \
-        "$IMAGE_NAME" \
-        bash -c "
-            set -e
-            echo 'Building ZipLock Android libraries for real devices...'
-
-            cd shared
-
-            # Build for specified targets (focusing on real Android devices)
-            if [ '$targets' = 'all' ] || [ '$targets' = 'arm64' ]; then
-                echo 'Building for ARM64 (modern Android devices)...'
-                cargo build --release --target aarch64-linux-android --features c-api
-
-                mkdir -p /output/arm64-v8a
-                cp /workspace/target/aarch64-linux-android/release/libziplock_shared.so /output/arm64-v8a/
-            fi
-
-            if [ '$targets' = 'all' ] || [ '$targets' = 'armv7' ]; then
-                echo 'Building for ARMv7 (older Android devices)...'
-                cargo build --release --target armv7-linux-androideabi --features c-api
-                mkdir -p /output/armeabi-v7a
-                cp /workspace/target/armv7-linux-androideabi/release/libziplock_shared.so /output/armeabi-v7a/
-            fi
-
-            # Emulator support (separate from 'all' to keep device focus)
-            if [ '$targets' = 'all' ] || [ '$targets' = 'emulator' ] || [ '$targets' = 'x86_64' ]; then
-                echo 'Building for x86_64 (emulator support)...'
-                cargo build --release --target x86_64-linux-android --features c-api
-                mkdir -p /output/x86_64
-                cp /workspace/target/x86_64-linux-android/release/libziplock_shared.so /output/x86_64/
-            fi
-
-            if [ '$targets' = 'all' ] || [ '$targets' = 'emulator' ] || [ '$targets' = 'x86' ]; then
-                echo 'Building for x86 (older emulator support)...'
-                cargo build --release --target i686-linux-android --features c-api
-                mkdir -p /output/x86
-                cp /workspace/target/i686-linux-android/release/libziplock_shared.so /output/x86/
-            fi
-
-            # Note: Use 'emulator' target to build x86/x86_64 for development
-
-            # Copy header file
-            cp /workspace/shared/include/ziplock.h /output/
-
-            echo 'Android build completed successfully!'
-            echo 'Built for real Android device architectures (ARM64 + ARMv7)'
-        "
-
-    print_success "Android libraries built successfully"
-    print_status "Output directory: $OUTPUT_DIR"
-}
-
-# Function to test the built libraries
-test_libraries() {
-    print_status "Testing built libraries..."
-
-    # Check all possible architectures that might have been built
-    for arch in arm64-v8a armeabi-v7a x86_64 x86; do
-        lib_path="$OUTPUT_DIR/$arch/libziplock_shared.so"
-        if [ -f "$lib_path" ]; then
-            size=$(du -h "$lib_path" | cut -f1)
-            print_success "✓ $arch: $size"
-
-            # Verify it's a valid shared library
-            if file "$lib_path" | grep -q "shared object"; then
-                echo "  - Valid shared library format"
-            else
-                print_error "  - Invalid library format"
-            fi
-        else
-            # Only report as error if this architecture was supposed to be built
-            case "$arch" in
-                "arm64-v8a"|"armeabi-v7a")
-                    # These are built by default, so missing is an error
-                    if [ -d "$OUTPUT_DIR" ] && [ "$(ls -A "$OUTPUT_DIR" 2>/dev/null)" ]; then
-                        print_warning "⚠ $arch: Library not found (may not have been built)"
-                    fi
-                    ;;
-                *)
-                    # Emulator architectures - only mention if output dir has content
-                    if [ -d "$OUTPUT_DIR" ] && [ "$(ls -A "$OUTPUT_DIR" 2>/dev/null)" ]; then
-                        echo "  $arch: Not built (use 'emulator' target for x86 support)"
-                    fi
-                    ;;
-            esac
-        fi
+        log_success "Successfully built for $target -> $arch_dir"
     done
 
-    # Test header file
-    if [ -f "$OUTPUT_DIR/ziplock.h" ]; then
-        print_success "✓ Header file: $(du -h "$OUTPUT_DIR/ziplock.h" | cut -f1)"
+    # Copy to Android app directory if it exists
+    if [ -d "$PROJECT_ROOT/apps/mobile/android" ]; then
+        log_info "Copying libraries to Android app jniLibs..."
+        local copy_cmd="mkdir -p /workspace/apps/mobile/android/app/src/main/jniLibs && \
+            cp -r /workspace/target/android/jniLibs/* /workspace/apps/mobile/android/app/src/main/jniLibs/"
+
+        run_docker "$image" "$copy_cmd"
+        log_success "Libraries copied to Android app"
     else
-        print_error "✗ Header file not found"
+        log_warning "Android app directory not found at apps/mobile/android"
     fi
+
+    # Generate header file
+    log_info "Generating C header file..."
+    local header_cmd="cd /workspace/shared && \
+        cbindgen --config cbindgen.toml --crate ziplock-shared --output /workspace/target/android/ziplock.h || \
+        echo '// Header generation requires cbindgen - install with: cargo install cbindgen' > /workspace/target/android/ziplock.h"
+
+    run_docker "$image" "$header_cmd"
+
+    # Create build info
+    local info_cmd="cat > /workspace/target/android/build-info.json << 'EOL'
+{
+  \"timestamp\": \"$(date -u +\"%Y-%m-%dT%H:%M:%SZ\")\",
+  \"target_arch\": \"$target_arch\",
+  \"rust_version\": \"$(rustc --version)\",
+  \"targets_built\": [$(printf '\"%s\",' ${targets[@]} | sed 's/,$//')]
+}
+EOL"
+
+    run_docker "$image" "$info_cmd"
+
+    log_success "Android build completed successfully!"
+    log_info "Output directory: $PROJECT_ROOT/target/android/"
 }
 
-# Clean up
-clean() {
-    print_status "Cleaning up..."
-    rm -rf "$OUTPUT_DIR"
-    docker rmi "$IMAGE_NAME" 2>/dev/null || true
-    print_success "Clean completed"
+# Test Android libraries
+test_android() {
+    log_info "Testing Android libraries..."
+
+    local image
+    image=$(setup_image)
+
+    # Check if libraries exist and have correct symbols
+    local test_cmd="
+        cd /workspace && \
+        echo 'Testing Android library outputs...' && \
+        for arch in arm64-v8a armeabi-v7a x86_64 x86; do
+            lib_path=\"target/android/jniLibs/\$arch/libziplock_shared.so\"
+            if [ -f \"\$lib_path\" ]; then
+                echo \"✓ Found library: \$arch\"
+                echo \"  Size: \$(stat -c%s \"\$lib_path\") bytes\"
+                echo \"  Type: \$(file \"\$lib_path\" | cut -d: -f2-)\"
+
+                # Check for key symbols
+                if readelf -s \"\$lib_path\" | grep -q \"ziplock_\"; then
+                    echo \"  ✓ Contains ziplock symbols\"
+                else
+                    echo \"  ⚠ No ziplock symbols found\"
+                fi
+            else
+                echo \"✗ Missing library: \$arch\"
+            fi
+            echo
+        done
+
+        # Test header file
+        if [ -f \"target/android/ziplock.h\" ]; then
+            echo \"✓ Header file exists\"
+            echo \"  Functions: \$(grep -c '^[[:space:]]*[a-zA-Z].*(' target/android/ziplock.h || echo 0)\"
+        else
+            echo \"✗ Header file missing\"
+        fi
+    "
+
+    run_docker "$image" "$test_cmd"
+    log_success "Android library testing completed"
 }
 
-# Usage
-usage() {
-    echo "Usage: $0 [COMMAND] [TARGET]"
-    echo ""
-    echo "Commands:"
-    echo "  build [TARGET]    Build Android libraries (default: all)"
-    echo "  test              Test built libraries"
-    echo "  clean             Clean up build artifacts and Docker image"
-    echo "  help              Show this help message"
-    echo ""
-    echo "Targets:"
-    echo "  all               Build for all device architectures (default: ARM64 + ARMv7)"
-    echo "  emulator          Build for emulator architectures (x86_64 + x86)"
-    echo "  arm64             Build for ARM64 only (modern devices)"
-    echo "  armv7             Build for ARMv7 only (older devices)"
-    echo "  x86_64            Build for x86_64 only (emulator)"
-    echo "  x86               Build for x86 only (emulator)"
-    echo ""
-    echo "Environment Variables:"
-    echo "  USE_REGISTRY      Use pre-built registry image (default: true)"
-    echo "                    Set to 'false' to force local build"
-    echo ""
-    echo "Examples:"
-    echo "  $0 build                 # Build for real devices (ARM64 + ARMv7)"
-    echo "  $0 build emulator        # Build for emulators (x86_64 + x86)"
-    echo "  $0 build arm64           # Build for ARM64 only (modern devices)"
-    echo "  $0 build x86_64          # Build for x86_64 emulator only"
-    echo "  USE_REGISTRY=false $0 build  # Force local image build"
-    echo "  $0 test                  # Test built libraries"
+# Clean build artifacts
+clean_android() {
+    log_info "Cleaning Android build artifacts..."
+
+    rm -rf "$PROJECT_ROOT/target/android"
+    rm -rf "$PROJECT_ROOT/target/aarch64-linux-android"
+    rm -rf "$PROJECT_ROOT/target/armv7-linux-androideabi"
+    rm -rf "$PROJECT_ROOT/target/x86_64-linux-android"
+    rm -rf "$PROJECT_ROOT/target/i686-linux-android"
+
+    if [ -d "$PROJECT_ROOT/apps/mobile/android/app/src/main/jniLibs" ]; then
+        rm -rf "$PROJECT_ROOT/apps/mobile/android/app/src/main/jniLibs"
+    fi
+
+    log_success "Android build artifacts cleaned"
+}
+
+# Open interactive shell
+open_shell() {
+    log_info "Opening interactive shell in Android builder container..."
+
+    local image
+    image=$(setup_image)
+
+    docker run -it --rm \
+        -v "$PROJECT_ROOT:/workspace" \
+        -w /workspace \
+        -u root \
+        -e CARGO_TARGET_DIR=/workspace/target \
+        "$image" \
+        bash
+}
+
+# Verify build environment
+verify_environment() {
+    log_info "Verifying Android build environment..."
+
+    local image
+    image=$(setup_image)
+
+    local verify_cmd="
+        echo '=== Android Builder Environment Verification ==='
+        echo
+        echo 'System Information:'
+        uname -a
+        echo
+        echo 'Rust Toolchain:'
+        rustc --version
+        cargo --version
+        echo
+        echo 'Android NDK:'
+        echo \"NDK_HOME: \$ANDROID_NDK_HOME\"
+        ls -la \$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/ | head -5
+        echo
+        echo 'Android Targets:'
+        rustup target list --installed | grep android
+        echo
+        echo 'Cross-compilation Tools:'
+        aarch64-linux-android21-clang --version | head -1
+        armv7a-linux-androideabi21-clang --version | head -1
+        x86_64-linux-android21-clang --version | head -1
+        i686-linux-android21-clang --version | head -1
+        echo
+        echo 'Testing compilation for ARM64:'
+        cd /workspace/shared
+        cargo check --target aarch64-linux-android --features c-api
+        echo
+        echo '✓ Android build environment is ready!'
+    "
+
+    run_docker "$image" "$verify_cmd"
+}
+
+# Pull latest image
+pull_image() {
+    log_info "Pulling latest Android builder image..."
+
+    if docker pull "$DOCKER_IMAGE"; then
+        log_success "Successfully pulled $DOCKER_IMAGE"
+    else
+        log_error "Failed to pull $DOCKER_IMAGE"
+        exit 1
+    fi
 }
 
 # Main script logic
 main() {
-    local command="${1:-build}"
-    local target="${2:-all}"
+    check_docker
+
+    if [ $# -eq 0 ]; then
+        show_usage
+        exit 1
+    fi
+
+    local command="$1"
+    shift
 
     case "$command" in
         "build")
-            get_image
-            run_build "$target"
-            test_libraries
+            build_android "$@"
             ;;
         "test")
-            test_libraries
+            test_android
             ;;
         "clean")
-            clean
+            clean_android
+            ;;
+        "shell")
+            open_shell
+            ;;
+        "verify")
+            verify_environment
+            ;;
+        "pull")
+            pull_image
             ;;
         "help"|"-h"|"--help")
-            usage
+            show_usage
             ;;
         *)
-            print_error "Unknown command: $command"
-            echo ""
-            usage
+            log_error "Unknown command: $command"
+            echo
+            show_usage
             exit 1
             ;;
     esac
 }
 
+# Run main function
 main "$@"

@@ -1,9 +1,12 @@
 #!/bin/bash
+set -e
 
-# ZipLock Mobile Library Build Script
-# This script builds the ZipLock shared library for iOS and Android platforms
+# ZipLock Mobile Build Script - Unified Architecture
+# This script builds the mobile FFI library for Android and iOS platforms
 
-set -e  # Exit on any error
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+SHARED_DIR="$PROJECT_ROOT/shared"
 
 # Colors for output
 RED='\033[0;31m'
@@ -12,382 +15,395 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-# Configuration
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(dirname "$(dirname "$SCRIPT_DIR")")"
-SHARED_DIR="$PROJECT_ROOT/shared"
-OUTPUT_DIR="$PROJECT_ROOT/mobile-builds"
-
-# Function to print colored output
-print_status() {
+# Logging functions
+log_info() {
     echo -e "${BLUE}[INFO]${NC} $1"
 }
 
-print_success() {
+log_success() {
     echo -e "${GREEN}[SUCCESS]${NC} $1"
 }
 
-print_warning() {
+log_warning() {
     echo -e "${YELLOW}[WARNING]${NC} $1"
 }
 
-print_error() {
+log_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
-# Function to check if a command exists
-command_exists() {
-    command -v "$1" >/dev/null 2>&1
+# Default values
+PLATFORM=""
+PROFILE="release"
+VERBOSE=false
+CLEAN=false
+TARGET_DIR="$PROJECT_ROOT/target"
+ANDROID_OUTPUT_DIR="$PROJECT_ROOT/target/android"
+OUTPUT_DIR="$PROJECT_ROOT/target/build"
+
+# Function to show usage
+show_usage() {
+    cat << EOF
+Usage: $0 [OPTIONS]
+
+Build ZipLock mobile FFI library for Android and iOS platforms.
+
+OPTIONS:
+    -p, --platform PLATFORM    Target platform: android, ios, or all (default: all)
+    -d, --debug                 Build debug profile (default: release)
+    -c, --clean                 Clean build artifacts before building
+    -v, --verbose               Enable verbose output
+    -o, --output DIR           Output directory (default: $OUTPUT_DIR)
+
+ANDROID BUILD LOCATIONS:
+    Native libs are built to: $PROJECT_ROOT/target/android/jniLibs/
+    Then copied to Android client: apps/mobile/android/app/src/main/jniLibs/
+    -h, --help                 Show this help message
+
+EXAMPLES:
+    $0                         # Build for all platforms (release)
+    $0 -p android              # Build for Android only
+    $0 -p ios -d               # Build for iOS debug
+    $0 -c -v                   # Clean build with verbose output
+
+PLATFORMS:
+    android    Build Android AAR with native libraries
+    ios        Build iOS XCFramework with native libraries
+    all        Build for all mobile platforms
+
+The script will:
+1. Build Rust mobile FFI library for target architectures
+2. Place Android libraries in target/android/jniLibs/ by architecture
+3. Copy libraries to Android client jniLibs folder
+4. Package native libraries for platform consumption
+5. Copy outputs to mobile-builds/ directory
+
+EOF
 }
 
-# Function to install Rust targets
-install_rust_targets() {
-    print_status "Installing Rust targets..."
+# Parse command line arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -p|--platform)
+            PLATFORM="$2"
+            shift 2
+            ;;
+        -d|--debug)
+            PROFILE="debug"
+            shift
+            ;;
+        -c|--clean)
+            CLEAN=true
+            shift
+            ;;
+        -v|--verbose)
+            VERBOSE=true
+            shift
+            ;;
+        -o|--output)
+            OUTPUT_DIR="$2"
+            shift 2
+            ;;
+        -h|--help)
+            show_usage
+            exit 0
+            ;;
+        *)
+            log_error "Unknown option: $1"
+            show_usage
+            exit 1
+            ;;
+    esac
+done
 
-    # iOS targets
-    rustup target add aarch64-apple-ios || true
-    rustup target add x86_64-apple-ios || true
-    rustup target add aarch64-apple-ios-sim || true
+# Set default platform if not specified
+if [ -z "$PLATFORM" ]; then
+    PLATFORM="all"
+fi
 
-    # Android targets
-    rustup target add aarch64-linux-android || true
-    rustup target add armv7-linux-androideabi || true
-    rustup target add x86_64-linux-android || true
-    rustup target add i686-linux-android || true
+# Validate platform
+case $PLATFORM in
+    android|ios|all)
+        ;;
+    *)
+        log_error "Invalid platform: $PLATFORM. Must be 'android', 'ios', or 'all'"
+        exit 1
+        ;;
+esac
 
-    print_success "Rust targets installed"
-}
+# Check if cargo is installed
+if ! command -v cargo &> /dev/null; then
+    log_error "Cargo is not installed. Please install Rust and Cargo."
+    exit 1
+fi
 
-# Function to build for iOS
-build_ios() {
-    print_status "Building for iOS..."
+# Check if we're in the right directory
+if [ ! -f "$SHARED_DIR/Cargo.toml" ]; then
+    log_error "Cannot find shared/Cargo.toml. Please run this script from the project root."
+    exit 1
+fi
 
+# Create output directories
+mkdir -p "$OUTPUT_DIR"
+mkdir -p "$ANDROID_OUTPUT_DIR"
+
+log_info "Starting ZipLock mobile build"
+log_info "Platform: $PLATFORM"
+log_info "Profile: $PROFILE"
+log_info "Output directory: $OUTPUT_DIR"
+
+# Clean if requested
+if [ "$CLEAN" = true ]; then
+    log_info "Cleaning build artifacts..."
     cd "$SHARED_DIR"
+    cargo clean
+    rm -rf "$OUTPUT_DIR"/*
+    rm -rf "$ANDROID_OUTPUT_DIR"/*
+    mkdir -p "$OUTPUT_DIR"
+    mkdir -p "$ANDROID_OUTPUT_DIR"
+    log_success "Clean completed"
+fi
 
-    # Create output directories
-    mkdir -p "$OUTPUT_DIR/ios/device"
-    mkdir -p "$OUTPUT_DIR/ios/simulator"
-    mkdir -p "$OUTPUT_DIR/ios/xcframework"
+# Build flags
+BUILD_FLAGS=""
+if [ "$PROFILE" = "release" ]; then
+    BUILD_FLAGS="--release"
+fi
 
-    # Build for iOS device (ARM64)
-    print_status "Building for iOS device (ARM64)..."
-    cargo build --release --target aarch64-apple-ios --features c-api
-    cp "target/aarch64-apple-ios/release/libziplock_shared.a" "$OUTPUT_DIR/ios/device/"
+if [ "$VERBOSE" = true ]; then
+    BUILD_FLAGS="$BUILD_FLAGS --verbose"
+fi
 
-    # Build for iOS simulator (x86_64)
-    print_status "Building for iOS simulator (x86_64)..."
-    cargo build --release --target x86_64-apple-ios --features c-api
+# Function to build for Android
+build_android() {
+    log_info "Building for Android..."
 
-    # Build for iOS simulator (ARM64)
-    print_status "Building for iOS simulator (ARM64)..."
-    cargo build --release --target aarch64-apple-ios-sim --features c-api
+    # Check for Android NDK
+    if [ -z "$ANDROID_NDK_HOME" ] && [ -z "$NDK_HOME" ]; then
+        log_warning "ANDROID_NDK_HOME not set. Trying to find NDK..."
+        # Try common locations
+        for ndk_path in "$HOME/Android/Sdk/ndk"/* "/usr/local/lib/android/sdk/ndk"/* "/opt/android-ndk"*; do
+            if [ -d "$ndk_path" ]; then
+                export ANDROID_NDK_HOME="$ndk_path"
+                log_info "Found NDK at: $ANDROID_NDK_HOME"
+                break
+            fi
+        done
 
-    # Create universal library for simulator
-    print_status "Creating universal library for iOS simulator..."
-    if command_exists lipo; then
-        lipo -create \
-            "target/x86_64-apple-ios/release/libziplock_shared.a" \
-            "target/aarch64-apple-ios-sim/release/libziplock_shared.a" \
-            -output "$OUTPUT_DIR/ios/simulator/libziplock_shared.a"
-    else
-        print_warning "lipo not found, copying ARM64 simulator library only"
-        cp "target/aarch64-apple-ios-sim/release/libziplock_shared.a" "$OUTPUT_DIR/ios/simulator/"
-    fi
-
-    # Create XCFramework if xcodebuild is available
-    if command_exists xcodebuild; then
-        print_status "Creating XCFramework..."
-        rm -rf "$OUTPUT_DIR/ios/xcframework/ZipLockCore.xcframework"
-        xcodebuild -create-xcframework \
-            -library "$OUTPUT_DIR/ios/device/libziplock_shared.a" \
-            -headers "$SHARED_DIR/include" \
-            -library "$OUTPUT_DIR/ios/simulator/libziplock_shared.a" \
-            -headers "$SHARED_DIR/include" \
-            -output "$OUTPUT_DIR/ios/xcframework/ZipLockCore.xcframework"
-        print_success "XCFramework created at $OUTPUT_DIR/ios/xcframework/ZipLockCore.xcframework"
-    else
-        print_warning "xcodebuild not found, skipping XCFramework creation"
-    fi
-
-    # Copy header file
-    cp "$SHARED_DIR/include/ziplock.h" "$OUTPUT_DIR/ios/"
-
-    print_success "iOS build completed"
-}
-
-# Function to setup Android NDK configuration
-setup_android_ndk() {
-    if [ -z "$ANDROID_NDK_HOME" ]; then
-        # Try to find NDK in common locations
-        if [ -d "$HOME/Android/Sdk/ndk" ]; then
-            # Find the latest NDK version
-            NDK_VERSION=$(ls "$HOME/Android/Sdk/ndk" | sort -V | tail -n 1)
-            export ANDROID_NDK_HOME="$HOME/Android/Sdk/ndk/$NDK_VERSION"
-            print_status "Found Android NDK at $ANDROID_NDK_HOME"
-        elif [ -d "/opt/android-ndk" ]; then
-            export ANDROID_NDK_HOME="/opt/android-ndk"
-            print_status "Found Android NDK at $ANDROID_NDK_HOME"
-        else
-            print_error "Android NDK not found. Please set ANDROID_NDK_HOME environment variable"
-            print_error "Download from: https://developer.android.com/ndk/downloads"
+        if [ -z "$ANDROID_NDK_HOME" ]; then
+            log_error "Android NDK not found. Please set ANDROID_NDK_HOME or install Android NDK."
             return 1
         fi
     fi
 
-    # Determine host OS for toolchain path
-    case "$(uname -s)" in
-        Linux*)     HOST_TAG=linux-x86_64;;
-        Darwin*)    HOST_TAG=darwin-x86_64;;
-        MINGW*)     HOST_TAG=windows-x86_64;;
-        *)          print_error "Unsupported host OS: $(uname -s)"; return 1;;
-    esac
+    # Android target architectures
+    ANDROID_TARGETS=(
+        "aarch64-linux-android"    # ARM64
+        "armv7-linux-androideabi"  # ARM7
+        "i686-linux-android"       # x86
+        "x86_64-linux-android"     # x86_64
+    )
 
-    TOOLCHAIN_PATH="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/$HOST_TAG"
+    # Install targets if needed
+    for target in "${ANDROID_TARGETS[@]}"; do
+        if ! rustup target list --installed | grep -q "$target"; then
+            log_info "Installing Rust target: $target"
+            rustup target add "$target"
+        fi
+    done
 
-    if [ ! -d "$TOOLCHAIN_PATH" ]; then
-        print_error "Android NDK toolchain not found at $TOOLCHAIN_PATH"
+    cd "$SHARED_DIR"
+
+    # Build for each Android architecture
+    for target in "${ANDROID_TARGETS[@]}"; do
+        log_info "Building for Android target: $target"
+
+        # Set up environment for cross-compilation with libgcc fix
+        case $target in
+            aarch64-linux-android)
+                export CC_aarch64_linux_android="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang"
+                export AR_aarch64_linux_android="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar"
+                export CFLAGS_aarch64_linux_android="-static-libgcc"
+                export CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang"
+                arch_dir="arm64-v8a"
+                ;;
+            armv7-linux-androideabi)
+                export CC_armv7_linux_androideabi="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/armv7a-linux-androideabi21-clang"
+                export AR_armv7_linux_androideabi="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar"
+                export CFLAGS_armv7_linux_androideabi="-static-libgcc"
+                export CARGO_TARGET_ARMV7_LINUX_ANDROIDEABI_LINKER="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/armv7a-linux-androideabi21-clang"
+                arch_dir="armeabi-v7a"
+                ;;
+            i686-linux-android)
+                export CC_i686_linux_android="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/i686-linux-android21-clang"
+                export AR_i686_linux_android="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar"
+                export CFLAGS_i686_linux_android="-static-libgcc"
+                export CARGO_TARGET_I686_LINUX_ANDROID_LINKER="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/i686-linux-android21-clang"
+                arch_dir="x86"
+                ;;
+            x86_64-linux-android)
+                export CC_x86_64_linux_android="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/x86_64-linux-android21-clang"
+                export AR_x86_64_linux_android="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar"
+                export CFLAGS_x86_64_linux_android="-static-libgcc"
+                export CARGO_TARGET_X86_64_LINUX_ANDROID_LINKER="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/x86_64-linux-android21-clang"
+                arch_dir="x86_64"
+                ;;
+        esac
+
+        # Set additional environment variables to force static linking and avoid libgcc_s.so.1
+        export RUSTFLAGS="-C link-arg=-static-libgcc -C link-arg=-Wl,--as-needed"
+
+        # Build the library with Android-specific configuration
+        log_info "Building with static libgcc to avoid libgcc_s.so.1 dependency"
+        RUSTFLAGS="$RUSTFLAGS -C target-feature=+crt-static" cargo build --target "$target" $BUILD_FLAGS --lib
+
+        # Copy the built library to the target/android directory
+        android_lib_dir="$ANDROID_OUTPUT_DIR/jniLibs/$arch_dir"
+        mkdir -p "$android_lib_dir"
+
+        if [ "$PROFILE" = "release" ]; then
+            cp "$TARGET_DIR/$target/release/libziplock_shared.so" "$android_lib_dir/"
+        else
+            cp "$TARGET_DIR/$target/debug/libziplock_shared.so" "$android_lib_dir/"
+        fi
+
+        # Also copy to the legacy output directory for compatibility
+        legacy_lib_dir="$OUTPUT_DIR/android/jniLibs/$arch_dir"
+        mkdir -p "$legacy_lib_dir"
+        cp "$android_lib_dir/libziplock_shared.so" "$legacy_lib_dir/"
+
+        log_success "Built for Android target: $target -> $arch_dir"
+    done
+
+    # Copy to Android app directory
+    ANDROID_APP_JNILIBS="$PROJECT_ROOT/apps/mobile/android/app/src/main/jniLibs"
+    if [ -d "$PROJECT_ROOT/apps/mobile/android" ]; then
+        log_info "Copying libraries to Android client jniLibs..."
+
+        # Ensure the jniLibs directory exists
+        mkdir -p "$ANDROID_APP_JNILIBS"
+
+        # Copy each architecture's libraries
+        for arch in arm64-v8a armeabi-v7a x86 x86_64; do
+            if [ -f "$ANDROID_OUTPUT_DIR/jniLibs/$arch/libziplock_shared.so" ]; then
+                mkdir -p "$ANDROID_APP_JNILIBS/$arch"
+                cp "$ANDROID_OUTPUT_DIR/jniLibs/$arch/libziplock_shared.so" "$ANDROID_APP_JNILIBS/$arch/"
+                log_success "Copied $arch library to Android client"
+            fi
+        done
+
+        log_success "All libraries copied to Android client"
+    else
+        log_warning "Android client directory not found at $PROJECT_ROOT/apps/mobile/android"
+        log_info "Libraries available in: $ANDROID_OUTPUT_DIR/jniLibs/"
+    fi
+
+    log_success "Android build completed"
+}
+
+# Function to build for iOS
+build_ios() {
+    log_info "Building for iOS..."
+
+    # Check if we're on macOS
+    if [ "$(uname)" != "Darwin" ]; then
+        log_warning "iOS builds are only supported on macOS. Skipping iOS build."
+        return 0
+    fi
+
+    # Check for Xcode command line tools
+    if ! command -v xcodebuild &> /dev/null; then
+        log_error "Xcode command line tools not found. Please install Xcode."
         return 1
     fi
 
-    export PATH="$TOOLCHAIN_PATH/bin:$PATH"
+    # iOS target architectures
+    IOS_TARGETS=(
+        "aarch64-apple-ios"        # iOS ARM64 (device)
+        "x86_64-apple-ios"         # iOS x86_64 (simulator)
+        "aarch64-apple-ios-sim"    # iOS ARM64 (simulator)
+    )
 
-    # Create cargo config for Android cross-compilation
-    mkdir -p "$HOME/.cargo"
+    # Install targets if needed
+    for target in "${IOS_TARGETS[@]}"; do
+        if ! rustup target list --installed | grep -q "$target"; then
+            log_info "Installing Rust target: $target"
+            rustup target add "$target"
+        fi
+    done
 
-    cat >> "$HOME/.cargo/config.toml" << EOF
+    cd "$SHARED_DIR"
 
-# ZipLock Android build configuration
-[target.aarch64-linux-android]
-ar = "aarch64-linux-android-ar"
-linker = "aarch64-linux-android21-clang"
+    # Build for each iOS architecture
+    IOS_LIBS=()
+    for target in "${IOS_TARGETS[@]}"; do
+        log_info "Building for iOS target: $target"
 
-[target.armv7-linux-androideabi]
-ar = "arm-linux-androideabi-ar"
-linker = "armv7a-linux-androideabi21-clang"
+        cargo build --target "$target" $BUILD_FLAGS --lib
 
-[target.x86_64-linux-android]
-ar = "x86_64-linux-android-ar"
-linker = "x86_64-linux-android21-clang"
+        if [ "$PROFILE" = "release" ]; then
+            IOS_LIBS+=("$TARGET_DIR/$target/release/libziplock_shared.a")
+        else
+            IOS_LIBS+=("$TARGET_DIR/$target/debug/libziplock_shared.a")
+        fi
 
-[target.i686-linux-android]
-ar = "i686-linux-android-ar"
-linker = "i686-linux-android21-clang"
+        log_success "Built for iOS target: $target"
+    done
+
+    # Create universal library using lipo
+    IOS_OUTPUT_DIR="$OUTPUT_DIR/ios"
+    mkdir -p "$IOS_OUTPUT_DIR"
+
+    log_info "Creating universal iOS library..."
+    lipo -create "${IOS_LIBS[@]}" -output "$IOS_OUTPUT_DIR/libziplock_shared.a"
+
+    # Copy to iOS app directory if it exists
+    IOS_APP_DIR="$PROJECT_ROOT/apps/mobile/ios"
+    if [ -d "$IOS_APP_DIR" ]; then
+        log_info "Copying library to iOS app directory..."
+        cp "$IOS_OUTPUT_DIR/libziplock_shared.a" "$IOS_APP_DIR/"
+        log_success "Library copied to iOS app"
+    fi
+
+    log_success "iOS build completed"
+}
+
+# Main build logic
+cd "$SHARED_DIR"
+
+case $PLATFORM in
+    android)
+        build_android
+        ;;
+    ios)
+        build_ios
+        ;;
+    all)
+        build_android
+        build_ios
+        ;;
+esac
+
+# Generate build info
+BUILD_INFO_FILE="$OUTPUT_DIR/build-info.json"
+cat > "$BUILD_INFO_FILE" << EOF
+{
+  "timestamp": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
+  "platform": "$PLATFORM",
+  "profile": "$PROFILE",
+  "rust_version": "$(rustc --version)",
+  "git_commit": "$(git rev-parse --short HEAD 2>/dev/null || echo 'unknown')",
+  "git_branch": "$(git branch --show-current 2>/dev/null || echo 'unknown')"
+}
 EOF
 
-    print_success "Android NDK configuration completed"
-}
+log_success "Build completed successfully!"
+log_info "Output directory: $OUTPUT_DIR"
+log_info "Build info: $BUILD_INFO_FILE"
 
-# Function to build for Android
-build_android() {
-    print_status "Building for Android..."
-
-    setup_android_ndk || return 1
-
-    cd "$SHARED_DIR"
-
-    # Create output directories
-    mkdir -p "$OUTPUT_DIR/android/arm64-v8a"
-    mkdir -p "$OUTPUT_DIR/android/armeabi-v7a"
-    mkdir -p "$OUTPUT_DIR/android/x86_64"
-    mkdir -p "$OUTPUT_DIR/android/x86"
-
-    # Build for ARM64
-    print_status "Building for Android ARM64..."
-    cargo build --release --target aarch64-linux-android --features c-api
-    cp "target/aarch64-linux-android/release/libziplock_shared.so" "$OUTPUT_DIR/android/arm64-v8a/"
-
-    # Build for ARMv7
-    print_status "Building for Android ARMv7..."
-    cargo build --release --target armv7-linux-androideabi --features c-api
-    cp "target/armv7-linux-androideabi/release/libziplock_shared.so" "$OUTPUT_DIR/android/armeabi-v7a/"
-
-    # Build for x86_64
-    print_status "Building for Android x86_64..."
-    cargo build --release --target x86_64-linux-android --features c-api
-    cp "target/x86_64-linux-android/release/libziplock_shared.so" "$OUTPUT_DIR/android/x86_64/"
-
-    # Build for x86
-    print_status "Building for Android x86..."
-    cargo build --release --target i686-linux-android --features c-api
-    cp "target/i686-linux-android/release/libziplock_shared.so" "$OUTPUT_DIR/android/x86/"
-
-    # Copy header file
-    cp "$SHARED_DIR/include/ziplock.h" "$OUTPUT_DIR/android/"
-
-    # Create Android project structure
-    mkdir -p "$OUTPUT_DIR/android/jniLibs/arm64-v8a"
-    mkdir -p "$OUTPUT_DIR/android/jniLibs/armeabi-v7a"
-    mkdir -p "$OUTPUT_DIR/android/jniLibs/x86_64"
-    mkdir -p "$OUTPUT_DIR/android/jniLibs/x86"
-
-    cp "$OUTPUT_DIR/android/arm64-v8a/libziplock_shared.so" "$OUTPUT_DIR/android/jniLibs/arm64-v8a/"
-    cp "$OUTPUT_DIR/android/armeabi-v7a/libziplock_shared.so" "$OUTPUT_DIR/android/jniLibs/armeabi-v7a/"
-    cp "$OUTPUT_DIR/android/x86_64/libziplock_shared.so" "$OUTPUT_DIR/android/jniLibs/x86_64/"
-    cp "$OUTPUT_DIR/android/x86/libziplock_shared.so" "$OUTPUT_DIR/android/jniLibs/x86/"
-
-    print_success "Android build completed"
-}
-
-# Function to clean build artifacts
-clean() {
-    print_status "Cleaning build artifacts..."
-
-    cd "$SHARED_DIR"
-    cargo clean
-
-    rm -rf "$OUTPUT_DIR"
-
-    print_success "Clean completed"
-}
-
-# Function to run tests
-test_build() {
-    print_status "Running tests..."
-
-    cd "$SHARED_DIR"
-    cargo test --features c-api
-
-    print_success "Tests completed"
-}
-
-# Function to display usage
-usage() {
-    echo "Usage: $0 [COMMAND]"
-    echo ""
-    echo "Commands:"
-    echo "  ios        Build for iOS platforms"
-    echo "  android    Build for Android platforms"
-    echo "  all        Build for all platforms (default)"
-    echo "  clean      Clean build artifacts"
-    echo "  test       Run tests"
-    echo "  setup      Install required Rust targets"
-    echo "  help       Show this help message"
-    echo ""
-    echo "Environment Variables:"
-    echo "  ANDROID_NDK_HOME   Path to Android NDK (auto-detected if not set)"
-    echo ""
-    echo "Examples:"
-    echo "  $0 ios             # Build only for iOS"
-    echo "  $0 android         # Build only for Android"
-    echo "  $0 all             # Build for all platforms"
-    echo "  $0 clean           # Clean all build artifacts"
-}
-
-# Function to check prerequisites
-check_prerequisites() {
-    print_status "Checking prerequisites..."
-
-    # Check if Rust is installed
-    if ! command_exists rustup; then
-        print_error "Rust is not installed. Please install from https://rustup.rs/"
-        exit 1
-    fi
-
-    if ! command_exists cargo; then
-        print_error "Cargo is not installed. Please install Rust toolchain."
-        exit 1
-    fi
-
-    # Check if we're in the right directory
-    if [ ! -f "$SHARED_DIR/Cargo.toml" ]; then
-        print_error "Shared library Cargo.toml not found. Are you in the right directory?"
-        exit 1
-    fi
-
-    print_success "Prerequisites check passed"
-}
-
-# Function to create build summary
-create_summary() {
-    print_status "Build Summary:"
-    echo ""
-
-    if [ -d "$OUTPUT_DIR" ]; then
-        echo "Output directory: $OUTPUT_DIR"
-        echo ""
-
-        # iOS summary
-        if [ -d "$OUTPUT_DIR/ios" ]; then
-            echo "iOS Libraries:"
-            if [ -f "$OUTPUT_DIR/ios/device/libziplock_shared.a" ]; then
-                SIZE=$(du -h "$OUTPUT_DIR/ios/device/libziplock_shared.a" | cut -f1)
-                echo "  ✓ Device (ARM64): $SIZE"
-            fi
-            if [ -f "$OUTPUT_DIR/ios/simulator/libziplock_shared.a" ]; then
-                SIZE=$(du -h "$OUTPUT_DIR/ios/simulator/libziplock_shared.a" | cut -f1)
-                echo "  ✓ Simulator (Universal): $SIZE"
-            fi
-            if [ -d "$OUTPUT_DIR/ios/xcframework/ZipLockCore.xcframework" ]; then
-                echo "  ✓ XCFramework: Available"
-            fi
-            echo ""
-        fi
-
-        # Android summary
-        if [ -d "$OUTPUT_DIR/android" ]; then
-            echo "Android Libraries:"
-            for arch in arm64-v8a armeabi-v7a x86_64 x86; do
-                if [ -f "$OUTPUT_DIR/android/$arch/libziplock_shared.so" ]; then
-                    SIZE=$(du -h "$OUTPUT_DIR/android/$arch/libziplock_shared.so" | cut -f1)
-                    echo "  ✓ $arch: $SIZE"
-                fi
-            done
-            echo ""
-        fi
-
-        echo "Header file: include/ziplock.h"
-        echo "Documentation: docs/mobile-integration.md"
-    else
-        echo "No build artifacts found."
-    fi
-}
-
-# Main script logic
-main() {
-    local command="${1:-all}"
-
-    case "$command" in
-        "ios")
-            check_prerequisites
-            install_rust_targets
-            build_ios
-            create_summary
-            ;;
-        "android")
-            check_prerequisites
-            install_rust_targets
-            build_android
-            create_summary
-            ;;
-        "all")
-            check_prerequisites
-            install_rust_targets
-            build_ios
-            build_android
-            create_summary
-            ;;
-        "clean")
-            clean
-            ;;
-        "test")
-            check_prerequisites
-            test_build
-            ;;
-        "setup")
-            check_prerequisites
-            install_rust_targets
-            ;;
-        "help"|"-h"|"--help")
-            usage
-            ;;
-        *)
-            print_error "Unknown command: $command"
-            echo ""
-            usage
-            exit 1
-            ;;
-    esac
-}
-
-# Execute main function with all arguments
-main "$@"
+# Show what was built
+echo
+log_info "Built artifacts:"
+find "$OUTPUT_DIR" -name "*.so" -o -name "*.a" | while read -r lib; do
+    echo "  $lib"
+done

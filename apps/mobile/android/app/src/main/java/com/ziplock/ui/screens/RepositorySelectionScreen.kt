@@ -40,57 +40,31 @@ import com.ziplock.utils.FileUtils
  */
 @Composable
 fun RepositorySelectionScreen(
-    hybridRepositoryViewModel: com.ziplock.viewmodel.HybridRepositoryViewModel? = null,
-    repositoryViewModel: com.ziplock.viewmodel.RepositoryViewModel? = null,
+    repositoryViewModel: com.ziplock.viewmodel.RepositoryViewModel,
     onArchiveOpened: (String) -> Unit,
-    onCreateNew: () -> Unit,
-    modifier: Modifier = Modifier,
-    initialFilePath: String? = null
+    onCreateNew: () -> Unit = {},
+    onDebugSettings: () -> Unit = {},
+    initialFilePath: String? = null,
+    modifier: Modifier = Modifier
 ) {
-    // Use hybrid view model by default, fallback to legacy if provided
-    val hybridVM = hybridRepositoryViewModel
-    val legacyVM = repositoryViewModel
-    require(hybridVM != null || legacyVM != null) { "Either hybridRepositoryViewModel or repositoryViewModel must be provided" }
+    // Use unified architecture view model
+    val uiState by repositoryViewModel.uiState.collectAsState()
+    val repositoryState by repositoryViewModel.repositoryState.collectAsState()
 
-    // Handle different view model types
-    val isLoading = if (hybridVM != null) {
-        val hybridState by hybridVM.uiState.collectAsState()
-        hybridState.isLoading
-    } else {
-        val legacyState by legacyVM!!.uiState.collectAsState()
-        legacyState.isLoading
-    }
-
-    val errorMessage = if (hybridVM != null) {
-        val hybridState by hybridVM.uiState.collectAsState()
-        hybridState.errorMessage
-    } else {
-        val legacyState by legacyVM!!.uiState.collectAsState()
-        legacyState.errorMessage
-    }
+    val isLoading = uiState.isLoading
+    val errorMessage = uiState.errorMessage
 
     var selectedFilePath by remember { mutableStateOf<String?>(initialFilePath) }
 
-    // For hybrid VM, watch repository state for success
-    if (hybridVM != null) {
-        val repositoryState by hybridVM.repositoryState.collectAsState()
-        LaunchedEffect(repositoryState) {
-            val currentState = repositoryState
-            if (currentState is com.ziplock.viewmodel.HybridRepositoryViewModel.HybridRepositoryState.Open) {
-                onArchiveOpened(currentState.path)
-            }
+    // Watch repository state for success
+    LaunchedEffect(repositoryState) {
+        val currentState = repositoryState
+        if (currentState?.isOpen == true) {
+            onArchiveOpened(currentState.archiveName ?: "Unknown Archive")
         }
     }
 
-    // For legacy VM, watch UI state for success
-    if (legacyVM != null) {
-        val legacyState by legacyVM.uiState.collectAsState()
-        LaunchedEffect(legacyState.successMessage) {
-            if (legacyState.successMessage != null) {
-                selectedFilePath?.let { onArchiveOpened(it) }
-            }
-        }
-    }
+
     var selectedFileName by remember { mutableStateOf<String?>(
         initialFilePath?.let { path ->
             extractUserFriendlyFileName(path)
@@ -245,25 +219,14 @@ fun RepositorySelectionScreen(
                                 localErrorMessage = null
 
                                 try {
-                                    // Call appropriate view model method
-                                    if (hybridVM != null) {
-                                        // For hybrid system, pass original path (it will handle content URI conversion internally)
-                                        println("RepositorySelectionScreen: Opening with hybrid system: '$path'")
-                                        hybridVM.openRepository(path, passphrase)
+                                    // Use unified architecture - convert string path to Uri
+                                    val archiveUri = if (path.startsWith("content://")) {
+                                        android.net.Uri.parse(path)
                                     } else {
-                                        // For legacy system, convert content URI to usable file path
-                                        val usableFilePath = if (path.startsWith("content://")) {
-                                            val uri = android.net.Uri.parse(path)
-                                            val fileName = selectedFileName ?: "archive.7z"
-                                            FileUtils.getUsableFilePath(context, uri, fileName)
-                                        } else {
-                                            path
-                                        }
-                                        println("RepositorySelectionScreen: Converting path '$path' to '$usableFilePath' for legacy system")
-                                        legacyVM?.let { vm ->
-                                            vm.openRepository(usableFilePath, passphrase)
-                                        }
+                                        android.net.Uri.fromFile(java.io.File(path))
                                     }
+                                    println("RepositorySelectionScreen: Opening with unified architecture: '$archiveUri'")
+                                    repositoryViewModel.openRepository(archiveUri, passphrase)
                                 } catch (e: Exception) {
                                     val errorMsg = when {
                                         e.message?.contains("authentication", ignoreCase = true) == true ->
@@ -313,25 +276,14 @@ fun RepositorySelectionScreen(
                                 localErrorMessage = null
 
                                 try {
-                                    // Call appropriate view model method
-                                    if (hybridVM != null) {
-                                        // For hybrid system, pass original path (it will handle content URI conversion internally)
-                                        println("RepositorySelectionScreen: Opening with hybrid system: '$path'")
-                                        hybridVM.openRepository(path, passphrase)
+                                    // Use unified architecture - convert string path to Uri
+                                    val archiveUri = if (path.startsWith("content://")) {
+                                        android.net.Uri.parse(path)
                                     } else {
-                                        // For legacy system, convert content URI to usable file path
-                                        val usableFilePath = if (path.startsWith("content://")) {
-                                            val uri = android.net.Uri.parse(path)
-                                            val fileName = selectedFileName ?: "archive.7z"
-                                            FileUtils.getUsableFilePath(context, uri, fileName)
-                                        } else {
-                                            path
-                                        }
-                                        println("RepositorySelectionScreen: Converting path '$path' to '$usableFilePath' for legacy system")
-                                        legacyVM?.let { vm ->
-                                            vm.openRepository(usableFilePath, passphrase)
-                                        }
+                                        android.net.Uri.fromFile(java.io.File(path))
                                     }
+                                    println("RepositorySelectionScreen: Opening with unified architecture: '$archiveUri'")
+                                    repositoryViewModel.openRepository(archiveUri, passphrase)
                                 } catch (e: Exception) {
                                     val errorMsg = when {
                                         e.message?.contains("authentication", ignoreCase = true) == true ->

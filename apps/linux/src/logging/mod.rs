@@ -10,12 +10,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use tracing::{info, warn};
-use tracing_subscriber::{
-    fmt::{self, writer::MakeWriterExt},
-    layer::SubscriberExt,
-    util::SubscriberInitExt,
-    EnvFilter, Layer,
-};
+use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Layer};
 
 /// YAML configuration structures
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -62,6 +57,7 @@ pub struct FeaturesConfig {
 
 /// Log rotation configuration
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct LogRotationConfig {
     /// Maximum size of a single log file in bytes (default: 10MB)
     pub max_file_size: u64,
@@ -98,8 +94,7 @@ pub struct LoggingConfig {
     pub enable_file: bool,
     /// Log rotation configuration
     pub rotation: LogRotationConfig,
-    /// Whether to include timestamps in console output
-    pub console_timestamps: bool,
+
     /// Whether to include thread IDs in logs
     pub include_thread_ids: bool,
     /// Whether to include source code locations in logs
@@ -116,7 +111,6 @@ impl Default for LoggingConfig {
             enable_console: true,
             enable_file: true,
             rotation: LogRotationConfig::default(),
-            console_timestamps: true,
             include_thread_ids: false,
             include_source_location: false,
         }
@@ -125,6 +119,7 @@ impl Default for LoggingConfig {
 
 impl LoggingConfig {
     /// Create a new logging configuration with custom log directory
+    #[allow(dead_code)]
     pub fn new(log_dir: PathBuf) -> Self {
         Self {
             log_dir,
@@ -133,42 +128,49 @@ impl LoggingConfig {
     }
 
     /// Set console log level
+    #[allow(dead_code)]
     pub fn console_level(mut self, level: &str) -> Self {
         self.console_level = level.to_string();
         self
     }
 
     /// Set file log level
+    #[allow(dead_code)]
     pub fn file_level(mut self, level: &str) -> Self {
         self.file_level = level.to_string();
         self
     }
 
     /// Enable or disable console logging
+    #[allow(dead_code)]
     pub fn console_enabled(mut self, enabled: bool) -> Self {
         self.enable_console = enabled;
         self
     }
 
     /// Enable or disable file logging
+    #[allow(dead_code)]
     pub fn file_enabled(mut self, enabled: bool) -> Self {
         self.enable_file = enabled;
         self
     }
 
     /// Configure log rotation
+    #[allow(dead_code)]
     pub fn rotation(mut self, rotation: LogRotationConfig) -> Self {
         self.rotation = rotation;
         self
     }
 
     /// Enable source code location in logs (useful for debugging)
+    #[allow(dead_code)]
     pub fn with_source_location(mut self) -> Self {
         self.include_source_location = true;
         self
     }
 
     /// Enable thread IDs in logs (useful for debugging async code)
+    #[allow(dead_code)]
     pub fn with_thread_ids(mut self) -> Self {
         self.include_thread_ids = true;
         self
@@ -179,7 +181,7 @@ impl LoggingConfig {
         Self {
             console_level: "DEBUG".to_string(),
             file_level: "TRACE".to_string(),
-            console_timestamps: true,
+
             include_thread_ids: true,
             include_source_location: true,
             ..Default::default()
@@ -191,7 +193,6 @@ impl LoggingConfig {
         Self {
             console_level: "WARN".to_string(),
             file_level: "INFO".to_string(),
-            console_timestamps: false,
             include_thread_ids: false,
             include_source_location: false,
             rotation: LogRotationConfig {
@@ -323,7 +324,6 @@ fn yaml_to_logging_config(yaml: &YamlLoggingConfig) -> Result<LoggingConfig> {
             max_files: yaml.rotation.max_files,
             compress: yaml.rotation.compress,
         },
-        console_timestamps: yaml.console.timestamps,
         include_thread_ids: yaml.features.thread_ids,
         include_source_location: yaml.features.source_location,
     })
@@ -465,7 +465,6 @@ fn get_default_config_for_environment(environment: &str) -> LoggingConfig {
         "docker" => LoggingConfig {
             enable_file: false,
             console_level: "INFO".to_string(),
-            console_timestamps: false,
             ..Default::default()
         },
         _ => LoggingConfig::default(),
@@ -473,6 +472,7 @@ fn get_default_config_for_environment(environment: &str) -> LoggingConfig {
 }
 
 /// Initialize logging for systemd service deployment
+#[allow(dead_code)]
 pub fn initialize_systemd_logging() -> Result<()> {
     let config = LoggingConfig {
         enable_console: false, // systemd will capture stdout/stderr
@@ -512,6 +512,7 @@ pub fn is_development_environment() -> bool {
 }
 
 /// Clean up old log files based on rotation configuration
+#[allow(dead_code)]
 pub fn cleanup_old_logs(config: &LoggingConfig) -> Result<()> {
     if !config.enable_file {
         return Ok(());
@@ -557,6 +558,7 @@ pub fn cleanup_old_logs(config: &LoggingConfig) -> Result<()> {
 }
 
 /// Setup log rotation as a background task
+#[allow(dead_code)]
 pub async fn setup_log_rotation_task(config: LoggingConfig) {
     let mut interval = tokio::time::interval(std::time::Duration::from_secs(3600)); // Check every hour
 
@@ -570,6 +572,7 @@ pub async fn setup_log_rotation_task(config: LoggingConfig) {
 }
 
 /// Create a systemd service file for log management
+#[allow(dead_code)]
 pub fn generate_systemd_service_config() -> String {
     r#"[Unit]
 Description=ZipLock Password Manager
@@ -609,6 +612,7 @@ WantedBy=multi-user.target
 }
 
 /// Create logrotate configuration for manual log rotation
+#[allow(dead_code)]
 pub fn generate_logrotate_config() -> String {
     format!(
         r#"/var/log/ziplock/*.log {{

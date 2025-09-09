@@ -29,7 +29,7 @@ fun CredentialTemplateSelectionScreen(
     modifier: Modifier = Modifier
 ) {
     // Get all available templates
-    val templates = remember { ZipLockNativeHelper.getAllTemplates() }
+    val templates = remember { ZipLockNativeHelper.getAvailableTemplates() }
 
     Column(
         modifier = modifier

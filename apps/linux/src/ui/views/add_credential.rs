@@ -6,6 +6,7 @@
 //! - Field validation and user input handling
 //! - Integration with backend credential creation API
 
+use crate::services::get_repository_service;
 use iced::{
     alignment,
     widget::{button, column, container, row, scrollable, svg, text, Space},
@@ -13,7 +14,6 @@ use iced::{
 };
 use std::collections::HashMap;
 use ziplock_shared::models::{CommonTemplates, CredentialField, CredentialTemplate, FieldType};
-use ziplock_shared::utils::StringUtils;
 
 use crate::ui::components::{CredentialForm, CredentialFormConfig, CredentialFormMessage};
 use crate::ui::theme::{button_styles, container_styles, utils};
@@ -389,22 +389,9 @@ impl AddCredentialView {
             let mut row_buttons = vec![];
 
             for template in chunk {
-                // Get icon SVG for credential type
-                let icon_svg = match template.name.as_str() {
-                    "login" => crate::ui::theme::lock_icon(),
-                    "credit_card" => crate::ui::theme::credit_card_icon(),
-                    "secure_note" => crate::ui::theme::note_icon(),
-                    "identity" => crate::ui::theme::user_icon(),
-                    "password" => crate::ui::theme::lock_icon(),
-                    "document" => crate::ui::theme::document_icon(),
-                    "ssh_key" => crate::ui::theme::settings_icon(),
-                    "bank_account" => crate::ui::theme::bank_icon(),
-                    "api_credentials" => crate::ui::theme::settings_icon(),
-                    "crypto_wallet" => crate::ui::theme::wallet_icon(),
-                    "database" => crate::ui::theme::database_icon(),
-                    "software_license" => crate::ui::theme::license_icon(),
-                    _ => crate::ui::theme::alert_icon(),
-                };
+                // Get icon SVG for credential type using centralized function
+                let icon_svg =
+                    crate::ui::theme::utils::typography::get_credential_type_icon(&template.name);
 
                 let button_element = button(
                     column![
@@ -417,7 +404,7 @@ impl AddCredentialView {
                         .center_x(),
                         Space::with_height(Length::Fixed(12.0)),
                         container(
-                            text(StringUtils::to_display_name(&template.name))
+                            text(template.to_display_name())
                                 .size(crate::ui::theme::utils::typography::medium_text_size())
                                 .horizontal_alignment(alignment::Horizontal::Center)
                         )
@@ -606,9 +593,8 @@ impl AddCredentialView {
         field_values: HashMap<String, String>,
         credential_type: String,
     ) -> Result<String, String> {
-        // Use hybrid client for unified architecture
-        let hybrid_client =
-            ziplock_shared::ZipLockHybridClient::new().map_err(|e| e.to_string())?;
+        // Use repository service for unified architecture
+        let repo_service = get_repository_service();
 
         // Get the template to properly map field types and sensitivity
         let template = match credential_type.as_str() {
@@ -660,18 +646,18 @@ impl AddCredentialView {
             })
             .collect();
 
-        tracing::debug!("Creating credential with hybrid client");
+        tracing::debug!("Creating credential with repository service");
         tracing::debug!("Title: {}", title);
         tracing::debug!("Credential type: {}", credential_type);
         tracing::debug!("Fields: {:?}", fields);
 
-        // Create credential record using hybrid approach
+        // Create credential record using repository service
         let mut credential = ziplock_shared::models::CredentialRecord::new(title, credential_type);
         credential.fields = fields;
         credential.tags = Vec::new();
         credential.notes = None;
 
-        hybrid_client
+        repo_service
             .add_credential(credential)
             .await
             .map_err(|e| e.to_string())

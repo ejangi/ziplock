@@ -1,197 +1,215 @@
 package com.ziplock.viewmodel
 
+import android.content.Context
+import android.util.Log
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-
-import com.ziplock.ffi.ZipLockNative
+import com.ziplock.repository.MobileRepositoryManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.delay
 
 /**
- * ViewModel for managing credentials list state and operations
+ * ViewModel for managing credentials list state and operations - Unified Architecture
+ *
+ * This ViewModel has been updated to use the unified architecture pattern:
+ * - Uses MobileRepositoryManager for all repository operations
+ * - Follows proper separation between UI, business logic, and data layers
+ * - Handles credential CRUD operations through the mobile FFI
+ * - Provides reactive state management for the UI
+ * - Manages search and filtering functionality
+ *
+ * The ViewModel acts as a bridge between the UI layer and the repository layer,
+ * handling all credential-related operations and state management.
  */
-class CredentialsViewModel : ViewModel() {
+class CredentialsViewModel(private val context: Context) : ViewModel() {
 
+    companion object {
+        private const val TAG = "CredentialsViewModel"
+    }
+
+    // Dependencies
+    private val repositoryManager: MobileRepositoryManager = MobileRepositoryManager.getInstance(context)
+
+    // UI State
     private val _uiState = MutableStateFlow(CredentialsUiState())
     val uiState: StateFlow<CredentialsUiState> = _uiState.asStateFlow()
 
+    // Search functionality
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
 
-    private val _archiveOpen = MutableStateFlow(false)
-    val archiveOpen: StateFlow<Boolean> = _archiveOpen.asStateFlow()
+    // Repository state
+    private val _repositoryOpen = MutableStateFlow(false)
+    val repositoryOpen: StateFlow<Boolean> = _repositoryOpen.asStateFlow()
 
     init {
-        println("CredentialsViewModel: Initializing...")
-        // Check initial state
-        val initiallyOpen = ZipLockNative.isArchiveOpen()
-        println("CredentialsViewModel: Initial archive open status: $initiallyOpen")
-        _archiveOpen.value = initiallyOpen
-        // Note: loadCredentials() is now called externally when archive is confirmed open
-        // This prevents race conditions where the UI loads before the archive is fully opened
-    }
+        Log.d(TAG, "Initializing CredentialsViewModel")
 
-    /**
-     * Test FFI connection
-     */
-    private fun testFFIConnection(): Boolean {
-        return try {
-            println("CredentialsViewModel: Testing FFI connection...")
-            val testResult = ZipLockNative.testConnection()
-            println("CredentialsViewModel: FFI test result: $testResult")
-
-            val version = ZipLockNative.getVersion()
-            println("CredentialsViewModel: FFI library version: $version")
-
-            testResult
-        } catch (e: Exception) {
-            println("CredentialsViewModel: FFI test failed: ${e.message}")
-            e.printStackTrace()
-            false
+        // Check initial repository state
+        viewModelScope.launch {
+            refreshRepositoryState()
+            if (_repositoryOpen.value) {
+                loadCredentials()
+            }
         }
     }
 
     /**
-     * Load credentials from the archive
+     * Load all credentials from the repository
      */
     fun loadCredentials() {
-        println("CredentialsViewModel: loadCredentials() called")
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(
-                isLoading = true,
-                errorMessage = null
-            )
-
             try {
-                // Test FFI connection first
-                if (!testFFIConnection()) {
-                    _uiState.value = _uiState.value.copy(
-                        isLoading = false,
-                        errorMessage = "FFI library connection failed. Please restart the app."
-                    )
-                    return@launch
+                Log.d(TAG, "Loading credentials")
+
+                _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
+
+                val result = repositoryManager.listCredentials()
+
+                when (result) {
+                    is MobileRepositoryManager.RepositoryResult.Success -> {
+                        val credentials = result.data
+                        Log.d(TAG, "Loaded ${credentials.size} credentials")
+
+                        // Convert CredentialRecord to Map<String, Any> for UI compatibility
+                        val credentialMaps = credentials.map { record ->
+                            mapOf(
+                                "id" to record.id,
+                                "title" to record.title,
+                                "credentialType" to record.credentialType,
+                                "fields" to record.fields.mapValues { (_, field) ->
+                                    mapOf(
+                                        "value" to field.value,
+                                        "fieldType" to field.fieldType,
+                                        "label" to field.label,
+                                        "sensitive" to field.sensitive
+                                    )
+                                },
+                                "createdAt" to record.createdAt,
+                                "updatedAt" to record.updatedAt,
+                                "tags" to record.tags
+                            )
+                        }
+
+                        _uiState.value = _uiState.value.copy(
+                            isLoading = false,
+                            credentials = credentialMaps,
+                            errorMessage = null,
+                            isEmpty = credentialMaps.isEmpty()
+                        )
+
+                        // Apply current search filter if active
+                        applySearchFilter(_searchQuery.value)
+                    }
+
+                    is MobileRepositoryManager.RepositoryResult.Error -> {
+                        val errorMessage = "Failed to load credentials: ${result.message}"
+                        Log.e(TAG, errorMessage, result.exception)
+
+                        _uiState.value = _uiState.value.copy(
+                            isLoading = false,
+                            errorMessage = errorMessage,
+                            credentials = emptyList(),
+                            filteredCredentials = emptyList(),
+                            isEmpty = true
+                        )
+                    }
                 }
 
-                // Add a small delay to show loading state for better UX
-                delay(500)
-
-                // Check if archive is open first
-                val isOpen = ZipLockNative.isArchiveOpen()
-                println("CredentialsViewModel: Archive is open: $isOpen")
-                _archiveOpen.value = isOpen
-
-                if (!isOpen) {
-                    _uiState.value = _uiState.value.copy(
-                        isLoading = false,
-                        errorMessage = "Archive is not open. Please open an archive first."
-                    )
-                    return@launch
-                }
-
-                println("CredentialsViewModel: Calling listCredentials...")
-                val result = ZipLockNative.listCredentials()
-                println("CredentialsViewModel: listCredentials result - success: ${result.success}, credentials: ${result.credentials.size}, error: ${result.errorMessage}")
-
-                if (result.success) {
-                    _uiState.value = _uiState.value.copy(
-                        isLoading = false,
-                        credentials = result.credentials,
-                        errorMessage = null
-                    )
-                    println("CredentialsViewModel: Successfully loaded ${result.credentials.size} credentials")
-                } else {
-                    _uiState.value = _uiState.value.copy(
-                        isLoading = false,
-                        errorMessage = result.errorMessage ?: "Failed to load credentials"
-                    )
-                    println("CredentialsViewModel: Failed to load credentials: ${result.errorMessage}")
-                }
             } catch (e: Exception) {
-                println("CredentialsViewModel: Exception loading credentials: ${e.message}")
-                e.printStackTrace()
+                val errorMessage = "Error loading credentials: ${e.message}"
+                Log.e(TAG, errorMessage, e)
+
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
-                    errorMessage = "Error loading credentials: ${e.message}"
+                    errorMessage = errorMessage,
+                    credentials = emptyList(),
+                    filteredCredentials = emptyList(),
+                    isEmpty = true
                 )
             }
         }
     }
 
     /**
-     * Load mock credentials for testing UI
-     * This can be used during development to test the credentials list UI
+     * Refresh credentials list
      */
-    fun loadMockCredentials() {
+    fun refreshCredentials() {
+        Log.d(TAG, "Refreshing credentials")
+        loadCredentials()
+    }
+
+    /**
+     * Refresh credentials list (alias for refreshCredentials)
+     */
+    fun refresh() {
+        refreshCredentials()
+    }
+
+    /**
+     * Delete a credential by ID
+     */
+    fun deleteCredential(credentialId: String) {
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(
-                isLoading = true,
-                errorMessage = null
-            )
-
             try {
-                delay(1000) // Simulate network/disk delay
+                Log.d(TAG, "Deleting credential: $credentialId")
 
-                val mockCredentials = listOf(
-                    ZipLockNative.Credential(
-                        id = "cred_1",
-                        title = "Google Account",
-                        credentialType = "login",
-                        url = "https://accounts.google.com",
-                        username = "user@gmail.com",
-                        tags = listOf("work", "email")
-                    ),
-                    ZipLockNative.Credential(
-                        id = "cred_2",
-                        title = "Bank of America",
-                        credentialType = "bank_account",
-                        url = "https://bankofamerica.com",
-                        tags = listOf("finance", "bank")
-                    ),
-                    ZipLockNative.Credential(
-                        id = "cred_3",
-                        title = "Visa Credit Card",
-                        credentialType = "credit_card",
-                        tags = listOf("finance", "payment")
-                    ),
-                    ZipLockNative.Credential(
-                        id = "cred_4",
-                        title = "WiFi Password",
-                        credentialType = "secure_note",
-                        notes = "Home network credentials",
-                        tags = listOf("home", "network")
-                    ),
-                    ZipLockNative.Credential(
-                        id = "cred_5",
-                        title = "SSH Server Key",
-                        credentialType = "ssh_key",
-                        url = "192.168.1.100",
-                        username = "admin",
-                        tags = listOf("server", "development")
-                    )
-                )
+                _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
 
-                _uiState.value = _uiState.value.copy(
-                    isLoading = false,
-                    credentials = mockCredentials,
-                    errorMessage = null
-                )
+                val result = repositoryManager.deleteCredential(credentialId)
+
+                when (result) {
+                    is MobileRepositoryManager.RepositoryResult.Success -> {
+                        Log.d(TAG, "Credential deleted successfully")
+
+                        // Remove from current list immediately for better UX
+                        val updatedCredentials = _uiState.value.credentials.filter {
+                            (it["id"] as String) != credentialId
+                        }
+
+                        _uiState.value = _uiState.value.copy(
+                            isLoading = false,
+                            credentials = updatedCredentials,
+                            errorMessage = null,
+                            isEmpty = updatedCredentials.isEmpty()
+                        )
+
+                        // Apply search filter to updated list
+                        applySearchFilter(_searchQuery.value)
+                    }
+
+                    is MobileRepositoryManager.RepositoryResult.Error -> {
+                        val errorMessage = "Failed to delete credential: ${result.message}"
+                        Log.e(TAG, errorMessage, result.exception)
+
+                        _uiState.value = _uiState.value.copy(
+                            isLoading = false,
+                            errorMessage = errorMessage
+                        )
+                    }
+                }
+
             } catch (e: Exception) {
+                val errorMessage = "Error deleting credential: ${e.message}"
+                Log.e(TAG, errorMessage, e)
+
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
-                    errorMessage = "Error loading mock credentials: ${e.message}"
+                    errorMessage = errorMessage
                 )
             }
         }
     }
 
     /**
-     * Update search query
+     * Update search query and filter credentials
      */
     fun updateSearchQuery(query: String) {
         _searchQuery.value = query
+        applySearchFilter(query)
     }
 
     /**
@@ -199,191 +217,270 @@ class CredentialsViewModel : ViewModel() {
      */
     fun clearSearch() {
         _searchQuery.value = ""
+        applySearchFilter("")
     }
 
     /**
-     * Refresh credentials list
+     * Apply search filter to credentials
      */
-    fun refresh() {
-        loadCredentials()
+    private fun applySearchFilter(query: String) {
+        val credentials = _uiState.value.credentials
+
+        val filtered = if (query.isBlank()) {
+            credentials
+        } else {
+            credentials.filter { credential ->
+                val title = (credential["title"] as? String)?.lowercase() ?: ""
+                val credentialType = (credential["credentialType"] as? String)?.lowercase() ?: ""
+                val tags = (credential["tags"] as? List<*>)?.joinToString(" ") { it.toString().lowercase() } ?: ""
+
+                // Search in fields
+                val fieldsText = (credential["fields"] as? Map<*, *>)?.values?.joinToString(" ") { fieldValue ->
+                    if (fieldValue is Map<*, *>) {
+                        val value = fieldValue["value"] as? String ?: ""
+                        val sensitive = fieldValue["sensitive"] as? Boolean ?: false
+                        // Don't search in sensitive fields for security
+                        if (!sensitive) value.lowercase() else ""
+                    } else {
+                        ""
+                    }
+                } ?: ""
+
+                val searchText = "$title $credentialType $tags $fieldsText"
+                searchText.contains(query.lowercase())
+            }
+        }
+
+        _uiState.value = _uiState.value.copy(
+            filteredCredentials = filtered,
+            hasSearchResults = filtered.isNotEmpty() || query.isBlank()
+        )
     }
 
     /**
-     * Handle add credential action
+     * Get credential by ID
      */
-    fun addCredential() {
-        // TODO: Navigate to add credential screen
-        println("Add credential requested")
-    }
-
-    /**
-     * Close the current archive
-     */
-    fun closeArchive(): Boolean {
+    suspend fun getCredential(credentialId: String): Map<String, Any>? {
         return try {
-            println("CredentialsViewModel: Closing archive...")
+            Log.d(TAG, "Getting credential: $credentialId")
 
-            // Check if an archive is actually open before trying to close
-            val isOpen = ZipLockNative.isArchiveOpen()
-            if (!isOpen) {
-                println("CredentialsViewModel: No archive is open, clearing UI state")
-                // Clear credentials UI state even if no archive was open
-                _uiState.value = _uiState.value.copy(
-                    credentials = emptyList(),
-                    errorMessage = null
-                )
-                _archiveOpen.value = false
-                return true // Return success since the desired state (no open archive) is achieved
+            val result = repositoryManager.getCredential(credentialId)
+
+            when (result) {
+                is MobileRepositoryManager.RepositoryResult.Success<*> -> {
+                    Log.d(TAG, "Retrieved credential successfully")
+                    result.data as? Map<String, Any>
+                }
+
+                is MobileRepositoryManager.RepositoryResult.Error -> {
+                    Log.e(TAG, "Failed to get credential: ${result.message}", result.exception)
+                    null
+                }
             }
-
-            val result = ZipLockNative.closeArchive()
-            println("CredentialsViewModel: Close archive result: $result")
-
-            if (result) {
-                // Clear credentials when archive is closed
-                _uiState.value = _uiState.value.copy(
-                    credentials = emptyList(),
-                    errorMessage = null
-                )
-                _archiveOpen.value = false
-                println("CredentialsViewModel: Archive closed successfully, cleared credentials")
-            } else {
-                println("CredentialsViewModel: Failed to close archive")
-            }
-            result
         } catch (e: Exception) {
-            println("CredentialsViewModel: Exception closing archive: ${e.message}")
-            e.printStackTrace()
-            _uiState.value = _uiState.value.copy(
-                errorMessage = "Error closing archive: ${e.message}"
-            )
-            false
+            Log.e(TAG, "Error getting credential: ${e.message}", e)
+            null
         }
     }
 
     /**
-     * Check if archive is currently open
+     * Get credentials by type
      */
-    fun isArchiveOpen(): Boolean {
-        val isOpen = ZipLockNative.isArchiveOpen()
-        println("CredentialsViewModel: isArchiveOpen() = $isOpen")
-        return isOpen
+    fun getCredentialsByType(type: String): List<Map<String, Any>> {
+        return _uiState.value.credentials.filter { credential ->
+            (credential["credentialType"] as? String) == type
+        }
     }
 
     /**
-     * Handle credential selection
+     * Get credentials by tag
      */
-    fun addCredential(credential: ZipLockNative.Credential) {
-        // For now, just log the selection
-        // TODO: Navigate to credential detail view
-        println("Selected credential: ${credential.title} (${credential.id})")
+    fun getCredentialsByTag(tag: String): List<Map<String, Any>> {
+        return _uiState.value.credentials.filter { credential ->
+            val tags = credential["tags"] as? List<*> ?: emptyList<Any>()
+            tags.contains(tag)
+        }
     }
 
     /**
-     * Clear any error messages
+     * Get unique credential types
      */
-    fun clearError() {
+    fun getCredentialTypes(): List<String> {
+        return _uiState.value.credentials
+            .mapNotNull { it["credentialType"] as? String }
+            .distinct()
+            .sorted()
+    }
+
+    /**
+     * Get unique tags
+     */
+    fun getTags(): List<String> {
+        return _uiState.value.credentials
+            .flatMap { credential ->
+                (credential["tags"] as? List<*>)?.mapNotNull { it as? String } ?: emptyList()
+            }
+            .distinct()
+            .sorted()
+    }
+
+    /**
+     * Check if repository is currently open
+     */
+    fun checkRepositoryStatus() {
+        viewModelScope.launch {
+            refreshRepositoryState()
+        }
+    }
+
+    /**
+     * Refresh repository state
+     */
+    private suspend fun refreshRepositoryState() {
+        try {
+            val stateResult = repositoryManager.getRepositoryState()
+
+            if (stateResult is MobileRepositoryManager.RepositoryResult.Success<*>) {
+                val repositoryState = stateResult.data
+                if (repositoryState is MobileRepositoryManager.RepositoryState) {
+                    _repositoryOpen.value = repositoryState.isOpen
+
+                    if (!repositoryState.isOpen) {
+                        // Clear credentials if repository is closed
+                        _uiState.value = _uiState.value.copy(
+                            credentials = emptyList(),
+                            filteredCredentials = emptyList(),
+                            isEmpty = true
+                        )
+                    }
+                } else {
+                    _repositoryOpen.value = false
+                }
+            } else if (stateResult is MobileRepositoryManager.RepositoryResult.Error<*>) {
+                Log.w(TAG, "Failed to get repository state: ${stateResult.message}")
+                _repositoryOpen.value = false
+            } else {
+                Log.w(TAG, "Unknown repository state result type")
+                _repositoryOpen.value = false
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error checking repository status", e)
+            _repositoryOpen.value = false
+        }
+    }
+
+    /**
+     * Clear all credentials from the repository
+     */
+    fun clearCredentials() {
+        viewModelScope.launch {
+            try {
+                Log.d(TAG, "Clearing all credentials")
+
+                _uiState.value = _uiState.value.copy(
+                    credentials = emptyList(),
+                    isLoading = false,
+                    errorMessage = null,
+                    isEmpty = true,
+                    hasSearchResults = true
+                )
+
+                _searchQuery.value = ""
+
+                Log.d(TAG, "All credentials cleared")
+            } catch (e: Exception) {
+                Log.e(TAG, "Error clearing credentials: ${e.message}", e)
+                _uiState.value = _uiState.value.copy(
+                    errorMessage = "Failed to clear credentials: ${e.message}"
+                )
+            }
+        }
+    }
+
+    /**
+     * Clear all error messages
+     */
+    private fun clearError() {
         _uiState.value = _uiState.value.copy(errorMessage = null)
     }
 
     /**
-     * Clear credentials state for cleanup
+     * Clear credentials state
      */
-    fun clearCredentials() {
+    fun clearCredentialsState() {
         _uiState.value = _uiState.value.copy(
             credentials = emptyList(),
+            isLoading = false,
             errorMessage = null,
-            isLoading = false
+            isEmpty = true
         )
-        _archiveOpen.value = false
-        println("CredentialsViewModel: Cleared credentials state")
     }
 
     /**
-     * Get filtered credentials based on search query
+     * Sort credentials by title
      */
-    fun getFilteredCredentials(): List<ZipLockNative.Credential> {
-        val query = _searchQuery.value
-        val credentials = _uiState.value.credentials
+    fun sortCredentialsByTitle(ascending: Boolean = true) {
+        val credentials = _uiState.value.credentials.sortedBy {
+            (it["title"] as? String)?.lowercase() ?: ""
+        }.let { if (ascending) it else it.reversed() }
 
-        return if (query.isBlank()) {
-            credentials
-        } else {
-            credentials.filter { credential: ZipLockNative.Credential ->
-                credential.title.contains(query, ignoreCase = true) ||
-                credential.credentialType.contains(query, ignoreCase = true) ||
-                credential.username.contains(query, ignoreCase = true) ||
-                credential.url.contains(query, ignoreCase = true) ||
-                credential.notes.contains(query, ignoreCase = true) ||
-                credential.tags.any { tag: String -> tag.contains(query, ignoreCase = true) }
-            }
-        }
+        _uiState.value = _uiState.value.copy(credentials = credentials)
+        applySearchFilter(_searchQuery.value) // Reapply search filter
     }
 
     /**
-     * Get credentials grouped by type for potential future use
+     * Sort credentials by type
      */
-    fun getCredentialsGroupedByType(): Map<String, List<ZipLockNative.Credential>> {
-        return _uiState.value.credentials.groupBy { it.credentialType }
+    fun sortCredentialsByType(ascending: Boolean = true) {
+        val credentials = _uiState.value.credentials.sortedBy {
+            (it["credentialType"] as? String)?.lowercase() ?: ""
+        }.let { if (ascending) it else it.reversed() }
+
+        _uiState.value = _uiState.value.copy(credentials = credentials)
+        applySearchFilter(_searchQuery.value) // Reapply search filter
     }
 
     /**
-     * Get unique credential types for potential filtering
+     * Sort credentials by last modified
      */
-    fun getCredentialTypes(): List<String> {
-        return _uiState.value.credentials
-            .map { it.credentialType }
-            .distinct()
-            .sorted()
+    fun sortCredentialsByDate(ascending: Boolean = true) {
+        val credentials = _uiState.value.credentials.sortedBy {
+            (it["updatedAt"] as? Long) ?: 0L
+        }.let { if (ascending) it else it.reversed() }
+
+        _uiState.value = _uiState.value.copy(credentials = credentials)
+        applySearchFilter(_searchQuery.value) // Reapply search filter
     }
 
-    /**
-     * Get all unique tags for potential filtering
-     */
-    fun getAllTags(): List<String> {
-        return _uiState.value.credentials
-            .flatMap { credential: ZipLockNative.Credential -> credential.tags }
-            .distinct()
-            .sorted()
-    }
-
-    /**
-     * Get credentials statistics
-     */
-    fun getCredentialsStats(): CredentialsStats {
-        val credentials = _uiState.value.credentials
-        val typeGroups = credentials.groupBy { credential: ZipLockNative.Credential -> credential.credentialType }
-
-        return CredentialsStats(
-            totalCount = credentials.size,
-            typeCount = typeGroups.size,
-            mostCommonType = typeGroups.maxByOrNull { (_, credentialList): Map.Entry<String, List<ZipLockNative.Credential>> -> credentialList.size }?.key ?: "",
-            tagCount = getAllTags().size
-        )
+    override fun onCleared() {
+        super.onCleared()
+        Log.d(TAG, "CredentialsViewModel cleared")
     }
 }
 
 /**
- * UI state for credentials list
+ * UI State for credentials screen
  */
 data class CredentialsUiState(
     val isLoading: Boolean = false,
-    val credentials: List<ZipLockNative.Credential> = emptyList(),
-    val errorMessage: String? = null
-) {
-    val isEmpty: Boolean
-        get() = credentials.isEmpty() && !isLoading
-
-    val hasError: Boolean
-        get() = errorMessage != null
-}
+    val credentials: List<Map<String, Any>> = emptyList(),
+    val filteredCredentials: List<Map<String, Any>> = emptyList(),
+    val errorMessage: String? = null,
+    val isEmpty: Boolean = true,
+    val hasSearchResults: Boolean = true
+)
 
 /**
- * Statistics about credentials
+ * Factory for creating CredentialsViewModel instances
  */
-data class CredentialsStats(
-    val totalCount: Int,
-    val typeCount: Int,
-    val mostCommonType: String,
-    val tagCount: Int
-)
+class CredentialsViewModelFactory(
+    private val context: Context
+) : ViewModelProvider.Factory {
+    @Suppress("UNCHECKED_CAST")
+    override fun <T : ViewModel> create(modelClass: Class<T>): T {
+        if (modelClass.isAssignableFrom(CredentialsViewModel::class.java)) {
+            return CredentialsViewModel(context) as T
+        }
+        throw IllegalArgumentException("Unknown ViewModel class")
+    }
+}

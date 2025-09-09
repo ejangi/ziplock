@@ -50,6 +50,10 @@ regex = "1.10"
 base64 = "0.21"
 sha2 = "0.10"
 
+# Optional logging backend
+env_logger = { version = "0.10", optional = true }
+log = { version = "0.4", optional = true }
+
 # HTTP client for update checking
 reqwest = { version = "0.11", features = [
     "json",
@@ -66,6 +70,9 @@ num_cpus.workspace = true
 # C FFI dependencies
 libc = "0.2"
 
+# CSV export support
+csv = "1.3"
+
 # TOTP support
 hmac = "0.12"
 sha1 = "0.10"
@@ -79,6 +86,14 @@ windows = { version = "0.52", features = [
     "Win32_Foundation",
     "Win32_System_Threading",
 ] }
+
+# Mobile platform dependencies
+[target.'cfg(target_os = "android")'.dependencies]
+android_log-sys = "0.3"
+
+[target.'cfg(target_os = "ios")'.dependencies]
+# iOS logging dependencies would go here if needed
+# For now using system calls directly
 
 # Optional dependencies for different serialization formats
 bincode = { version = "1.3", optional = true }
@@ -94,6 +109,9 @@ default = ["yaml"]
 yaml = []
 bincode = ["dep:bincode"]
 messagepack = ["dep:rmp-serde"]
+
+# Logging backend support
+env_logger = ["dep:env_logger", "dep:log"]
 
 # Additional validation features
 strict-validation = []

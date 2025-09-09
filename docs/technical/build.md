@@ -339,10 +339,13 @@ ZipLock supports full Android cross-compilation through a containerized build en
 ./scripts/build/build-android-docker.sh build arm64
 
 # Test built libraries
-./scripts/build/build-android-docker.sh test
+./scripts/build/test-android-integration.sh basic
 
-# Verify build environment
-./scripts/build/test-android-readiness.sh
+# Verify build environment and symbols
+./scripts/build/verify-android-symbols.sh verify
+
+# Open interactive shell for debugging
+./scripts/build/build-android-docker.sh shell
 ```
 
 ##### Android Builder Container
@@ -375,6 +378,7 @@ The Android builder includes:
 - **Android NDK**: Version 25.2.9519653  
 - **API Level**: 21 (Android 5.0+)
 - **Pre-configured**: Cross-compilation toolchains, cargo configuration, NDK environment
+- **libgcc Fix**: Static linking configuration to avoid `libgcc_s.so.1` dependency issues
 
 ##### Build Options and Fallbacks
 
@@ -415,6 +419,32 @@ Successful Android builds produce:
 - **C Header**: `ziplock.h` for native integration
 - **Size**: ~1.5MB per architecture (optimized release builds)
 - **Location**: `target/{architecture}/release/`
+
+##### Android libgcc_s.so.1 Fix
+
+**Problem**: Previous Android builds failed at runtime with:
+```
+java.lang.UnsatisfiedLinkError: dlopen failed: library "libgcc_s.so.1" not found
+```
+
+**Root Cause**: Rust's standard library was linking against glibc's `libgcc_s.so.1`, which doesn't exist on Android (Android uses Bionic C library).
+
+**Solution Implemented**: 
+1. **Static libgcc linking**: Added `-C link-arg=-static-libgcc` to force static linking
+2. **Cargo configuration**: Created `shared/.cargo/config.toml` with Android-specific settings
+3. **Build script updates**: Modified `scripts/build/build-mobile.sh` to use proper flags
+4. **Runtime verification**: Libraries now only depend on `libc.so` and `libdl.so` (Android-compatible)
+
+**Verification**:
+```bash
+# Verify the fix worked
+./scripts/dev/verify-android-library.sh
+
+# Check library dependencies directly
+readelf -d apps/mobile/android/app/src/main/jniLibs/arm64-v8a/libziplock_shared.so
+```
+
+**Result**: All Android architectures now build successfully and load without dependency errors.
 
 ##### Integration with CI/CD
 
@@ -1087,6 +1117,145 @@ jobs:
 - `scripts/build/build-linux.sh` - Fixed version extraction using `sed -n` instead of `head`
 
 This fix maintains all security and compatibility features while preventing pipeline failures from SIGPIPE errors.
+
+### Unified Release Build
+
+ZipLock includes a unified build script that creates complete releases with both Linux and Android artifacts:
+
+```bash
+# Build complete release for all platforms
+./scripts/build/build-unified-release.sh
+
+# Build only Linux components
+./scripts/build/build-unified-release.sh -p linux
+
+# Build only Android components  
+./scripts/build/build-unified-release.sh -p android
+
+# Clean build with verbose output
+./scripts/build/build-unified-release.sh -c -v
+
+# Skip tests and packages for faster builds
+./scripts/build/build-unified-release.sh --skip-tests --skip-packages
+
+# Update PKGBUILD checksums automatically
+./scripts/build/build-unified-release.sh --update-checksums
+```
+
+The unified build creates a structured release directory:
+```
+target/unified-release/
+├── linux/
+│   ├── binaries/           # Linux executables
+│   ├── packages/           # .deb and .pkg files
+│   └── install/            # Installation structure
+├── android/
+│   ├── libraries/          # .so files by architecture
+│   │   ├── arm64-v8a/     # ARM64 (modern devices)
+│   │   ├── armeabi-v7a/   # ARMv7 (older devices)
+│   │   ├── x86_64/        # x86_64 emulator
+│   │   └── x86/           # x86 emulator
+│   ├── headers/           # C header files
+│   └── integration/       # Android app integration files
+├── packaging/              # Platform packaging files
+│   ├── arch/              # Arch Linux PKGBUILD and install scripts
+│   └── linux/             # Linux packaging configurations
+├── docs/                  # Complete documentation
+├── release-info.json      # Build metadata
+├── RELEASE_NOTES.md       # Generated release notes
+└── CHANGELOG.md           # Project changelog
+```
+
+The script also creates a compressed archive: `ziplock-VERSION-unified-release.tar.gz`
+
+#### Arch Linux Release Process
+
+The release includes all necessary files for creating Arch Linux packages:
+
+```bash
+# After extracting the unified release
+cd ziplock-VERSION/packaging/arch
+
+# Build Arch package
+makepkg -si
+
+# Or for AUR submission
+makepkg --printsrcinfo > .SRCINFO
+```
+
+The `packaging/arch/` directory contains:
+- **`PKGBUILD`**: Complete Arch Linux package definition
+- **`ziplock.install`**: Install/upgrade/removal hooks for proper system integration
+
+**Automatic Updates**: The unified build script automatically:
+- Updates `pkgver` to match the current project version
+- Updates the source URL to point to the correct GitHub release
+- Resets `pkgrel` to 1 for new versions
+- Optionally calculates and updates SHA256 checksums with `--update-checksums`
+
+**Manual Checksum Update**: If not using `--update-checksums`, update the SHA256 hash manually:
+```bash
+# Download the source and calculate checksum
+wget https://github.com/ejangi/ziplock/archive/v0.3.0.tar.gz
+sha256sum v0.3.0.tar.gz
+# Update the sha256sums line in PKGBUILD
+```
+
+#### PKGBUILD Automation Features
+
+The unified build script provides comprehensive automation for Arch Linux package management:
+
+**Automatic Updates Performed:**
+- `pkgver`: Updated to match current project version
+- `pkgrel`: Reset to 1 for new versions  
+- `source`: URL updated to point to correct GitHub release tag
+- `sha256sums`: Calculated and updated when using `--update-checksums`
+
+**Usage Examples:**
+```bash
+# Standard build (manual checksum update needed)
+./scripts/build/build-unified-release.sh
+
+# Fully automated build with checksum calculation
+./scripts/build/build-unified-release.sh --update-checksums
+
+# Build specific version with checksums
+VERSION=1.0.0 ./scripts/build/build-unified-release.sh --update-checksums
+```
+
+**Checksum Calculation Process:**
+When `--update-checksums` is used, the script:
+1. Downloads the source tarball from GitHub (`https://github.com/ejangi/ziplock/archive/v{VERSION}.tar.gz`)
+2. Calculates SHA256 hash of the downloaded file
+3. Updates the `sha256sums` array in PKGBUILD
+4. Cleans up temporary files
+
+**Benefits:**
+- **Version Consistency**: Ensures PKGBUILD version matches project version
+- **Automated Checksums**: Eliminates manual checksum calculation errors
+- **AUR Ready**: Generated PKGBUILD is ready for AUR submission
+- **CI/CD Integration**: Can be fully automated in build pipelines
+
+**AUR Publishing Workflow:**
+```bash
+# 1. Create release with updated PKGBUILD
+./scripts/build/build-unified-release.sh --update-checksums
+
+# 2. Extract and verify
+tar -xzf target/ziplock-*-unified-release.tar.gz
+cd ziplock-*/packaging/arch
+
+# 3. Test build locally
+makepkg -si
+
+# 4. Generate .SRCINFO for AUR
+makepkg --printsrcinfo > .SRCINFO
+
+# 5. Submit to AUR
+git add PKGBUILD .SRCINFO
+git commit -m "Update to version X.Y.Z"
+git push
+```
 
 ### Triggering a Release
 

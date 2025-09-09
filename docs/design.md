@@ -78,13 +78,54 @@ This view displays all the information for a single credential.
 * Fields containing sensitive data (e.g., passwords, TOTP keys) should be masked by default and require an explicit action (e.g., a "show" button or an eye icon) to reveal the content.
 * Buttons for editing, deleting, or copying field content will be clearly visible and accessible.
 
-### **3.3 Initial Setup**
+### **3.3 TOTP Integration and Login Credentials**
+
+The login credential form includes comprehensive two-factor authentication (TOTP) support:
+
+#### **Login Credential Fields**
+- **Username** (required): Standard username input with validation
+- **Password** (required): Masked password field with visibility toggle
+- **Website URL** (optional): URL field with proper validation and formatting
+- **TOTP Secret** (optional): Specialized TOTP field with real-time code generation
+- **Notes** (optional): Multi-line text area for additional information
+
+#### **TOTP Field Design**
+The TOTP field provides a sophisticated user experience:
+- **Secret Input**: Base32-encoded secret input with format validation
+- **Live Code Display**: Real-time 6-digit TOTP code generation
+- **Countdown Timer**: Visual indicator showing code expiration (typically 30 seconds)
+- **Copy Functionality**: One-click copy with automatic clipboard clearing for security
+- **Visual Feedback**: Clear indication of code validity and refresh timing
+
+#### **Security Considerations**
+- TOTP codes automatically cleared from clipboard after configurable timeout (default 30 seconds)
+- Secret keys masked by default with optional visibility toggle
+- Real-time validation ensures proper Base32 format for TOTP secrets
+- Visual countdown prevents users from copying expired codes
+
+### **3.4 Initial Setup and Repository Access**
 
 The first-run experience must be simple and guide the user through the process of creating their encrypted database.
 
+#### **First-Time Setup**
 * A step-by-step process with clear instructions.
 * A strong master key validation that provides feedback on the password's strength.
 * A file picker dialog to choose the location for the ziplock.7z file.
+
+#### **Recent Repository Persistence**
+The application maintains a persistent history of recently accessed repositories to streamline the user experience:
+
+* **Automatic Repository Selection**: The most recently opened repository is automatically selected when the user opens the app
+* **Simplified Access**: Users only need to enter their passphrase - no file selection required for recent repositories
+* **Visual Indicators**: Clear distinction between auto-selected recent repositories and manually selected files
+* **Fallback Options**: Users can still browse for different repositories if needed
+* **Secure Persistence**: Only repository paths are stored - no passwords or sensitive data
+
+#### **Repository Opening Experience**
+* **Recent Repository**: Shows "Recent repository: [filename]" with focused passphrase input
+* **Manual Selection**: Traditional file selection with "Selected: [filename]" display
+* **Contextual Messaging**: Different header messages based on whether repository was auto-selected
+* **Consistent Workflow**: Same passphrase input and validation regardless of selection method
 
 ## **4. Error Display and Feedback System**
 
