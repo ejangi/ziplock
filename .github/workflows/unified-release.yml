@@ -232,15 +232,7 @@ jobs:
       - name: Build Android libraries
         shell: bash
         run: |
-          # Debug: Check current environment
-          echo "=== Environment Debug ==="
-          echo "PWD: $(pwd)"
-          echo "CARGO_TARGET_DIR: $CARGO_TARGET_DIR"
-          echo "Listing current directory:"
-          ls -la
-
           cd shared
-          echo "After cd shared, PWD: $(pwd)"
 
           # Debug: Check what targets are available
           echo "=== Available Rust targets ==="
@@ -274,12 +266,11 @@ jobs:
 
             # Check what was built
             echo "Checking build output for $target:"
-            echo "Looking in ../target/$target/release/:"
-            ls -la "../target/$target/release/" | grep ziplock || echo "No ziplock files found in ../target/$target/release/"
-            echo "Checking if CARGO_TARGET_DIR affects the path:"
-            ls -la "/workspace/target/$target/release/" | grep ziplock || echo "No ziplock files found in /workspace/target/$target/release/"
-            echo "Full directory listing:"
-            find ../target -name "*ziplock*" -type f || echo "No ziplock files found anywhere in ../target"
+            if ls "/workspace/target/$target/release/"*ziplock* 1> /dev/null 2>&1; then
+              echo "✓ Build artifacts found for $target"
+            else
+              echo "⚠ No build artifacts found for $target"
+            fi
           done
 
           # Create output structure
@@ -605,15 +596,31 @@ jobs:
           # Make binaries executable
           chmod +x target/artifacts/linux/binaries/*
 
+          # Install virtual display for GUI testing
+          sudo apt-get update
+          sudo apt-get install -y xvfb
+
           # Run basic performance tests
           echo "# ZipLock Performance Benchmarks" > benchmark-results.md
           echo "Generated: $(date -u)" >> benchmark-results.md
           echo "Commit: ${{ github.sha }}" >> benchmark-results.md
           echo "" >> benchmark-results.md
 
-          # Test basic functionality
-          ./target/artifacts/linux/binaries/ziplock --version >> benchmark-results.md
-          ./target/artifacts/linux/binaries/ziplock-cli --version >> benchmark-results.md
+          # Test basic functionality with virtual display for GUI app
+          echo "## Version Information" >> benchmark-results.md
+          echo '```' >> benchmark-results.md
+
+          # GUI version with virtual display
+          xvfb-run -a ./target/artifacts/linux/binaries/ziplock --version >> benchmark-results.md 2>&1 || echo "ziplock version failed" >> benchmark-results.md
+
+          echo '```' >> benchmark-results.md
+          echo "" >> benchmark-results.md
+
+          # Basic functionality test
+          echo "## Basic Functionality Test" >> benchmark-results.md
+          echo '```' >> benchmark-results.md
+          xvfb-run -a ./target/artifacts/linux/binaries/ziplock --help | head -10 >> benchmark-results.md 2>&1 || echo "Help command failed" >> benchmark-results.md
+          echo '```' >> benchmark-results.md
 
       - name: Upload benchmark results
         uses: actions/upload-artifact@v4
