@@ -183,13 +183,21 @@ impl CredentialTemplate {
     /// Converts snake_case and kebab-case names to Title Case
     /// Examples: "credit_card" -> "Credit Card", "ssh-key" -> "SSH Key"
     pub fn to_display_name(&self) -> String {
+        let common_acronyms = [
+            "api", "ftp", "http", "url", "xml", "json", "csv", "pdf", "otp",
+        ];
+
         self.name
             .replace('_', " ")
             .replace('-', " ")
             .split_whitespace()
             .map(|word| {
+                let word_lower = word.to_lowercase();
                 if word.to_uppercase() == word && word.len() <= 4 {
-                    // Keep acronyms like "SSH", "API" uppercase
+                    // Keep already uppercase acronyms like "SSH", "API" uppercase
+                    word.to_uppercase()
+                } else if common_acronyms.contains(&word_lower.as_str()) {
+                    // Convert common acronyms to uppercase
                     word.to_uppercase()
                 } else {
                     // Title case for regular words

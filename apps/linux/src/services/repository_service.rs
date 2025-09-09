@@ -523,11 +523,17 @@ mod tests {
             .unwrap();
         assert_eq!(email_results.len(), 1);
 
-        let all_results = service
+        // Search for "Login" should only match "Work Login" title, not "Gmail Account"
+        let login_results = service
             .search_credentials("Login".to_string())
             .await
             .unwrap();
-        assert_eq!(all_results.len(), 2);
+        assert_eq!(login_results.len(), 1);
+        assert_eq!(login_results[0].title, "Work Login");
+
+        // Search for "com" should match both email addresses
+        let com_results = service.search_credentials("com".to_string()).await.unwrap();
+        assert_eq!(com_results.len(), 2);
     }
 
     #[tokio::test]

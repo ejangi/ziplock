@@ -246,6 +246,47 @@ impl ConfigManager {
 }
 
 #[cfg(test)]
+pub fn debug_config_main() {
+    use tracing::Level;
+    use tracing_subscriber::FmtSubscriber;
+
+    // Initialize tracing
+    let subscriber = FmtSubscriber::builder()
+        .with_max_level(Level::DEBUG)
+        .finish();
+    tracing::subscriber::set_global_default(subscriber).unwrap();
+
+    println!("=== Debug Config Test ===");
+
+    // Test config loading
+    let mut config_manager = ConfigManager::new().expect("Failed to create config manager");
+    config_manager.load().expect("Failed to load config");
+
+    println!("Config loaded successfully");
+    println!("Has repository: {}", config_manager.has_repository());
+
+    let recent_repos = config_manager.get_recent_repositories();
+    println!("Recent repositories count: {}", recent_repos.len());
+
+    for (i, repo) in recent_repos.iter().enumerate() {
+        println!("Repository {}: {} -> {}", i + 1, repo.name, repo.path);
+        let exists = std::path::Path::new(&repo.path).exists();
+        println!("  File exists: {}", exists);
+    }
+
+    let most_recent = config_manager.get_most_recent_accessible_repository();
+    println!("Most recent accessible repository: {:?}", most_recent);
+
+    let should_show_wizard = config_manager.should_show_wizard();
+    println!("Should show wizard: {}", should_show_wizard);
+
+    let accessible_repos = config_manager.detect_all_accessible_repositories();
+    println!("Accessible repositories count: {}", accessible_repos.len());
+
+    println!("=== End Debug Test ===");
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use std::fs::File;
@@ -337,45 +378,4 @@ app:
         // assert!(discovered.iter().any(|r| r.path == repo1));
         // assert!(discovered.iter().any(|r| r.path == repo2));
     }
-}
-
-#[cfg(test)]
-pub fn debug_config_main() {
-    use tracing::Level;
-    use tracing_subscriber::FmtSubscriber;
-
-    // Initialize tracing
-    let subscriber = FmtSubscriber::builder()
-        .with_max_level(Level::DEBUG)
-        .finish();
-    tracing::subscriber::set_global_default(subscriber).unwrap();
-
-    println!("=== Debug Config Test ===");
-
-    // Test config loading
-    let mut config_manager = ConfigManager::new().expect("Failed to create config manager");
-    config_manager.load().expect("Failed to load config");
-
-    println!("Config loaded successfully");
-    println!("Has repository: {}", config_manager.has_repository());
-
-    let recent_repos = config_manager.get_recent_repositories();
-    println!("Recent repositories count: {}", recent_repos.len());
-
-    for (i, repo) in recent_repos.iter().enumerate() {
-        println!("Repository {}: {} -> {}", i + 1, repo.name, repo.path);
-        let exists = std::path::Path::new(&repo.path).exists();
-        println!("  File exists: {}", exists);
-    }
-
-    let most_recent = config_manager.get_most_recent_accessible_repository();
-    println!("Most recent accessible repository: {:?}", most_recent);
-
-    let should_show_wizard = config_manager.should_show_wizard();
-    println!("Should show wizard: {}", should_show_wizard);
-
-    let accessible_repos = config_manager.detect_all_accessible_repositories();
-    println!("Accessible repositories count: {}", accessible_repos.len());
-
-    println!("=== End Debug Test ===");
 }

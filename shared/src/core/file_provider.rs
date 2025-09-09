@@ -152,9 +152,9 @@ impl FileOperationProvider for DesktopFileProvider {
                         let path = entry.path();
 
                         if path.is_file() {
-                            let relative_path = path.strip_prefix(base_path).map_err(|_| {
-                                std::io::Error::new(std::io::ErrorKind::Other, "Path error")
-                            })?;
+                            let relative_path = path
+                                .strip_prefix(base_path)
+                                .map_err(|_| std::io::Error::other("Path error"))?;
                             let content = std::fs::read(&path)?;
                             file_map.insert(relative_path.to_string_lossy().to_string(), content);
                         } else if path.is_dir() {

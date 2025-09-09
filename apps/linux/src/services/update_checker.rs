@@ -345,15 +345,19 @@ mod tests {
         let result = checker.check_for_updates().await;
 
         match result {
-            UpdateCheckResult::NoUpdateAvailable(info) => {
-                assert_eq!(info.current_version, info.latest_version);
-                assert!(!info.update_available);
+            Ok(info) => {
+                if info.update_available {
+                    // This shouldn't happen with the mock implementation
+                    panic!("Unexpected update available in test");
+                } else {
+                    assert_eq!(
+                        info.current_version,
+                        info.latest_version.unwrap_or_default()
+                    );
+                    assert!(!info.update_available);
+                }
             }
-            UpdateCheckResult::UpdateAvailable(_) => {
-                // This shouldn't happen with the mock implementation
-                panic!("Unexpected update available in test");
-            }
-            UpdateCheckResult::CheckFailed(_) => {
+            Err(_) => {
                 // This could happen if network is unavailable, which is fine for tests
             }
         }
@@ -381,6 +385,7 @@ mod tests {
             release_notes: Some("Bug fixes and improvements".to_string()),
             download_url: Some("https://github.com/example/releases".to_string()),
             last_checked: 1700000000,
+            installation_method: InstallationMethod::Unknown,
         };
 
         let json = serde_json::to_string(&version_info).unwrap();

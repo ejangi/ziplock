@@ -15,7 +15,7 @@ use crate::models::{CredentialTemplate, FieldType};
 /// This configuration is typically stored within the repository itself
 /// (as part of the metadata) or alongside it. It contains settings that
 /// are specific to how this particular repository should behave.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct RepositoryConfig {
     /// Repository metadata and identification
     pub metadata: RepositoryMetadata,
@@ -105,7 +105,7 @@ pub struct RepositorySecurity {
 }
 
 /// Validation configuration for repository data
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ValidationConfig {
     /// URL validation settings
     pub url_validation: UrlValidation,
@@ -156,7 +156,7 @@ pub struct EmailValidation {
 }
 
 /// Phone number validation configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct PhoneValidation {
     /// Whether to validate phone number format
     pub validate_format: bool,
@@ -252,7 +252,7 @@ pub struct CustomFieldDefinition {
 }
 
 /// Repository behavior configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct RepositoryBehavior {
     /// Auto-save settings
     pub auto_save: AutoSaveConfig,
@@ -344,7 +344,7 @@ pub struct SearchConfig {
 }
 
 /// Integration configuration for external services
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct IntegrationConfig {
     /// Cloud sync settings
     pub cloud_sync: Option<CloudSyncConfig>,
@@ -431,20 +431,6 @@ pub struct TotpSettings {
     pub algorithm: String,
 }
 
-impl Default for RepositoryConfig {
-    fn default() -> Self {
-        Self {
-            metadata: RepositoryMetadata::default(),
-            security: RepositorySecurity::default(),
-            validation: ValidationConfig::default(),
-            templates: Vec::new(),
-            custom_fields: HashMap::new(),
-            behavior: RepositoryBehavior::default(),
-            integration: IntegrationConfig::default(),
-        }
-    }
-}
-
 impl Default for RepositoryMetadata {
     fn default() -> Self {
         let now = chrono::Utc::now();
@@ -490,17 +476,6 @@ impl Default for UrlValidation {
     }
 }
 
-impl Default for PhoneValidation {
-    fn default() -> Self {
-        Self {
-            validate_format: false,
-            default_country_code: None,
-            allowed_countries: Vec::new(),
-            required_format: None,
-        }
-    }
-}
-
 impl Default for CreditCardValidation {
     fn default() -> Self {
         Self {
@@ -513,18 +488,6 @@ impl Default for CreditCardValidation {
                 "Discover".to_string(),
             ],
             validate_expiry: true,
-        }
-    }
-}
-
-impl Default for ValidationConfig {
-    fn default() -> Self {
-        Self {
-            url_validation: UrlValidation::default(),
-            email_validation: EmailValidation::default(),
-            phone_validation: PhoneValidation::default(),
-            credit_card_validation: CreditCardValidation::default(),
-            custom_rules: Vec::new(),
         }
     }
 }
@@ -599,16 +562,6 @@ impl Default for SearchConfig {
     }
 }
 
-impl Default for IntegrationConfig {
-    fn default() -> Self {
-        Self {
-            cloud_sync: None,
-            two_factor: TwoFactorConfig::default(),
-            plugins: HashMap::new(),
-        }
-    }
-}
-
 impl Default for TwoFactorConfig {
     fn default() -> Self {
         Self {
@@ -625,17 +578,6 @@ impl Default for TotpSettings {
             digits: 6,
             time_step: 30,
             algorithm: "SHA1".to_string(),
-        }
-    }
-}
-
-impl Default for RepositoryBehavior {
-    fn default() -> Self {
-        Self {
-            auto_save: AutoSaveConfig::default(),
-            backup: BackupConfig::default(),
-            import_export: ImportExportConfig::default(),
-            search: SearchConfig::default(),
         }
     }
 }

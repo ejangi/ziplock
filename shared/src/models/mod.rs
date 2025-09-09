@@ -120,47 +120,6 @@ pub enum FieldType {
     Custom(String),
 }
 
-/// Template for a field in a credential template
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct FieldTemplate {
-    /// Field name/key
-    pub name: String,
-
-    /// Field type
-    pub field_type: FieldType,
-
-    /// Display label
-    pub label: String,
-
-    /// Whether this field is required
-    pub required: bool,
-
-    /// Whether this field is sensitive
-    pub sensitive: bool,
-
-    /// Default value (if any)
-    pub default_value: Option<String>,
-
-    /// Field validation rules
-    pub validation: Option<FieldValidation>,
-}
-
-/// Validation rules for fields
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct FieldValidation {
-    /// Minimum length
-    pub min_length: Option<usize>,
-
-    /// Maximum length
-    pub max_length: Option<usize>,
-
-    /// Regular expression pattern
-    pub pattern: Option<String>,
-
-    /// Custom validation message
-    pub message: Option<String>,
-}
-
 impl CredentialRecord {
     /// Create a new credential record with generated ID
     pub fn new(title: String, credential_type: String) -> Self {
@@ -186,7 +145,10 @@ impl CredentialRecord {
     }
 
     /// Create a credential from a template
-    pub fn from_template(_template: &FieldTemplate, title: String) -> Self {
+    pub fn from_template(
+        _template: &crate::models::template::FieldTemplate,
+        title: String,
+    ) -> Self {
         let credential = Self::new(title, "custom".to_string());
 
         // For now, just create a basic credential
@@ -523,7 +485,6 @@ impl std::fmt::Display for FieldType {
 /// 12. **Software License** - Software license information (License Key, Product Name, Purchase Date)
 ///
 /// Each template includes appropriate field types, sensitivity settings, validation rules, and default tags.
-
 #[cfg(test)]
 mod tests {
     use super::*;
