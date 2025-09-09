@@ -179,6 +179,20 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Setup Rust toolchain and Android environment
+        run: |
+          rustup default stable
+          rustup update
+          # Verify Android NDK is available
+          if [ -n "$ANDROID_NDK_HOME" ]; then
+            echo "Android NDK found at: $ANDROID_NDK_HOME"
+          elif [ -n "$NDK_HOME" ]; then
+            export ANDROID_NDK_HOME="$NDK_HOME"
+            echo "Android NDK found at: $ANDROID_NDK_HOME"
+          else
+            echo "Warning: Android NDK environment variables not set"
+          fi
+
       - name: Build Android libraries
         run: |
           chmod +x scripts/build/build-mobile.sh
