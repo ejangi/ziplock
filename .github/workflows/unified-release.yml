@@ -389,8 +389,30 @@ jobs:
           mkdir -p "$INSTALL_DIR"/{bin,share/{applications,icons/hicolor/scalable/apps,metainfo}}
           mkdir -p "$PKG_DIR/DEBIAN"
 
-          # Copy binaries
-          cp target/artifacts/linux/binaries/* "$INSTALL_DIR/bin/"
+          # Debug: Check artifact structure
+          echo "=== Debugging artifact structure ==="
+          echo "Contents of target/artifacts/linux/:"
+          ls -la target/artifacts/linux/ || echo "Directory not found"
+          echo "Contents of target/artifacts/linux/binaries/:"
+          ls -la target/artifacts/linux/binaries/ || echo "Directory not found"
+          echo "Finding all files in target/artifacts/:"
+          find target/artifacts/ -type f 2>/dev/null || echo "No files found"
+
+          # Copy binaries (handle both files and directory structure)
+          if [ -d "target/artifacts/linux/binaries" ]; then
+            echo "Copying from binaries directory..."
+            find target/artifacts/linux/binaries -type f -executable -exec cp {} "$INSTALL_DIR/bin/" \;
+          elif [ -d "target/artifacts/linux" ]; then
+            echo "Copying from linux directory..."
+            find target/artifacts/linux -type f -executable -exec cp {} "$INSTALL_DIR/bin/" \;
+          else
+            echo "Error: No artifact directories found"
+            exit 1
+          fi
+
+          # Verify binaries were copied
+          echo "Binaries copied to $INSTALL_DIR/bin/:"
+          ls -la "$INSTALL_DIR/bin/"
 
           # Copy desktop integration files if they exist
           if [ -f "packaging/linux/ziplock.desktop" ]; then
@@ -465,7 +487,9 @@ jobs:
     name: Create Arch Linux Package
     runs-on: ubuntu-22.04
     needs: [test-and-build, security-audit]
-    container: ghcr.io/ejangi/ziplock/arch-builder:latest
+    container:
+      image: ghcr.io/ejangi/ziplock/arch-builder:latest
+      options: --user root
 
     steps:
       - name: Checkout code
