@@ -13,7 +13,7 @@ RUN apt-get update && apt-get install -y \
     file \
     binutils \
     unzip \
-    openjdk-11-jdk \
+    openjdk-17-jdk \
     python3 \
     python3-pip \
     git \
@@ -108,13 +108,19 @@ ENV CC_i686_linux_android="i686-linux-android21-clang"
 ENV CXX_i686_linux_android="i686-linux-android21-clang++"
 ENV AR_i686_linux_android="llvm-ar"
 
+# Set Java 17 as the default Java version
+ENV JAVA_HOME="/usr/lib/jvm/java-17-openjdk-amd64"
+ENV PATH="${JAVA_HOME}/bin:${PATH}"
+
 # Set cargo target directory
 ENV CARGO_TARGET_DIR="/workspace/target"
 
 # Verify installation
 RUN rustc --version && \
     cargo --version && \
-    aarch64-linux-android21-clang --version
+    aarch64-linux-android21-clang --version && \
+    java -version && \
+    echo "JAVA_HOME: $JAVA_HOME"
 
 # Create workspace directory
 WORKDIR /workspace

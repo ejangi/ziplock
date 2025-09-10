@@ -185,6 +185,16 @@ jobs:
 
       - name: Setup Rust toolchain and Android environment
         run: |
+          # Ensure Java 17 is available and set as default
+          export JAVA_HOME="/usr/lib/jvm/java-17-openjdk-amd64"
+          export PATH="$JAVA_HOME/bin:$PATH"
+          echo "JAVA_HOME=$JAVA_HOME" >> $GITHUB_ENV
+          echo "$JAVA_HOME/bin" >> $GITHUB_PATH
+
+          # Verify Java version
+          java -version
+          echo "Using Java from: $(which java)"
+
           rustup default stable
           rustup update
 
@@ -360,6 +370,15 @@ jobs:
         run: |
           echo "Building Android APK..."
 
+          # Ensure Java 17 is set for Gradle
+          export JAVA_HOME="/usr/lib/jvm/java-17-openjdk-amd64"
+          export PATH="$JAVA_HOME/bin:$PATH"
+
+          # Verify Java version before building
+          echo "Java version for Gradle:"
+          java -version
+          echo "JAVA_HOME: $JAVA_HOME"
+
           cd apps/mobile/android
 
           # Ensure native libraries are in the correct location
@@ -377,6 +396,9 @@ jobs:
 
           # Make gradlew executable
           chmod +x gradlew
+
+          # Set Gradle Java home explicitly
+          echo "org.gradle.java.home=$JAVA_HOME" >> gradle.properties
 
           # Build release APK
           echo "Building release APK..."
