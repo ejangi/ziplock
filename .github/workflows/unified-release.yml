@@ -175,7 +175,7 @@ jobs:
 
   # Build Android libraries
   build-android:
-    name: Build Android Libraries
+    name: Build Android Libraries and APK
     runs-on: ubuntu-latest
     container: ghcr.io/ejangi/ziplock/android-builder:latest
 
@@ -354,6 +354,53 @@ jobs:
             fi
             echo
           done
+
+      - name: Build Android APK
+        shell: bash
+        run: |
+          echo "Building Android APK..."
+
+          cd apps/mobile/android
+
+          # Ensure native libraries are in the correct location
+          if [ -d "../../../target/android/jniLibs" ]; then
+            mkdir -p app/src/main/jniLibs
+            cp -r ../../../target/android/jniLibs/* app/src/main/jniLibs/
+            echo "✓ Native libraries copied to Android project"
+          else
+            echo "⚠ Warning: No native libraries found, APK will be built without native components"
+          fi
+
+          # List what we have in jniLibs
+          echo "Native libraries in jniLibs:"
+          find app/src/main/jniLibs -name "*.so" 2>/dev/null || echo "No .so files found"
+
+          # Make gradlew executable
+          chmod +x gradlew
+
+          # Build release APK
+          echo "Building release APK..."
+          ./gradlew assembleRelease --stacktrace --info
+
+          # Check if APK was built
+          APK_PATH="app/build/outputs/apk/release/app-release-unsigned.apk"
+          if [ -f "$APK_PATH" ]; then
+            echo "✓ APK built successfully: $APK_PATH"
+
+            # Copy APK to target directory for artifact upload
+            mkdir -p ../../../target/android/apk
+            cp "$APK_PATH" ../../../target/android/apk/ziplock-release-unsigned.apk
+
+            # Show APK info
+            echo "APK info:"
+            ls -lh "$APK_PATH"
+          else
+            echo "✗ APK build failed - checking alternative locations..."
+            find app/build/outputs/apk -name "*.apk" 2>/dev/null || echo "No APK files found"
+
+            # Still create the directory structure for consistency
+            mkdir -p ../../../target/android/apk
+          fi
 
       - name: Upload Android artifacts
         uses: actions/upload-artifact@v4
@@ -715,13 +762,20 @@ jobs:
             cp artifacts/arch-package/* "$RELEASE_DIR/linux/packages/arch/" 2>/dev/null || true
           fi
 
-          # Copy Android libraries
+          # Copy Android libraries and APK
           if [ -d "artifacts/android-libraries" ]; then
             cp -r artifacts/android-libraries/* "$RELEASE_DIR/android/libraries/"
 
             # Copy headers if they exist
             if [ -f "artifacts/android-libraries/ziplock.h" ]; then
               cp artifacts/android-libraries/ziplock.h "$RELEASE_DIR/android/headers/"
+            fi
+
+            # Copy APK if it exists
+            if [ -f "artifacts/android-libraries/apk/ziplock-release-unsigned.apk" ]; then
+              mkdir -p "$RELEASE_DIR/android/apk"
+              cp artifacts/android-libraries/apk/ziplock-release-unsigned.apk "$RELEASE_DIR/android/apk/"
+              echo "✓ Android APK included in release"
             fi
           fi
 
@@ -744,7 +798,8 @@ jobs:
               },
               "android": {
                 "architectures": ["arm64-v8a", "armeabi-v7a"],
-                "api_level": 21
+                "api_level": 21,
+                "apk_included": true
               }
             }
           }
@@ -768,6 +823,7 @@ jobs:
             - \`arm64-v8a/\` - ARM64 libraries (modern devices)
             - \`armeabi-v7a/\` - ARMv7 libraries (older devices)
           - \`android/headers/\` - C header files for integration
+          - \`android/apk/\` - Pre-built Android APK (unsigned)
 
           ### Documentation
           - \`docs/\` - Complete project documentation
@@ -780,7 +836,8 @@ jobs:
           - **Manual**: Copy binaries from \`linux/binaries/\` to your PATH
 
           ### Android
-          See the technical documentation in \`docs/technical/android.md\` for integration instructions.
+          - **APK Installation**: Install the unsigned APK with \`adb install android/apk/ziplock-release-unsigned.apk\`
+          - **Development**: See the technical documentation in \`docs/technical/android.md\` for integration instructions.
 
           ## Build Information
           - **Version**: $VERSION
@@ -822,11 +879,10 @@ jobs:
             - **Standalone Binaries**: Direct executables for manual installation
 
             ### Android Builds
+            - **Android APK**: Pre-built unsigned APK ready for installation or signing
             - **Native Libraries**: ARM64 and ARMv7 shared libraries (.so files) for Android integration
             - **Headers**: C header files for FFI integration
             - **Documentation**: Complete integration guide
-
-            *Note: This release includes native libraries for Android development. The full Android APK is not included - developers should build the APK locally using the provided native libraries.*
 
             ## 🚀 Quick Start
 
@@ -839,11 +895,14 @@ jobs:
             **Linux (Arch):**
             Download the arch package files and use makepkg, or install from AUR.
 
-            **Android Development:**
+            **Android:**
             ```bash
-            # Download the unified release for Android native libraries
+            # Install APK directly (requires ADB and connected device)
+            wget https://github.com/ejangi/ziplock/releases/download/v${{ needs.test-and-build.outputs.version }}/ziplock-release-unsigned.apk
+            adb install ziplock-release-unsigned.apk
+
+            # Or download full release for development
             wget https://github.com/ejangi/ziplock/releases/download/v${{ needs.test-and-build.outputs.version }}/ziplock-v${{ needs.test-and-build.outputs.version }}-unified-release.tar.gz
-            # Extract and follow the integration guide in docs/technical/android.md
             ```
 
             ## 📋 Changelog
@@ -862,7 +921,7 @@ jobs:
             ziplock-v${{ needs.test-and-build.outputs.version }}-unified-release.tar.gz
             artifacts/debian-package/*.deb
             artifacts/arch-package/*
-            artifacts/android-libraries/*
+            artifacts/android-libraries/apk/ziplock-release-unsigned.apk
           generate_release_notes: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
