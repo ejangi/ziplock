@@ -1,22 +1,24 @@
 <?xml version="1.0" encoding="utf-8"?>
 <data-extraction-rules>
     <cloud-backup>
-        <!-- Exclude all sensitive data from cloud backup -->
+        <!-- Include only non-sensitive app data first -->
+        <include domain="file" path="logs/" />
+
+        <!-- Then exclude sensitive data from cloud backup -->
         <exclude domain="sharedpref" path="." />
         <exclude domain="database" path="." />
-        <exclude domain="file" path="." />
-
-        <!-- Only include non-sensitive app data -->
-        <include domain="file" path="logs/" />
+        <exclude domain="file" path="cache/" />
+        <exclude domain="file" path="tmp/" />
     </cloud-backup>
 
     <device-transfer>
-        <!-- Exclude sensitive data from device transfer -->
+        <!-- Include only non-sensitive app data first -->
+        <include domain="file" path="logs/" />
+
+        <!-- Then exclude sensitive data from device transfer -->
         <exclude domain="sharedpref" path="." />
         <exclude domain="database" path="." />
-        <exclude domain="file" path="." />
-
-        <!-- Only include non-sensitive app data -->
-        <include domain="file" path="logs/" />
+        <exclude domain="file" path="cache/" />
+        <exclude domain="file" path="tmp/" />
     </device-transfer>
 </data-extraction-rules>
