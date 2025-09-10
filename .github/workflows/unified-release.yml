@@ -439,7 +439,7 @@ jobs:
 
             # Copy APK to target directory for artifact upload
             mkdir -p ../../../target/android/apk
-            cp "$APK_PATH" ../../../target/android/apk/ziplock-release-unsigned.apk
+            cp "$APK_PATH" ../../../target/android/apk/ziplock-unsigned.apk
 
             # Show APK info
             echo "APK info:"
@@ -822,9 +822,9 @@ jobs:
             fi
 
             # Copy APK if it exists
-            if [ -f "artifacts/android-libraries/apk/ziplock-release-unsigned.apk" ]; then
+            if [ -f "artifacts/android-libraries/apk/ziplock-unsigned.apk" ]; then
               mkdir -p "$RELEASE_DIR/android/apk"
-              cp artifacts/android-libraries/apk/ziplock-release-unsigned.apk "$RELEASE_DIR/android/apk/"
+              cp artifacts/android-libraries/apk/ziplock-unsigned.apk "$RELEASE_DIR/android/apk/"
               echo "✓ Android APK included in release"
             fi
           fi
@@ -886,7 +886,7 @@ jobs:
           - **Manual**: Copy binaries from \`linux/binaries/\` to your PATH
 
           ### Android
-          - **APK Installation**: Install the unsigned APK with \`adb install android/apk/ziplock-release-unsigned.apk\`
+          - **APK Installation**: Install the unsigned APK with \`adb install android/apk/ziplock-unsigned.apk\`
           - **Development**: See the technical documentation in \`docs/technical/android.md\` for integration instructions.
 
           ## Build Information
@@ -948,8 +948,8 @@ jobs:
             **Android:**
             ```bash
             # Install APK directly (requires ADB and connected device)
-            wget https://github.com/ejangi/ziplock/releases/download/v${{ needs.test-and-build.outputs.version }}/ziplock-release-unsigned.apk
-            adb install ziplock-release-unsigned.apk
+            wget https://github.com/ejangi/ziplock/releases/download/v${{ needs.test-and-build.outputs.version }}/ziplock-unsigned.apk
+            adb install ziplock-unsigned.apk
 
             # Or download full release for development
             wget https://github.com/ejangi/ziplock/releases/download/v${{ needs.test-and-build.outputs.version }}/ziplock-v${{ needs.test-and-build.outputs.version }}-unified-release.tar.gz
@@ -971,7 +971,7 @@ jobs:
             ziplock-v${{ needs.test-and-build.outputs.version }}-unified-release.tar.gz
             artifacts/debian-package/*.deb
             artifacts/arch-package/*
-            artifacts/android-libraries/apk/ziplock-release-unsigned.apk
+            artifacts/android-libraries/apk/ziplock-unsigned.apk
           generate_release_notes: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
