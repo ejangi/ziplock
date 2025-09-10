@@ -95,7 +95,7 @@ ZipLock follows a unified architecture with pure separation of concerns:
 | **Linux** | ✅ Stable | Rust + iced/GTK4 | Shared library direct access | Unified FFI |
 | **Windows** | 📋 Planned | Rust + iced | Shared library direct access | Unified FFI |
 | **iOS** | 📋 Planned | Swift + SwiftUI | Native iOS file APIs + 7z | Memory-only FFI |
-| **Android** | 🚧 In Development | Kotlin + Jetpack Compose | Native Android file APIs + 7z | Memory-only FFI |
+| **Android** | ✅ Stable | Kotlin + Jetpack Compose | Native Android file APIs + 7z | Memory-only FFI |
 | **macOS** | 📋 Planned | Swift + SwiftUI | Native macOS file APIs + 7z | Memory-only FFI |
 
 ### Architecture Benefits
@@ -180,15 +180,22 @@ yay -S ziplock
 paru -S ziplock
 
 # Manual installation from release
-wget -O- https://github.com/ejangi/ziplock/releases/latest/download/ziplock-0.1.7.tar.gz
+wget -O- https://github.com/ejangi/ziplock/releases/latest/download/ziplock-0.3.0.tar.gz
 # Extract and follow PKGBUILD instructions
+```
+
+**Android**:
+```bash
+# Download and install APK
+wget -O ziplock-unsigned.apk https://github.com/ejangi/ziplock/releases/latest/download/ziplock-unsigned.apk
+adb install ziplock-unsigned.apk
+
+# Or download from GitHub Releases page and install manually
 ```
 
 **Windows**: Not yet available - Windows implementation is currently in development
 
 **iOS**: Available on the App Store (coming soon)
-
-**Android**: Available on Google Play Store (coming soon)
 
 ### Building from Source
 
@@ -220,6 +227,7 @@ ZipLock can be customized through configuration files:
 
 **Linux**: `~/.config/ziplock/config.yml`
 **Windows**: `%APPDATA%/ZipLock/config.yml`
+**Android**: `/data/data/com.ziplock/files/config.yml`
 
 For complete configuration documentation and examples, see the [Configuration Guide](docs/technical/configuration.md).
 
