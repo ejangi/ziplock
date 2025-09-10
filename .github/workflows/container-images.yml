@@ -200,4 +200,4 @@ jobs:
       - name: Test image
         run: |
           docker run --rm ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/android-builder:latest \
-            bash -c "rustc --version && cargo --version && aarch64-linux-android21-clang --version && java -version && echo 'JAVA_HOME: $JAVA_HOME'"
+            bash -c "rustc --version && cargo --version && aarch64-linux-android21-clang --version && java -version && echo 'JAVA_HOME: $JAVA_HOME' && echo 'ANDROID_HOME: $ANDROID_HOME' && sdkmanager --version"
