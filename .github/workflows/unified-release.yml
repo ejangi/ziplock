@@ -422,12 +422,13 @@ jobs:
           # Make gradlew executable
           chmod +x gradlew
 
-          # Set Gradle Java home explicitly
-          echo "org.gradle.java.home=$JAVA_HOME" >> gradle.properties
-
-          # Build release APK
+          # Build release APK with explicit properties
           echo "Building release APK..."
-          ./gradlew assembleRelease --stacktrace --info
+          ./gradlew assembleRelease \
+            -Dorg.gradle.java.home="$JAVA_HOME" \
+            -Pandroid.useAndroidX=true \
+            -Pandroid.enableJetifier=true \
+            --stacktrace --info
 
           # Check if APK was built
           APK_PATH="app/build/outputs/apk/release/app-release-unsigned.apk"
