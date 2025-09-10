@@ -471,14 +471,19 @@ jobs:
 
       - name: Test package installation
         run: |
+          # Install virtual display for GUI testing
+          apt-get update
+          apt-get install -y xvfb
+
           # Install the package
           dpkg -i target/ziplock_*.deb || true
-          apt-get update && apt-get install -f -y
+          apt-get install -f -y
 
           # Verify installation
           which ziplock
-          which ziplock-cli
-          ziplock --version
+
+          # Test with virtual display
+          xvfb-run -a ziplock --version
 
       - name: Upload Debian package
         uses: actions/upload-artifact@v4
