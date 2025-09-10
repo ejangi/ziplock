@@ -7,6 +7,7 @@ Run one of the following prompts in Zed's agent panel and when you're ready to b
 
 ## Linux
 - Taking into consideration `docs/technical.md` and `docs/architecture.md`, can you ensure the app is creating logs and has the necessary log rotate setup when it's deployed. Not sure if this needs to be in the build or part of the codebase.
+- Taking into consideration `docs/technical.md`, `docs/architecture.md`, `docs/design.md`, `docs/technical/iced-migration.md` and remembering to output summaries rather than create new *.md files, can you please review the linux app (located in `apps/linux`) and see if there is anything additional that we need to add to the migration doc before we start work on migrating from Iced 0.12 to Iced 0.13?
 
 
 ## Android
