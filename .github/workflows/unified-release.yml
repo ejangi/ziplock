@@ -822,9 +822,11 @@ jobs:
             - **Standalone Binaries**: Direct executables for manual installation
 
             ### Android Builds
-            - **Native Libraries**: ARM64 and ARMv7 libraries for Android integration
+            - **Native Libraries**: ARM64 and ARMv7 shared libraries (.so files) for Android integration
             - **Headers**: C header files for FFI integration
             - **Documentation**: Complete integration guide
+
+            *Note: This release includes native libraries for Android development. The full Android APK is not included - developers should build the APK locally using the provided native libraries.*
 
             ## 🚀 Quick Start
 
@@ -837,8 +839,12 @@ jobs:
             **Linux (Arch):**
             Download the arch package files and use makepkg, or install from AUR.
 
-            **Android:**
-            Download the unified release archive and follow the integration guide in the documentation.
+            **Android Development:**
+            ```bash
+            # Download the unified release for Android native libraries
+            wget https://github.com/ejangi/ziplock/releases/download/v${{ needs.test-and-build.outputs.version }}/ziplock-v${{ needs.test-and-build.outputs.version }}-unified-release.tar.gz
+            # Extract and follow the integration guide in docs/technical/android.md
+            ```
 
             ## 📋 Changelog
 
@@ -855,6 +861,8 @@ jobs:
           files: |
             ziplock-v${{ needs.test-and-build.outputs.version }}-unified-release.tar.gz
             artifacts/debian-package/*.deb
+            artifacts/arch-package/*
+            artifacts/android-libraries/*
           generate_release_notes: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
