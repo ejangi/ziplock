@@ -398,13 +398,15 @@ jobs:
           echo "Finding all files in target/artifacts/:"
           find target/artifacts/ -type f 2>/dev/null || echo "No files found"
 
-          # Copy binaries (handle both files and directory structure)
+          # Copy binaries and make them executable
           if [ -d "target/artifacts/linux/binaries" ]; then
             echo "Copying from binaries directory..."
-            find target/artifacts/linux/binaries -type f -executable -exec cp {} "$INSTALL_DIR/bin/" \;
+            cp target/artifacts/linux/binaries/* "$INSTALL_DIR/bin/"
+            chmod +x "$INSTALL_DIR/bin/"*
           elif [ -d "target/artifacts/linux" ]; then
             echo "Copying from linux directory..."
-            find target/artifacts/linux -type f -executable -exec cp {} "$INSTALL_DIR/bin/" \;
+            find target/artifacts/linux -type f -exec cp {} "$INSTALL_DIR/bin/" \;
+            chmod +x "$INSTALL_DIR/bin/"*
           else
             echo "Error: No artifact directories found"
             exit 1
@@ -509,8 +511,11 @@ jobs:
           mkdir -p target/arch-package
           cd target/arch-package
 
-          # Copy source
-          cp -r "$GITHUB_WORKSPACE" ziplock-src/
+          # Create source directory structure
+          mkdir -p ziplock-src
+
+          # Copy source files (avoiding recursive copy)
+          rsync -av --exclude='target/' --exclude='.git/' "$GITHUB_WORKSPACE/" ziplock-src/
 
           # Create PKGBUILD
           cat > PKGBUILD << EOF
