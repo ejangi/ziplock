@@ -1,24 +1,30 @@
 <?xml version="1.0" encoding="utf-8"?>
 <data-extraction-rules>
     <cloud-backup>
-        <!-- Include only non-sensitive app data first -->
+        <!-- Only include specific non-sensitive data for cloud backup -->
+        <!-- For a password manager, we should be very conservative about what gets backed up -->
+
+        <!-- Include only logs for debugging purposes -->
         <include domain="file" path="logs/" />
 
-        <!-- Then exclude sensitive data from cloud backup -->
-        <exclude domain="sharedpref" path="." />
-        <exclude domain="database" path="." />
-        <exclude domain="file" path="cache/" />
-        <exclude domain="file" path="tmp/" />
+        <!-- Include app preferences that are not sensitive (UI settings, etc.) -->
+        <!-- Note: Do not include any authentication tokens or sensitive preferences -->
+
+        <!-- Explicitly exclude everything else by not including other domains -->
+        <!-- This is more secure than including everything and then excluding -->
     </cloud-backup>
 
     <device-transfer>
-        <!-- Include only non-sensitive app data first -->
+        <!-- Only include specific non-sensitive data for device transfer -->
+        <!-- For a password manager, we should be very conservative about what gets transferred -->
+
+        <!-- Include only logs for debugging purposes -->
         <include domain="file" path="logs/" />
 
-        <!-- Then exclude sensitive data from device transfer -->
-        <exclude domain="sharedpref" path="." />
-        <exclude domain="database" path="." />
-        <exclude domain="file" path="cache/" />
-        <exclude domain="file" path="tmp/" />
+        <!-- Include app preferences that are not sensitive (UI settings, etc.) -->
+        <!-- Note: Do not include any authentication tokens or sensitive preferences -->
+
+        <!-- Explicitly exclude everything else by not including other domains -->
+        <!-- This is more secure than including everything and then excluding -->
     </device-transfer>
 </data-extraction-rules>
