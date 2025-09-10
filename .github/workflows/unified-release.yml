@@ -386,7 +386,10 @@ jobs:
           PKG_DIR="target/debian-package"
           INSTALL_DIR="$PKG_DIR/usr"
 
-          mkdir -p "$INSTALL_DIR"/{bin,share/{applications,icons/hicolor/scalable/apps,metainfo}}
+          mkdir -p "$INSTALL_DIR/bin"
+          mkdir -p "$INSTALL_DIR/share/applications"
+          mkdir -p "$INSTALL_DIR/share/icons/hicolor/scalable/apps"
+          mkdir -p "$INSTALL_DIR/share/metainfo"
           mkdir -p "$PKG_DIR/DEBIAN"
 
           # Debug: Check artifact structure
@@ -507,9 +510,9 @@ jobs:
         run: |
           VERSION="${{ needs.test-and-build.outputs.version }}"
 
-          # Create package directory
-          mkdir -p target/arch-package
-          cd target/arch-package
+          # Create package directory with proper permissions
+          mkdir -p /tmp/arch-package
+          cd /tmp/arch-package
 
           # Create source directory structure
           mkdir -p ziplock-src
@@ -546,9 +549,8 @@ jobs:
           package() {
               cd "\$pkgname-\$pkgver"
 
-              # Install binaries
-              install -Dm755 target/release/ziplock "\$pkgdir/usr/bin/ziplock"
-              install -Dm755 target/release/ziplock-cli "\$pkgdir/usr/bin/ziplock-cli"
+              # Install binaries (using pre-built artifacts)
+              install -Dm755 ../../../target/artifacts/linux/binaries/ziplock "\$pkgdir/usr/bin/ziplock"
 
               # Install desktop integration files if they exist
               if [ -f packaging/linux/ziplock.desktop ]; then
@@ -589,18 +591,22 @@ jobs:
           # Create source archive for AUR
           tar -czf "ziplock-${VERSION}.tar.gz" ziplock-src/
 
+          # Change ownership to builder user and build
+          chown -R builder:builder .
+
           # Generate .SRCINFO for AUR
           sudo -u builder makepkg --printsrcinfo > .SRCINFO
+
+          # Copy results back to workspace
+          cp PKGBUILD .SRCINFO ziplock.install ziplock-*.tar.gz "$GITHUB_WORKSPACE/target/arch-package/" || true
+          mkdir -p "$GITHUB_WORKSPACE/target/arch-package"
+          cp PKGBUILD .SRCINFO ziplock.install ziplock-*.tar.gz "$GITHUB_WORKSPACE/target/arch-package/"
 
       - name: Upload Arch package
         uses: actions/upload-artifact@v4
         with:
           name: arch-package
-          path: |
-            target/arch-package/PKGBUILD
-            target/arch-package/.SRCINFO
-            target/arch-package/ziplock.install
-            target/arch-package/ziplock-*.tar.gz
+          path: target/arch-package/
           retention-days: 30
 
   # Performance benchmarks (only on main branch)
