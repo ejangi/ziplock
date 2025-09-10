@@ -422,12 +422,14 @@ jobs:
           # Make gradlew executable
           chmod +x gradlew
 
-          # Build release APK with explicit properties
+          # Build release APK with explicit properties and increased memory
           echo "Building release APK..."
           ./gradlew assembleRelease \
             -Dorg.gradle.java.home="$JAVA_HOME" \
+            -Dorg.gradle.jvmargs="-Xmx6144m -XX:MaxMetaspaceSize=1024m -XX:+UseG1GC" \
             -Pandroid.useAndroidX=true \
             -Pandroid.enableJetifier=true \
+            --no-daemon \
             --stacktrace --info
 
           # Check if APK was built
