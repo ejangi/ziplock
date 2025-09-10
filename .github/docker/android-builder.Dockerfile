@@ -29,6 +29,24 @@ ENV PATH="/root/.cargo/bin:${PATH}"
 # Add Android targets
 RUN rustup target add aarch64-linux-android armv7-linux-androideabi x86_64-linux-android i686-linux-android
 
+# Install Android SDK Command Line Tools
+ENV ANDROID_HOME=/opt/android-sdk
+ENV ANDROID_SDK_ROOT=$ANDROID_HOME
+RUN mkdir -p ${ANDROID_HOME}/cmdline-tools \
+    && curl -L https://dl.google.com/android/repository/commandlinetools-linux-10406996_latest.zip \
+    -o cmdline-tools.zip \
+    && unzip cmdline-tools.zip -d ${ANDROID_HOME}/cmdline-tools \
+    && mv ${ANDROID_HOME}/cmdline-tools/cmdline-tools ${ANDROID_HOME}/cmdline-tools/latest \
+    && rm cmdline-tools.zip
+
+# Add SDK tools to PATH
+ENV PATH="${ANDROID_HOME}/cmdline-tools/latest/bin:${ANDROID_HOME}/platform-tools:${PATH}"
+
+# Accept Android SDK licenses and install required packages
+RUN yes | sdkmanager --licenses \
+    && sdkmanager --update \
+    && sdkmanager "platform-tools" "build-tools;34.0.0" "platforms;android-34" "platforms;android-21"
+
 # Install Android NDK
 ENV ANDROID_NDK_VERSION=25.2.9519653
 ENV ANDROID_NDK_HOME=/opt/android-ndk
@@ -120,7 +138,9 @@ RUN rustc --version && \
     cargo --version && \
     aarch64-linux-android21-clang --version && \
     java -version && \
-    echo "JAVA_HOME: $JAVA_HOME"
+    echo "JAVA_HOME: $JAVA_HOME" && \
+    echo "ANDROID_HOME: $ANDROID_HOME" && \
+    sdkmanager --list | head -20
 
 # Create workspace directory
 WORKDIR /workspace
