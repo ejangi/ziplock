@@ -177,7 +177,9 @@ jobs:
   build-android:
     name: Build Android Libraries and APK
     runs-on: ubuntu-latest
-    container: ghcr.io/ejangi/ziplock/android-builder:latest
+    container:
+      image: ghcr.io/ejangi/ziplock/android-builder:latest
+      options: --pull always
 
     steps:
       - name: Checkout code
@@ -185,8 +187,15 @@ jobs:
 
       - name: Setup Rust toolchain and Android environment
         run: |
-          # Ensure Java 17 is available and set as default
-          export JAVA_HOME="/usr/lib/jvm/java-17-openjdk-amd64"
+          # Find and set Java 17 path
+          JAVA17_HOME=$(find /usr/lib/jvm -name "java-17-openjdk*" -type d | head -1)
+          if [ -z "$JAVA17_HOME" ]; then
+            echo "Java 17 not found, checking available Java versions:"
+            ls -la /usr/lib/jvm/
+            exit 1
+          fi
+
+          export JAVA_HOME="$JAVA17_HOME"
           export PATH="$JAVA_HOME/bin:$PATH"
           echo "JAVA_HOME=$JAVA_HOME" >> $GITHUB_ENV
           echo "$JAVA_HOME/bin" >> $GITHUB_PATH
@@ -194,6 +203,7 @@ jobs:
           # Verify Java version
           java -version
           echo "Using Java from: $(which java)"
+          echo "JAVA_HOME set to: $JAVA_HOME"
 
           rustup default stable
           rustup update
@@ -370,8 +380,15 @@ jobs:
         run: |
           echo "Building Android APK..."
 
-          # Ensure Java 17 is set for Gradle
-          export JAVA_HOME="/usr/lib/jvm/java-17-openjdk-amd64"
+          # Find and set Java 17 path
+          JAVA17_HOME=$(find /usr/lib/jvm -name "java-17-openjdk*" -type d | head -1)
+          if [ -z "$JAVA17_HOME" ]; then
+            echo "Java 17 not found, checking available Java versions:"
+            ls -la /usr/lib/jvm/
+            exit 1
+          fi
+
+          export JAVA_HOME="$JAVA17_HOME"
           export PATH="$JAVA_HOME/bin:$PATH"
 
           # Verify Java version before building
