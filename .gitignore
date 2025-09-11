@@ -88,6 +88,7 @@ desktop.ini
 **/android/app/release/
 **/android/**/*.keystore
 **/android/**/*.jks
+**/android/app/.cxx/
 
 ## iOS
 **/ios/build/
