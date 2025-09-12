@@ -12,7 +12,6 @@ Run one of the following prompts in Zed's agent panel and when you're ready to b
 
 ## Android
 - Taking into consideration `docs/design.md`, `docs/technical.md` and `docs/technical/*.md` and remembering to only output summary information (not create new *.md files), can you please...
-- Taking into consideration `docs/design.md`, `docs/technical.md` and `docs/technical/*.md` and remembering to only output summary information (not create new *.md files), can you please remove the apps/mobile/android/app/.cxx directory from all git history?
 
 
 
