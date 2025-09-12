@@ -1,23 +1,23 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
-  <Product Id="*"
-           Name="ZipLock Password Manager"
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Package Name="ZipLock Password Manager"
            Language="1033"
            Version="!(bind.FileVersion.ZipLockExe)"
            Manufacturer="ZipLock Project"
-           UpgradeCode="12345678-1234-1234-1234-123456789012">
+           UpgradeCode="12345678-1234-1234-1234-123456789012"
+           InstallerVersion="500"
+           Compressed="yes"
+           Scope="perMachine">
 
-    <Package InstallerVersion="200"
-             Compressed="yes"
-             InstallScope="perMachine"
-             Description="ZipLock Password Manager - Secure password management using encrypted 7z archives"
-             Comments="Open source password manager with cross-platform compatibility" />
+    <!-- Package description -->
+    <SummaryInformation Description="ZipLock Password Manager - Secure password management using encrypted 7z archives"
+                       Comments="Open source password manager with cross-platform compatibility" />
 
     <!-- Allow upgrades and prevent downgrades -->
     <MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed." />
 
     <!-- Embed the CAB file in the MSI -->
-    <MediaTemplate EmbedCab="yes" />
+    <Media Id="1" Cabinet="media1.cab" EmbedCab="yes" />
 
     <!-- Feature definitions -->
     <Feature Id="ProductFeature" Title="ZipLock Password Manager" Level="1">
@@ -27,36 +27,32 @@
     </Feature>
 
     <!-- Installation directory structure -->
-    <Directory Id="TARGETDIR" Name="SourceDir">
-      <Directory Id="ProgramFiles64Folder">
-        <Directory Id="INSTALLFOLDER" Name="ZipLock">
-          <Directory Id="BINDIR" Name="bin" />
-        </Directory>
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLFOLDER" Name="ZipLock">
+        <Directory Id="BINDIR" Name="bin" />
       </Directory>
+    </StandardDirectory>
 
-      <!-- Start Menu -->
-      <Directory Id="ProgramMenuFolder">
-        <Directory Id="ApplicationProgramsFolder" Name="ZipLock" />
-      </Directory>
+    <!-- Start Menu -->
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Directory Id="ApplicationProgramsFolder" Name="ZipLock" />
+    </StandardDirectory>
 
-      <!-- Desktop -->
-      <Directory Id="DesktopFolder" />
-    </Directory>
+    <!-- Desktop -->
+    <StandardDirectory Id="DesktopFolder" />
 
     <!-- Components -->
     <ComponentGroup Id="ProductComponents" Directory="BINDIR">
       <!-- Main executable -->
-      <Component Id="ZipLockExecutable" Guid="*">
+      <Component Id="ZipLockExecutable">
         <File Id="ZipLockExe"
               Source="$(var.SourceDir)\ziplock.exe"
-              KeyPath="yes"
               Checksum="yes">
           <Shortcut Id="StartMenuShortcut"
                     Directory="ApplicationProgramsFolder"
                     Name="ZipLock Password Manager"
                     WorkingDirectory="BINDIR"
                     Icon="ZipLockIcon.exe"
-                    IconIndex="0"
                     Description="Secure password management using encrypted archives" />
         </File>
 
@@ -74,7 +70,7 @@
     </ComponentGroup>
 
     <!-- Application shortcuts -->
-    <Component Id="ApplicationShortcut" Directory="ApplicationProgramsFolder" Guid="*">
+    <Component Id="ApplicationShortcut" Directory="ApplicationProgramsFolder">
       <Shortcut Id="ApplicationStartMenuShortcut"
                 Name="ZipLock Password Manager"
                 Target="[#ZipLockExe]"
@@ -86,7 +82,7 @@
     </Component>
 
     <!-- Desktop shortcut (optional) -->
-    <Component Id="DesktopShortcut" Directory="DesktopFolder" Guid="*">
+    <Component Id="DesktopShortcut" Directory="DesktopFolder">
       <Shortcut Id="DesktopApplicationShortcut"
                 Name="ZipLock Password Manager"
                 Target="[#ZipLockExe]"
@@ -110,8 +106,10 @@
     <Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER" />
 
     <!-- UI configuration -->
-    <UIRef Id="WixUI_InstallDir" />
-    <UIRef Id="WixUI_ErrorProgressText" />
+    <UI>
+      <UIRef Id="WixUI_InstallDir" />
+      <UIRef Id="WixUI_ErrorProgressText" />
+    </UI>
 
     <!-- License agreement -->
     <WixVariable Id="WixUILicenseRtf" Value="license.rtf" />
@@ -128,5 +126,5 @@
     <InstallExecuteSequence>
       <Custom Action="CleanupRegistry" Before="RemoveFiles">REMOVE="ALL"</Custom>
     </InstallExecuteSequence>
-  </Product>
+  </Package>
 </Wix>
