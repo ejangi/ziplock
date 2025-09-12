@@ -71,7 +71,7 @@ build_project() {
     fi
 
     # Build unified application
-    if cargo build --release -p ziplock-linux --no-default-features --features "iced-gui,wayland-support,file-dialog,ffi-client" > /dev/null 2>&1; then
+    if cargo build --release -p ziplock-desktop --no-default-features --features "iced-gui,file-dialog,ffi-client" > /dev/null 2>&1; then
         log_success "Unified application built successfully"
     else
         log_error "Failed to build unified application"

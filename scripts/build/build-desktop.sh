@@ -1,18 +1,18 @@
 #!/bin/bash
 set -euo pipefail
 
-# ZipLock Linux Build Script
-# Builds unified ZipLock application with FFI shared library for Linux distribution
+# ZipLock Desktop Build Script
+# Builds cross-platform ZipLock desktop application for Linux, Windows, and macOS
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 BUILD_DIR="$PROJECT_ROOT/target"
-PACKAGING_DIR="$PROJECT_ROOT/packaging/linux"
+PACKAGING_DIR="$PROJECT_ROOT/packaging"
 
 # Build configuration
 RUST_TARGET_DIR="$BUILD_DIR"
 PROFILE="${PROFILE:-release}"
-TARGET_ARCH="${TARGET_ARCH:-x86_64-unknown-linux-gnu}"
+TARGET_ARCH="${TARGET_ARCH:-$(rustc --version --verbose | grep "host:" | cut -d' ' -f2)}"
 VERSION="${VERSION:-$(grep '^version' "$PROJECT_ROOT/Cargo.toml" | sed -n '1s/.*"\(.*\)".*/\1/p')}"
 CARGO_CMD="cargo"  # Will be set to correct path in check_dependencies
 
@@ -187,7 +187,7 @@ build_unified_application() {
     log_info "Building unified ZipLock application..."
 
     cd "$PROJECT_ROOT"
-    $CARGO_CMD build --profile "$PROFILE" --target "$TARGET_ARCH" -p ziplock-linux --no-default-features --features "iced-gui,wayland-support,file-dialog"
+    $CARGO_CMD build --profile "$PROFILE" --target "$TARGET_ARCH" -p ziplock-desktop --no-default-features --features "iced-gui,file-dialog"
 
     # Map profile name to actual directory name
     local cargo_profile="$PROFILE"
@@ -212,7 +212,7 @@ run_tests() {
     $CARGO_CMD test --profile "$PROFILE" --target "$TARGET_ARCH" -p ziplock-shared --features c-api
 
     # Test unified application with FFI client
-    $CARGO_CMD test --profile "$PROFILE" --target "$TARGET_ARCH" -p ziplock-linux --no-default-features --features "iced-gui,wayland-support,file-dialog"
+    $CARGO_CMD test --profile "$PROFILE" --target "$TARGET_ARCH" -p ziplock-desktop --no-default-features --features "iced-gui,file-dialog"
 
     log_success "All tests passed"
 }
@@ -355,24 +355,24 @@ create_install_structure() {
     fi
 
     # Copy desktop file and icon
-    if [ -f "$PROJECT_ROOT/apps/linux/resources/ziplock.desktop" ]; then
-        cp "$PROJECT_ROOT/apps/linux/resources/ziplock.desktop" "$install_dir/usr/share/applications/"
+    if [ -f "$PROJECT_ROOT/packaging/linux/resources/ziplock.desktop" ]; then
+        cp "$PROJECT_ROOT/packaging/linux/resources/ziplock.desktop" "$install_dir/usr/share/applications/"
     else
         log_warning "Desktop file not found"
     fi
 
     # Copy MIME type definition for .7z file associations
-    if [ -f "$PROJECT_ROOT/apps/linux/resources/mime/packages/ziplock.xml" ]; then
+    if [ -f "$PROJECT_ROOT/packaging/linux/resources/mime/packages/ziplock.xml" ]; then
         mkdir -p "$install_dir/usr/share/mime/packages"
-        cp "$PROJECT_ROOT/apps/linux/resources/mime/packages/ziplock.xml" "$install_dir/usr/share/mime/packages/"
+        cp "$PROJECT_ROOT/packaging/linux/resources/mime/packages/ziplock.xml" "$install_dir/usr/share/mime/packages/"
         log_info "Installed MIME type definition for .7z file associations"
     else
         log_warning "MIME type definition file not found"
     fi
 
     # Copy icon
-    if [ -f "$PROJECT_ROOT/apps/linux/resources/icons/ziplock.svg" ]; then
-        cp "$PROJECT_ROOT/apps/linux/resources/icons/ziplock.svg" "$install_dir/usr/share/icons/hicolor/scalable/apps/"
+    if [ -f "$PROJECT_ROOT/apps/desktop/resources/icons/ziplock.svg" ]; then
+        cp "$PROJECT_ROOT/apps/desktop/resources/icons/ziplock.svg" "$install_dir/usr/share/icons/hicolor/scalable/apps/"
     elif [ -f "$PROJECT_ROOT/assets/icons/ziplock-logo.svg" ]; then
         cp "$PROJECT_ROOT/assets/icons/ziplock-logo.svg" "$install_dir/usr/share/icons/hicolor/scalable/apps/ziplock.svg"
     else

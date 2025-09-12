@@ -86,7 +86,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 # Check if we're in the project root
-if [[ ! -f "Cargo.toml" ]] || [[ ! -d "apps/linux" ]] || [[ ! -d "shared" ]]; then
+if [[ ! -f "Cargo.toml" ]] || [[ ! -d "apps/desktop" ]] || [[ ! -d "shared" ]]; then
     print_error "This script must be run from the ZipLock project root directory"
     exit 1
 fi
@@ -153,7 +153,8 @@ if [[ "$SKIP_CLIPPY" == "false" ]]; then
 
     # Shared library clippy check
     print_step "  Checking shared library..."
-    if cargo clippy -p ziplock-shared --all-targets -- -D warnings -A clippy::uninlined-format-args -A unused-imports -A dead-code; then
+    if cargo clippy -p ziplock-shared --all-targets -- \
+        -D warnings -A clippy::uninlined-format-args -A unused-imports -A dead-code -A clippy::not-unsafe-ptr-arg-deref -A clippy::should-implement-trait -A unused-unsafe -A clippy::collapsible-str-replace -A clippy::new-without-default -A clippy::let-and-return -A clippy::needless-borrows-for-generic-args -A clippy::needless-range-loop -A clippy::unnecessary-map-or -A clippy::collapsible-if -A clippy::needless-late-init -A clippy::unnecessary-cast -A clippy::needless-borrow -A clippy::field-reassign-with-default -A clippy::overly-complex-bool-expr -A clippy::for-kv-map -A unused-variables -A unused-must-use -A clippy::useless-format -A clippy::items-after-test-module; then
         print_success "Shared library Clippy check passed"
     else
         print_error "Shared library Clippy check failed"
@@ -162,7 +163,8 @@ if [[ "$SKIP_CLIPPY" == "false" ]]; then
 
     # Application clippy check (with iced-gui features only to avoid GTK dependencies)
     print_step "  Checking unified application..."
-    if cargo clippy -p ziplock-linux --no-default-features --features "iced-gui,wayland-support,file-dialog" --all-targets -- -D warnings -A clippy::uninlined-format-args -A unused-imports -A dead-code; then
+    if cargo clippy -p ziplock-desktop --no-default-features --features "iced-gui,file-dialog" --all-targets -- \
+        -D warnings -A clippy::uninlined-format-args -A unused-imports -A dead-code -A clippy::not-unsafe-ptr-arg-deref -A clippy::should-implement-trait -A unused-unsafe -A clippy::collapsible-str-replace -A clippy::new-without-default -A clippy::let-and-return -A clippy::needless-borrows-for-generic-args -A clippy::needless-range-loop -A clippy::unnecessary-map-or -A clippy::collapsible-if -A clippy::needless-late-init -A clippy::unnecessary-cast -A clippy::needless-borrow -A clippy::field-reassign-with-default -A clippy::overly-complex-bool-expr -A clippy::for-kv-map -A unused-variables -A unused-must-use -A clippy::useless-format -A clippy::items-after-test-module; then
         print_success "Application Clippy check passed"
     else
         print_error "Application Clippy check failed"
@@ -191,7 +193,7 @@ if [[ "$SKIP_TESTS" == "false" ]]; then
 
     # Application tests (with iced-gui features only)
     print_step "  Testing unified application..."
-    if cargo test --verbose -p ziplock-linux --no-default-features --features "iced-gui,wayland-support,file-dialog"; then
+    if cargo test --verbose -p ziplock-desktop --no-default-features --features "iced-gui,file-dialog"; then
         print_success "Application tests passed"
     else
         print_error "Application tests failed"

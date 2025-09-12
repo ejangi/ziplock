@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
-# ZipLock Launch Script
-# This script launches the unified ZipLock application (FFI-based architecture)
+# ZipLock Desktop Launch Script
+# This script launches the cross-platform ZipLock desktop application
 
 set -e  # Exit on any error
 
@@ -26,7 +26,7 @@ while [[ $# -gt 0 ]]; do
             shift
             ;;
         --help|-h)
-            echo "ZipLock Development Launcher (Unified FFI Architecture)"
+            echo "ZipLock Desktop Development Launcher"
             echo
             echo "Usage: $0 [OPTIONS]"
             echo
@@ -35,8 +35,8 @@ while [[ $# -gt 0 ]]; do
             echo "  --debug, -d       Run with debug logging enabled"
             echo "  --help, -h        Show this help message"
             echo
-            echo "This script builds and runs the unified ZipLock application."
-            echo "No separate backend daemon is needed with the new FFI architecture."
+            echo "This script builds and runs the cross-platform ZipLock desktop application."
+            echo "Works on Linux, Windows (via WSL), and macOS."
             exit 0
             ;;
         *)
@@ -51,8 +51,8 @@ done
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
-echo -e "${BLUE}🔐 ZipLock Development Launcher (Unified FFI)${NC}"
-echo -e "${BLUE}=============================================${NC}"
+echo -e "${BLUE}🔐 ZipLock Desktop Development Launcher${NC}"
+echo -e "${BLUE}=======================================${NC}"
 
 # Function to cleanup on exit
 cleanup() {
@@ -98,17 +98,17 @@ else
         exit 1
     fi
 
-    # Build the unified frontend application
-    echo -e "${BLUE}   Building unified application...${NC}"
-    if [[ -f "apps/linux/Cargo.toml" ]]; then
-        if cargo build --release --bin ziplock --manifest-path apps/linux/Cargo.toml; then
-            echo -e "${GREEN}✅ ZipLock application built successfully${NC}"
+    # Build the desktop application
+    echo -e "${BLUE}   Building desktop application...${NC}"
+    if [[ -f "apps/desktop/Cargo.toml" ]]; then
+        if cargo build --release --bin ziplock --manifest-path apps/desktop/Cargo.toml; then
+            echo -e "${GREEN}✅ ZipLock desktop application built successfully${NC}"
         else
-            echo -e "${RED}❌ Failed to build ZipLock application${NC}"
+            echo -e "${RED}❌ Failed to build ZipLock desktop application${NC}"
             exit 1
         fi
     else
-        echo -e "${RED}❌ apps/linux/Cargo.toml not found!${NC}"
+        echo -e "${RED}❌ apps/desktop/Cargo.toml not found!${NC}"
         echo -e "${RED}   Current directory: $(pwd)${NC}"
         exit 1
     fi
@@ -127,7 +127,7 @@ else
     export ZIPLOCK_LOG_LEVEL="info"
 fi
 
-echo -e "${GREEN}🚀 Starting ZipLock (Unified FFI Architecture)...${NC}"
+echo -e "${GREEN}🚀 Starting ZipLock Desktop Application...${NC}"
 echo -e "${BLUE}   Binary: $FRONTEND_BIN${NC}"
 echo -e "${BLUE}   Library path: $SHARED_LIB_DIR${NC}"
 echo -e "${BLUE}   Log level: ${RUST_LOG}${NC}"

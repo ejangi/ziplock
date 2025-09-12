@@ -1,0 +1,132 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <Product Id="*"
+           Name="ZipLock Password Manager"
+           Language="1033"
+           Version="!(bind.FileVersion.ZipLockExe)"
+           Manufacturer="ZipLock Project"
+           UpgradeCode="12345678-1234-1234-1234-123456789012">
+
+    <Package InstallerVersion="200"
+             Compressed="yes"
+             InstallScope="perMachine"
+             Description="ZipLock Password Manager - Secure password management using encrypted 7z archives"
+             Comments="Open source password manager with cross-platform compatibility" />
+
+    <!-- Allow upgrades and prevent downgrades -->
+    <MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed." />
+
+    <!-- Embed the CAB file in the MSI -->
+    <MediaTemplate EmbedCab="yes" />
+
+    <!-- Feature definitions -->
+    <Feature Id="ProductFeature" Title="ZipLock Password Manager" Level="1">
+      <ComponentGroupRef Id="ProductComponents" />
+      <ComponentRef Id="ApplicationShortcut" />
+      <ComponentRef Id="DesktopShortcut" />
+    </Feature>
+
+    <!-- Installation directory structure -->
+    <Directory Id="TARGETDIR" Name="SourceDir">
+      <Directory Id="ProgramFiles64Folder">
+        <Directory Id="INSTALLFOLDER" Name="ZipLock">
+          <Directory Id="BINDIR" Name="bin" />
+        </Directory>
+      </Directory>
+
+      <!-- Start Menu -->
+      <Directory Id="ProgramMenuFolder">
+        <Directory Id="ApplicationProgramsFolder" Name="ZipLock" />
+      </Directory>
+
+      <!-- Desktop -->
+      <Directory Id="DesktopFolder" />
+    </Directory>
+
+    <!-- Components -->
+    <ComponentGroup Id="ProductComponents" Directory="BINDIR">
+      <!-- Main executable -->
+      <Component Id="ZipLockExecutable" Guid="*">
+        <File Id="ZipLockExe"
+              Source="$(var.SourceDir)\ziplock.exe"
+              KeyPath="yes"
+              Checksum="yes">
+          <Shortcut Id="StartMenuShortcut"
+                    Directory="ApplicationProgramsFolder"
+                    Name="ZipLock Password Manager"
+                    WorkingDirectory="BINDIR"
+                    Icon="ZipLockIcon.exe"
+                    IconIndex="0"
+                    Description="Secure password management using encrypted archives" />
+        </File>
+
+        <!-- File associations for .7z files -->
+        <ProgId Id="ZipLock.Archive" Description="ZipLock Password Archive" Icon="ZipLockIcon.exe">
+          <Extension Id="7z" ContentType="application/x-7z-compressed">
+            <Verb Id="open" Command="Open with ZipLock" TargetFile="ZipLockExe" />
+          </Extension>
+        </ProgId>
+
+        <!-- Registry entries for file associations -->
+        <RegistryValue Root="HKCR" Key=".7z\OpenWithProgids" Name="ZipLock.Archive" Value="" Type="string" />
+        <RegistryValue Root="HKCR" Key="ZipLock.Archive\shell\open\command" Value="&quot;[#ZipLockExe]&quot; &quot;%1&quot;" Type="string" />
+      </Component>
+    </ComponentGroup>
+
+    <!-- Application shortcuts -->
+    <Component Id="ApplicationShortcut" Directory="ApplicationProgramsFolder" Guid="*">
+      <Shortcut Id="ApplicationStartMenuShortcut"
+                Name="ZipLock Password Manager"
+                Target="[#ZipLockExe]"
+                WorkingDirectory="BINDIR"
+                Icon="ZipLockIcon.exe"
+                Description="Secure password management using encrypted archives" />
+      <RemoveFolder Id="CleanUpShortCut" Directory="ApplicationProgramsFolder" On="uninstall" />
+      <RegistryValue Root="HKCU" Key="Software\ZipLock" Name="installed" Type="integer" Value="1" KeyPath="yes" />
+    </Component>
+
+    <!-- Desktop shortcut (optional) -->
+    <Component Id="DesktopShortcut" Directory="DesktopFolder" Guid="*">
+      <Shortcut Id="DesktopApplicationShortcut"
+                Name="ZipLock Password Manager"
+                Target="[#ZipLockExe]"
+                WorkingDirectory="BINDIR"
+                Icon="ZipLockIcon.exe"
+                Description="Secure password management using encrypted archives" />
+      <RegistryValue Root="HKCU" Key="Software\ZipLock" Name="desktop_shortcut" Type="integer" Value="1" KeyPath="yes" />
+    </Component>
+
+    <!-- Icon definition -->
+    <Icon Id="ZipLockIcon.exe" SourceFile="$(var.SourceDir)\ziplock.exe" />
+
+    <!-- Properties for Add/Remove Programs -->
+    <Property Id="ARPPRODUCTICON" Value="ZipLockIcon.exe" />
+    <Property Id="ARPHELPLINK" Value="https://github.com/ejangi/ziplock" />
+    <Property Id="ARPURLINFOABOUT" Value="https://github.com/ejangi/ziplock" />
+    <Property Id="ARPNOREPAIR" Value="1" />
+    <Property Id="ARPNOMODIFY" Value="1" />
+
+    <!-- Custom properties -->
+    <Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER" />
+
+    <!-- UI configuration -->
+    <UIRef Id="WixUI_InstallDir" />
+    <UIRef Id="WixUI_ErrorProgressText" />
+
+    <!-- License agreement -->
+    <WixVariable Id="WixUILicenseRtf" Value="license.rtf" />
+
+    <!-- Custom actions for registry cleanup -->
+    <CustomAction Id="CleanupRegistry"
+                  Directory="BINDIR"
+                  ExeCommand="reg delete &quot;HKCR\.7z\OpenWithProgids&quot; /v &quot;ZipLock.Archive&quot; /f"
+                  Execute="deferred"
+                  Impersonate="no"
+                  Return="ignore" />
+
+    <!-- Installation sequence -->
+    <InstallExecuteSequence>
+      <Custom Action="CleanupRegistry" Before="RemoveFiles">REMOVE="ALL"</Custom>
+    </InstallExecuteSequence>
+  </Product>
+</Wix>

@@ -89,7 +89,7 @@ build_project() {
     # Build unified application
     print_status "Building unified application..."
     local app_log="$TEST_OUTPUT_DIR/build-app.log"
-    if ! cargo build --release -p ziplock-linux --no-default-features --features "iced-gui,wayland-support,file-dialog,ffi-client" 2>&1 | tee "$app_log"; then
+    if ! cargo build --release -p ziplock-desktop --no-default-features --features "iced-gui,file-dialog,ffi-client" 2>&1 | tee "$app_log"; then
         print_error "Failed to build unified application - check $app_log"
         return 1
     fi
@@ -124,7 +124,7 @@ run_unit_tests() {
 
     # Test unified application
     print_status "Testing unified application..."
-    if ! cargo test --release -p ziplock-linux --no-default-features --features "iced-gui,wayland-support,file-dialog,ffi-client" 2>&1 | tee -a "$log_file"; then
+    if ! cargo test --release -p ziplock-desktop --no-default-features --features "iced-gui,file-dialog,ffi-client" 2>&1 | tee -a "$log_file"; then
         print_error "Application unit tests failed - check $log_file"
         return 1
     fi
@@ -148,7 +148,7 @@ run_ffi_tests() {
 
     # Test FFI client functionality
     print_status "Testing FFI client integration..."
-    if ! cargo test --release -p ziplock-linux --no-default-features --features "ffi-client" -- ffi 2>&1 | tee -a "$log_file"; then
+    if ! cargo test --release -p ziplock-desktop --no-default-features --features "ffi-client" -- ffi 2>&1 | tee -a "$log_file"; then
         print_error "FFI client tests failed - check $log_file"
         return 1
     fi

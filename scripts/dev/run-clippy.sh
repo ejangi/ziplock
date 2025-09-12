@@ -63,7 +63,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 # Check if we're in the project root
-if [[ ! -f "Cargo.toml" ]] || [[ ! -d "apps/linux" ]] || [[ ! -d "shared" ]]; then
+if [[ ! -f "Cargo.toml" ]] || [[ ! -d "apps/desktop" ]] || [[ ! -d "shared" ]]; then
     print_error "This script must be run from the ZipLock project root directory"
     exit 1
 fi
@@ -97,7 +97,7 @@ echo ""
 
 # Application clippy check (iced-gui features only)
 print_step "Checking unified application (iced-gui features only)..."
-if cargo clippy -p ziplock-linux --no-default-features --features "iced-gui,wayland-support,file-dialog" $CLIPPY_ARGS; then
+if cargo clippy -p ziplock-desktop --no-default-features --features "iced-gui,file-dialog" $CLIPPY_ARGS; then
     print_success "Application Clippy check passed"
 else
     print_error "Application Clippy check failed"

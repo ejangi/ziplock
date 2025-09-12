@@ -96,12 +96,14 @@ logging:
 EOF
 
     # Copy resource files if they exist
-    if [ -f "apps/linux/resources/ziplock.desktop" ]; then
-        cp apps/linux/resources/ziplock.desktop target/install/usr/share/applications/
+    if [ -f "packaging/linux/resources/ziplock.desktop" ]; then
+        cp packaging/linux/resources/ziplock.desktop target/install/usr/share/applications/
+    elif [ -f "apps/desktop/resources/ziplock.desktop" ]; then
+        cp apps/desktop/resources/ziplock.desktop target/install/usr/share/applications/
     fi
 
-    if [ -f "apps/linux/resources/icons/ziplock.svg" ]; then
-        cp apps/linux/resources/icons/ziplock.svg target/install/usr/share/icons/hicolor/scalable/apps/
+    if [ -f "apps/desktop/resources/icons/ziplock.svg" ]; then
+        cp apps/desktop/resources/icons/ziplock.svg target/install/usr/share/icons/hicolor/scalable/apps/
     elif [ -f "assets/icons/ziplock-logo.svg" ]; then
         cp assets/icons/ziplock-logo.svg target/install/usr/share/icons/hicolor/scalable/apps/ziplock.svg
     fi

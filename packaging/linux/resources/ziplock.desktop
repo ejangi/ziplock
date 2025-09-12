@@ -1,0 +1,55 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=ZipLock Password Manager
+GenericName=Password Manager
+Comment=Secure password management using encrypted 7z archives
+Comment[es]=Gestor de contraseñas seguro usando archivos 7z cifrados
+Comment[fr]=Gestionnaire de mots de passe sécurisé utilisant des archives 7z chiffrées
+Comment[de]=Sichere Passwort-Verwaltung mit verschlüsselten 7z-Archiven
+Comment[it]=Gestione sicura delle password utilizzando archivi 7z crittografati
+Keywords=password;manager;security;encryption;vault;credentials;7zip;archive;
+Icon=ziplock
+Exec=ziplock %F
+TryExec=ziplock
+Terminal=false
+NoDisplay=false
+Hidden=false
+StartupNotify=true
+StartupWMClass=ziplock
+
+# File associations
+MimeType=application/x-7z-compressed;application/zip;
+
+# Categories for application menu
+Categories=Utility;Security;Office;
+
+# Actions for right-click menu
+Actions=NewVault;OpenVault;
+
+[Desktop Action NewVault]
+Name=Create New Vault
+Name[es]=Crear Nueva Bóveda
+Name[fr]=Créer un Nouveau Coffre
+Name[de]=Neuen Tresor Erstellen
+Name[it]=Crea Nuovo Vault
+Exec=ziplock --new-vault
+Icon=ziplock
+
+[Desktop Action OpenVault]
+Name=Open Existing Vault
+Name[es]=Abrir Bóveda Existente
+Name[fr]=Ouvrir un Coffre Existant
+Name[de]=Vorhandenen Tresor Öffnen
+Name[it]=Apri Vault Esistente
+Exec=ziplock --open-vault
+Icon=ziplock
+
+# DBus activation
+DBusActivatable=false
+
+# Additional metadata
+X-GNOME-UsesNotifications=true
+X-GNOME-SingleWindow=false
+X-KDE-SubstituteUID=false
+X-Desktop-File-Install-Version=0.26

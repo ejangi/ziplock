@@ -123,8 +123,8 @@ jobs:
 
       - name: Build Linux binaries
         run: |
-          # Build the ziplock binary from the Linux app workspace member
-          cargo build --release --bin ziplock -p ziplock-linux
+          # Build the ziplock binary from the desktop app workspace member
+          cargo build --release --bin ziplock -p ziplock-desktop
 
           # Create output directory structure
           mkdir -p target/artifacts/linux/binaries
@@ -460,6 +460,103 @@ jobs:
           retention-days: 30
 
   # Package for Debian/Ubuntu
+  package-windows:
+    name: Create Windows Package
+    runs-on: windows-latest
+    needs: [test-and-build, security-audit]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Install WiX
+        run: |
+          dotnet tool install --global wix --version 4.0.4
+          wix extension add WixToolset.UI.wixext
+
+      - name: Build Windows application
+        run: |
+          cd apps/desktop
+          cargo build --release --target x86_64-pc-windows-msvc
+
+      - name: Create MSI installer
+        run: |
+          $VERSION = "${{ needs.test-and-build.outputs.version }}"
+
+          # Create staging directory
+          New-Item -ItemType Directory -Path "target/windows-package" -Force
+
+          # Copy binary
+          Copy-Item "target/x86_64-pc-windows-msvc/release/ziplock.exe" "target/windows-package/"
+
+          # Copy resources
+          if (Test-Path "packaging/windows/resources") {
+              Copy-Item "packaging/windows/resources/*" "target/windows-package/" -Recurse -Force
+          }
+
+          # Build MSI using WiX
+          cd packaging/windows/installer
+          wix build ziplock.wxs -define SourceDir=../../../target/windows-package -define Version=$VERSION -out ../../../target/ZipLock-$VERSION-x64.msi
+
+      - name: Upload Windows package
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-package
+          path: target/ZipLock-*.msi
+          retention-days: 30
+
+  package-macos:
+    name: Create macOS Package
+    runs-on: macos-latest
+    needs: [test-and-build, security-audit]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-apple-darwin
+
+      - name: Build macOS application
+        run: |
+          cd apps/desktop
+          cargo build --release --target x86_64-apple-darwin
+
+      - name: Create App Bundle
+        run: |
+          VERSION="${{ needs.test-and-build.outputs.version }}"
+
+          # Run app bundle creation script
+          chmod +x packaging/macos/scripts/create-app-bundle.sh
+          ./packaging/macos/scripts/create-app-bundle.sh --config release --target x86_64-apple-darwin --output target/macos-package
+
+      - name: Create DMG
+        run: |
+          VERSION="${{ needs.test-and-build.outputs.version }}"
+
+          # Create DMG
+          mkdir -p target/dmg
+          cp -R target/macos-package/ZipLock.app target/dmg/
+
+          # Create a simple DMG (can be enhanced later with custom layout)
+          hdiutil create -volname "ZipLock $VERSION" -srcfolder target/dmg -ov -format UDZO target/ZipLock-$VERSION.dmg
+
+      - name: Upload macOS package
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-package
+          path: |
+            target/ZipLock-*.dmg
+            target/macos-package/ZipLock.app
+          retention-days: 30
+
   package-debian:
     name: Create Debian Package
     runs-on: ubuntu-22.04
@@ -591,7 +688,7 @@ jobs:
 
   # Package for Arch Linux
   package-arch:
-    name: Create Arch Linux Package
+    name: Create Arch Package
     runs-on: ubuntu-22.04
     needs: [test-and-build, security-audit]
     container:
@@ -768,7 +865,7 @@ jobs:
 
   # Create unified release (only on tags)
   release:
-    name: Create Unified Release
+    name: Create Release
     runs-on: ubuntu-22.04
     needs:
       [
@@ -776,6 +873,8 @@ jobs:
         build-android,
         package-debian,
         package-arch,
+        package-windows,
+        package-macos,
         security-audit,
       ]
     if: startsWith(github.ref, 'refs/tags/v')
@@ -795,7 +894,7 @@ jobs:
           RELEASE_DIR="unified-release"
 
           # Create release directory structure
-          mkdir -p "$RELEASE_DIR"/{linux/{binaries,packages},android/{libraries,headers},docs}
+          mkdir -p "$RELEASE_DIR"/{linux/{binaries,packages},windows/{binaries,packages},macos/{binaries,packages},android/{libraries,headers},docs}
 
           # Copy Linux binaries
           if [ -d "artifacts/linux-binaries" ]; then
@@ -810,6 +909,25 @@ jobs:
           if [ -d "artifacts/arch-package" ]; then
             mkdir -p "$RELEASE_DIR/linux/packages/arch"
             cp artifacts/arch-package/* "$RELEASE_DIR/linux/packages/arch/" 2>/dev/null || true
+          fi
+
+          # Copy Windows packages
+          if [ -d "artifacts/windows-package" ]; then
+            mkdir -p "$RELEASE_DIR/windows/packages"
+            cp artifacts/windows-package/*.msi "$RELEASE_DIR/windows/packages/" 2>/dev/null || true
+            # Also copy binary for manual installation
+            mkdir -p "$RELEASE_DIR/windows/binaries"
+            cp artifacts/windows-package/ziplock.exe "$RELEASE_DIR/windows/binaries/" 2>/dev/null || true
+          fi
+
+          # Copy macOS packages
+          if [ -d "artifacts/macos-package" ]; then
+            mkdir -p "$RELEASE_DIR/macos/packages"
+            cp artifacts/macos-package/*.dmg "$RELEASE_DIR/macos/packages/" 2>/dev/null || true
+            # Copy app bundle
+            if [ -d "artifacts/macos-package/ZipLock.app" ]; then
+              cp -r artifacts/macos-package/ZipLock.app "$RELEASE_DIR/macos/packages/"
+            fi
           fi
 
           # Copy Android libraries and APK
@@ -845,6 +963,14 @@ jobs:
               "linux": {
                 "architectures": ["x86_64"],
                 "formats": ["deb", "arch"]
+              },
+              "windows": {
+                "architectures": ["x86_64"],
+                "formats": ["msi", "exe"]
+              },
+              "macos": {
+                "architectures": ["x86_64"],
+                "formats": ["dmg", "app"]
               },
               "android": {
                 "architectures": ["arm64-v8a", "armeabi-v7a"],
@@ -884,6 +1010,14 @@ jobs:
           - **Debian/Ubuntu**: \`sudo dpkg -i linux/packages/ziplock_${VERSION}_amd64.deb\`
           - **Arch Linux**: Use the PKGBUILD in \`linux/packages/arch/\`
           - **Manual**: Copy binaries from \`linux/binaries/\` to your PATH
+
+          ### Windows
+          - **MSI Installer**: Download and run \`windows/packages/ZipLock-${VERSION}-x64.msi\`
+          - **Manual**: Extract and run \`ziplock.exe\` from \`windows/binaries/\`
+
+          ### macOS
+          - **DMG Package**: Download and install \`macos/packages/ZipLock-${VERSION}.dmg\`
+          - **App Bundle**: Extract \`ZipLock.app\` from \`macos/packages/\` to Applications folder
 
           ### Android
           - **APK Installation**: Install the unsigned APK with \`adb install android/apk/ziplock-unsigned.apk\`
@@ -945,6 +1079,20 @@ jobs:
             **Linux (Arch):**
             Download the arch package files and use makepkg, or install from AUR.
 
+            **Windows:**
+            ```bash
+            # Download and install MSI package
+            wget https://github.com/ejangi/ziplock/releases/download/v${{ needs.test-and-build.outputs.version }}/ZipLock-${{ needs.test-and-build.outputs.version }}-x64.msi
+            # Double-click to install, or use msiexec /i ZipLock-${{ needs.test-and-build.outputs.version }}-x64.msi
+            ```
+
+            **macOS:**
+            ```bash
+            # Download and install DMG package
+            wget https://github.com/ejangi/ziplock/releases/download/v${{ needs.test-and-build.outputs.version }}/ZipLock-${{ needs.test-and-build.outputs.version }}.dmg
+            # Open DMG and drag ZipLock.app to Applications folder
+            ```
+
             **Android:**
             ```bash
             # Install APK directly (requires ADB and connected device)
@@ -963,14 +1111,16 @@ jobs:
 
             - **Build Date**: $(date -u)
             - **Commit**: ${{ github.sha }}
-            - **Platforms**: Linux (x86_64), Android (ARM64/ARMv7)
-            - **Dependencies**: GTK4, libadwaita (Linux), API 21+ (Android)
+            - **Platforms**: Linux (x86_64), Windows (x64), macOS (x86_64), Android (ARM64/ARMv7)
+            - **Dependencies**: GTK4, libadwaita (Linux), Visual C++ Redistributable (Windows), macOS 10.15+ (macOS), API 21+ (Android)
           draft: false
           prerelease: ${{ contains(needs.test-and-build.outputs.version, '-') }}
           files: |
             ziplock-v${{ needs.test-and-build.outputs.version }}-unified-release.tar.gz
             artifacts/debian-package/*.deb
             artifacts/arch-package/*
+            artifacts/windows-package/*.msi
+            artifacts/macos-package/*.dmg
             artifacts/android-libraries/apk/ziplock-unsigned.apk
           generate_release_notes: false
         env:

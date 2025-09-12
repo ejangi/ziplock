@@ -31,7 +31,7 @@ else
 fi
 
 echo -e "${YELLOW}⚙️  Building ZipLock Linux app...${NC}"
-if cargo build --release --bin ziplock --manifest-path apps/linux/Cargo.toml; then
+if cargo build --release --bin ziplock --manifest-path apps/desktop/Cargo.toml; then
     echo -e "${GREEN}✅ Linux app built successfully${NC}"
 else
     echo -e "${RED}❌ Failed to build Linux app${NC}"

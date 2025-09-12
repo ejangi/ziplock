@@ -1,12 +1,12 @@
 [package]
-name = "ziplock-linux"
+name = "ziplock-desktop"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true
-description = "Linux application for ZipLock password manager"
+description = "Cross-platform desktop application for ZipLock password manager"
 keywords.workspace = true
 categories.workspace = true
 
@@ -62,9 +62,22 @@ tracing-appender = "0.2" # For file rotation and advanced logging
 is-terminal = "0.4"      # For terminal detection (colored output)
 serde_yaml = "0.9"       # For YAML configuration file support
 
-# Linux-specific dependencies
+# Platform-specific dependencies
+[target.'cfg(unix)'.dependencies]
 nix = "0.27"
 freedesktop-desktop-entry = "0.5"
+
+[target.'cfg(windows)'.dependencies]
+winreg = "0.50"  # Registry access for file associations
+windows = { version = "0.52", features = [
+    "Win32_Foundation",
+    "Win32_System_Registry",
+    "Win32_UI_Shell",
+] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+cocoa = "0.24"
+objc = "0.2"
 
 # Icon and asset loading
 resvg = "0.37"
@@ -74,15 +87,16 @@ tempfile = "3.8"
 assert_matches = "1.5"
 
 [features]
-default = ["iced-gui", "wayland-support", "file-dialog"]
+default = ["iced-gui", "file-dialog"]
 
 # GUI framework selection
 iced-gui = []
 gtk-gui = ["gtk", "gdk4", "glib"]
 
-# Platform support
-wayland-support = []
-x11-support = []
+# Platform-specific features
+wayland-support = []  # Linux Wayland support
+x11-support = []      # Linux X11 support
+file-associations = [] # File association registration
 
 # File operations
 file-dialog = ["rfd"]
@@ -91,10 +105,11 @@ file-dialog = ["rfd"]
 debug-ui = []
 mock-backend = []
 
+# Linux packaging metadata
 [package.metadata.deb]
 maintainer = "James Angus <james@ejangi.com>"
 copyright = "2024, James Angus <james@ejangi.com>"
-license-file = ["../../LICENSE", "4"]
+license-file = ["../../LICENSE.md", "4"]
 extended-description = """\
 A secure, portable password manager using encrypted 7z archives.
 ZipLock provides a clean, modern interface for managing your passwords
@@ -109,13 +124,20 @@ assets = [
         "755",
     ],
     [
+        "../../packaging/linux/resources/ziplock.desktop",
+        "usr/share/applications/",
+        "644",
+    ],
+    [
         "resources/icons/ziplock.svg",
         "usr/share/icons/hicolor/scalable/apps/",
         "644",
     ],
-    [
-        "resources/ziplock.desktop",
-        "usr/share/applications/",
-        "644",
-    ],
 ]
+
+# Windows packaging metadata
+[package.metadata.wix]
+upgrade-guid = "12345678-1234-1234-1234-123456789012"
+path-guid = "87654321-4321-4321-4321-210987654321"
+license = "../../LICENSE.md"
+eula = false
