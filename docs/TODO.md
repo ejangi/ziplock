@@ -5,8 +5,10 @@ Run one of the following prompts in Zed's agent panel and when you're ready to b
 - Taking into consideration `docs/technical.md` and `docs/technical/build.md` and remembering to only output summary information (not create new *.md files), can you please...
 
 
+
 ## Linux
 - Taking into consideration `docs/technical.md` and `docs/architecture.md`, can you ensure the app is creating logs and has the necessary log rotate setup when it's deployed. Not sure if this needs to be in the build or part of the codebase.
+- Taking into consideration `docs/technical.md` and `docs/design.md` and remembering to only output summaries here, rather than creating new *.md files, can you please ensure for all credential types that only the title is required? I believe this needs to be done in the `shared/src/models/templates.rs` file.
 
 
 
@@ -16,4 +18,4 @@ Run one of the following prompts in Zed's agent panel and when you're ready to b
 
 
 ## Windows
-- Taking into consideration `docs/design.md`, `docs/architecture.md`, `docs/technical.md` can we look at the viability of using Iced as the GUI for Windows instead of Tauri? If that is possible can you update the documentation and the README.md to reflect the change?
+- Taking into consideration `docs/technical.md`, `docs/technical/cross-platform-adaptation-plan.md` and remembering to only output summaries here, rather than creating new *.md files, can you please check the `github/workflows/unified-release.yml` and determine if the `apps/windows` directory is being used at all? If it's not, can we remove it please?

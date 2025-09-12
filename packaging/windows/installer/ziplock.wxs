@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
   <Package Name="ZipLock Password Manager"
            Language="1033"
            Version="!(bind.FileVersion.ZipLockExe)"
@@ -102,10 +103,7 @@
     <Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER" />
 
     <!-- UI configuration -->
-    <UI>
-      <UIRef Id="WixUI_InstallDir" />
-      <UIRef Id="WixUI_ErrorProgressText" />
-    </UI>
+    <ui:WixUI Id="WixUI_InstallDir" />
 
     <!-- License agreement -->
     <WixVariable Id="WixUILicenseRtf" Value="license.rtf" />

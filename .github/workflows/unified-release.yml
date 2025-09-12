@@ -501,7 +501,7 @@ jobs:
 
           # Build MSI using WiX
           cd packaging/windows/installer
-          wix build ziplock.wxs -define SourceDir=../../../target/windows-package -define Version=$VERSION -out ../../../target/ZipLock-$VERSION-x64.msi
+          wix build ziplock.wxs -ext WixToolset.UI.wixext -define SourceDir=../../../target/windows-package -define Version=$VERSION -out ../../../target/ZipLock-$VERSION-x64.msi
 
       - name: Upload Windows package
         uses: actions/upload-artifact@v4
