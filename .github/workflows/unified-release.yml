@@ -474,18 +474,17 @@ jobs:
         with:
           targets: x86_64-pc-windows-msvc
 
-      - name: Install WiX
-        run: |
-          dotnet tool install --global wix --version 4.0.4
-          wix extension add WixToolset.UI.wixext
-
       - name: Build Windows application
         run: |
           cd apps/desktop
           cargo build --release --target x86_64-pc-windows-msvc
 
-      - name: Create MSI installer
+      - name: Install WiX and Create MSI installer
         run: |
+          # Install WiX toolset
+          dotnet tool install --global wix --version 4.0.4
+          wix extension add WixToolset.UI.wixext
+
           $VERSION = "${{ needs.test-and-build.outputs.version }}"
 
           # Create staging directory
