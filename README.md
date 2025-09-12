@@ -93,10 +93,11 @@ ZipLock follows a unified architecture with pure separation of concerns:
 | Platform | Status | Technology | File Operations | Memory Operations |
 |----------|--------|------------|----------------|------------------|
 | **Linux** | ✅ Stable | Rust + iced/GTK4 | Shared library direct access | Unified FFI |
+| **macOS** | 🚧 In Development | Swift + SwiftUI | Native macOS file APIs + 7z | Unified FFI |
 | **Windows** | 🚧 In Development | Rust + iced | Shared library direct access | Unified FFI |
 | **iOS** | 📋 Planned | Swift + SwiftUI | Native iOS file APIs + 7z | Memory-only FFI |
 | **Android** | ✅ Stable | Kotlin + Jetpack Compose | Native Android file APIs + 7z | Memory-only FFI |
-| **macOS** | 🚧 In Development | Swift + SwiftUI | Native macOS file APIs + 7z | Memory-only FFI |
+
 
 ### Architecture Benefits
 - **Pure Separation**: Memory operations in shared core, file operations via platform callbacks
