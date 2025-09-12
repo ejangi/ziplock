@@ -10,7 +10,7 @@ use iced::{
     Alignment, Element, Length,
 };
 
-use crate::ui::theme::{button_styles, container_styles, utils};
+use crate::ui::theme::{self, utils};
 
 /// Messages for the update dialog
 #[derive(Debug, Clone)]
@@ -39,7 +39,7 @@ impl UpdateDialog {
     pub fn view(&self) -> Element<'_, UpdateDialogMessage> {
         let title = text("Update Available")
             .size(utils::typography::header_text_size())
-            .horizontal_alignment(Horizontal::Center);
+            .align_x(Horizontal::Center);
 
         let version_info = self.create_version_info();
         let release_notes = self.create_release_notes();
@@ -63,17 +63,16 @@ impl UpdateDialog {
         .width(Length::Fill);
 
         container(content)
-            .style(container_styles::modal())
             .width(Length::Fill)
             .height(Length::Fill)
-            .center_x()
-            .center_y()
+            .center_x(Length::Fill)
+            .center_y(Length::Fill)
             .into()
     }
 
-    /// Create version information display
+    /// Create version comparison display
     fn create_version_info(&self) -> Element<'_, UpdateDialogMessage> {
-        let current_version = format!("Current: {}", self.update_result.current_version);
+        let current_version = format!("Current: {}", env!("CARGO_PKG_VERSION"));
         let latest_version = format!(
             "Latest: {}",
             self.update_result
@@ -84,26 +83,26 @@ impl UpdateDialog {
 
         row![
             container(
-                text(&current_version)
+                text(current_version)
                     .size(utils::typography::normal_text_size())
-                    .horizontal_alignment(Horizontal::Center)
+                    .align_x(Horizontal::Center)
             )
             .width(Length::FillPortion(1)),
             container(
                 text("→")
                     .size(utils::typography::large_text_size())
-                    .horizontal_alignment(Horizontal::Center)
+                    .align_x(Horizontal::Center)
             )
             .width(Length::Fixed(40.0)),
             container(
-                text(&latest_version)
+                text(latest_version)
                     .size(utils::typography::normal_text_size())
-                    .horizontal_alignment(Horizontal::Center)
+                    .align_x(Horizontal::Center)
             )
             .width(Length::FillPortion(1)),
         ]
         .spacing(10)
-        .align_items(Alignment::Center)
+        .align_y(Alignment::Center)
         .into()
     }
 
@@ -111,7 +110,7 @@ impl UpdateDialog {
     fn create_release_notes(&self) -> Element<'_, UpdateDialogMessage> {
         let notes_title = text("What's New")
             .size(utils::typography::large_text_size())
-            .horizontal_alignment(Horizontal::Left);
+            .align_x(Horizontal::Left);
 
         let notes_content = if let Some(release) = &self.update_result.latest_release {
             let body = if let Some(body_text) = &release.body {
@@ -135,13 +134,8 @@ impl UpdateDialog {
             text("Release information not available.").size(utils::typography::normal_text_size())
         };
 
-        let scrollable_notes = scrollable(
-            container(notes_content)
-                .padding(15)
-                .style(container_styles::card())
-                .width(Length::Fill),
-        )
-        .height(Length::Fixed(150.0));
+        let scrollable_notes = scrollable(container(notes_content).padding(15).width(Length::Fill))
+            .height(Length::Fixed(150.0));
 
         column![
             notes_title,
@@ -156,7 +150,7 @@ impl UpdateDialog {
     fn create_installation_instructions(&self) -> Element<'_, UpdateDialogMessage> {
         let instructions_title = text("Installation Instructions")
             .size(utils::typography::large_text_size())
-            .horizontal_alignment(Horizontal::Left);
+            .align_x(Horizontal::Left);
 
         let installation_method = &self.update_result.installation_method;
         let default_version = "latest".to_string();
@@ -177,7 +171,7 @@ impl UpdateDialog {
 
         let method_info = text(method_label)
             .size(utils::typography::small_text_size())
-            .horizontal_alignment(Horizontal::Left);
+            .align_x(Horizontal::Left);
 
         let instructions_content =
             text(instructions_text).size(utils::typography::small_text_size());
@@ -192,7 +186,6 @@ impl UpdateDialog {
                 .spacing(0),
             )
             .padding(15)
-            .style(container_styles::card())
             .width(Length::Fill),
         )
         .height(Length::Fixed(120.0));
@@ -208,11 +201,11 @@ impl UpdateDialog {
 
     /// Create action buttons
     fn create_action_buttons(&self) -> Element<'_, UpdateDialogMessage> {
-        let close_button = button(text("Close").horizontal_alignment(Horizontal::Center))
+        let close_button = button(text("Close").align_x(Horizontal::Center))
             .on_press(UpdateDialogMessage::Close)
             .padding(12)
-            .style(button_styles::secondary())
-            .width(Length::Fixed(100.0));
+            .width(Length::Fixed(100.0))
+            .style(theme::button_styles::secondary());
 
         let mut buttons = vec![close_button];
 
@@ -220,11 +213,11 @@ impl UpdateDialog {
         if let Some(release) = &self.update_result.latest_release {
             if let Some(url) = &release.html_url {
                 if !url.is_empty() {
-                    let release_button =
-                        button(text("View Release").horizontal_alignment(Horizontal::Center))
-                            .on_press(UpdateDialogMessage::OpenReleasePage)
-                            .padding(12)
-                            .width(Length::Fixed(120.0));
+                    let release_button = button(text("View Release").align_x(Horizontal::Center))
+                        .on_press(UpdateDialogMessage::OpenReleasePage)
+                        .padding(12)
+                        .width(Length::Fixed(120.0))
+                        .style(theme::button_styles::primary());
 
                     buttons.insert(0, release_button);
                 }
@@ -236,22 +229,23 @@ impl UpdateDialog {
             self.update_result.installation_method,
             InstallationMethod::DebianPackage | InstallationMethod::ArchAUR
         ) {
-            let copy_button = button(text("Copy Command").horizontal_alignment(Horizontal::Center))
+            let copy_button = button(text("Copy Command").align_x(Horizontal::Center))
                 .on_press(UpdateDialogMessage::CopyCommand)
                 .padding(12)
-                .style(button_styles::secondary())
-                .width(Length::Fixed(130.0));
+                .width(Length::Fixed(130.0))
+                .style(theme::button_styles::secondary());
 
             buttons.insert(1, copy_button);
         }
 
-        let button_elements: Vec<Element<'_, UpdateDialogMessage>> =
+        let button_elements: Vec<Element<UpdateDialogMessage>> =
             buttons.into_iter().map(|b| b.into()).collect();
-        let button_row = row(button_elements)
-            .spacing(15)
-            .align_items(Alignment::Center);
+        let button_row = row(button_elements).spacing(15).align_y(Alignment::Center);
 
-        container(button_row).width(Length::Fill).center_x().into()
+        container(button_row)
+            .width(Length::Fill)
+            .center_x(Length::Fill)
+            .into()
     }
 
     /// Get the command to copy to clipboard based on installation method

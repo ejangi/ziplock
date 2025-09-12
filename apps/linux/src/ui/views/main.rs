@@ -4,12 +4,11 @@
 //! It demonstrates how to use the shared theme system across different views.
 
 use crate::services::get_repository_service;
-use crate::ui::theme::container_styles;
-use crate::ui::theme::{EXTRA_LIGHT_GRAY, LIGHT_GRAY_TEXT, VERY_LIGHT_GRAY};
-use crate::ui::{button_styles, theme, utils};
+
+use crate::ui::{components::button as btn, theme, utils};
 use iced::{
     widget::{button, column, container, row, scrollable, svg, text, text_input, Space},
-    Alignment, Command, Element, Length,
+    Alignment, Element, Length, Task,
 };
 
 /// Messages for the main application view
@@ -89,84 +88,84 @@ impl MainView {
     }
 
     /// Create a command to refresh credentials if we have a session
-    pub fn initial_refresh_command(&self) -> Command<MainViewMessage> {
+    pub fn initial_refresh_command(&self) -> Task<MainViewMessage> {
         if self.session_id.is_some() {
-            Command::perform(
+            Task::perform(
                 Self::load_credentials_async(self.session_id.clone()),
                 MainViewMessage::CredentialsLoaded,
             )
         } else {
-            Command::none()
+            Task::none()
         }
     }
 
     /// Create a command to refresh credentials (public method for external use)
-    pub fn refresh_credentials(&mut self) -> Command<MainViewMessage> {
+    pub fn refresh_credentials(&mut self) -> Task<MainViewMessage> {
         self.is_loading = true;
         if self.session_id.is_some() {
-            Command::perform(
+            Task::perform(
                 Self::load_credentials_async(self.session_id.clone()),
                 MainViewMessage::CredentialsLoaded,
             )
         } else {
-            Command::none()
+            Task::none()
         }
     }
 
     /// Update the main view based on messages
-    pub fn update(&mut self, message: MainViewMessage) -> Command<MainViewMessage> {
+    pub fn update(&mut self, message: MainViewMessage) -> Task<MainViewMessage> {
         match message {
             MainViewMessage::SearchChanged(query) => {
                 self.search_query = query;
                 self.filter_credentials();
-                Command::none()
+                Task::none()
             }
 
             MainViewMessage::SearchSubmitted => {
                 // Perform search using repository service for more advanced search
                 if !self.search_query.trim().is_empty() {
                     self.is_loading = true;
-                    Command::perform(
+                    Task::perform(
                         Self::search_credentials_async(self.search_query.clone()),
                         MainViewMessage::CredentialsLoaded,
                     )
                 } else {
                     self.filter_credentials();
-                    Command::none()
+                    Task::none()
                 }
             }
 
             MainViewMessage::ClearSearch => {
                 self.search_query.clear();
                 self.filter_credentials();
-                Command::none()
+                Task::none()
             }
 
             MainViewMessage::AddCredential => {
                 // TODO: Show add credential dialog
-                Command::none()
+                Task::none()
             }
 
             MainViewMessage::EditCredential(id) => {
                 self.selected_credential = Some(id);
                 // TODO: Show edit credential dialog
-                Command::none()
+                Task::none()
             }
 
             MainViewMessage::CredentialClicked(id) => {
                 self.selected_credential = Some(id);
                 // TODO: Show edit credential dialog
-                Command::none()
+                Task::none()
             }
 
             MainViewMessage::DeleteCredential(_id) => {
                 // TODO: Show confirmation dialog and delete
-                Command::none()
+                Task::none()
             }
 
             MainViewMessage::RefreshCredentials => {
                 self.is_loading = true;
-                Command::perform(
+                Task::perform(
                     Self::load_credentials_async(self.session_id.clone()),
                     MainViewMessage::CredentialsLoaded,
                 )
@@ -205,7 +204,7 @@ impl MainView {
                         self.is_authenticated = false;
                     }
                 }
-                Command::none()
+                Task::none()
             }
 
             MainViewMessage::OperationCompleted(result) => {
@@ -217,10 +216,10 @@ impl MainView {
                             self.session_id = None;
                             self.is_authenticated = false;
                             self.credentials.clear();
-                            Command::none()
+                            Task::none()
                         } else {
                             // Auto-refresh credentials after successful operation
-                            Command::perform(
+                            Task::perform(
                                 Self::load_credentials_async(self.session_id.clone()),
                                 MainViewMessage::CredentialsLoaded,
                             )
@@ -234,30 +233,30 @@ impl MainView {
                             return timeout_command;
                         }
                         // Error handling is now done at the application level
-                        Command::none()
+                        Task::none()
                     }
                 }
             }
 
             MainViewMessage::ShowError(_error) => {
                 // Error is now handled at the application level via toast system
-                Command::none()
+                Task::none()
             }
 
             // Error demonstration handlers - these are for testing
             MainViewMessage::TriggerConnectionError => {
                 // These would be handled at the application level
-                Command::none()
+                Task::none()
             }
 
             MainViewMessage::TriggerAuthError => {
                 // These would be handled at the application level
-                Command::none()
+                Task::none()
             }
 
             MainViewMessage::TriggerValidationError => {
                 // These would be handled at the application level
-                Command::none()
+                Task::none()
             }
 
             MainViewMessage::LockDatabase => {
@@ -271,28 +270,28 @@ impl MainView {
                 self.credentials.clear();
 
                 tracing::info!("Database locked successfully");
-                Command::none()
+                Task::none()
             }
 
             MainViewMessage::ShowSettings => {
                 // This is handled at the application level in main.rs
-                Command::none()
+                Task::none()
             }
 
             MainViewMessage::ShowAbout => {
                 // TODO: Show about dialog
-                Command::none()
+                Task::none()
             }
 
             MainViewMessage::CheckForUpdates => {
                 // This is handled by the parent application
-                Command::none()
+                Task::none()
             }
 
             MainViewMessage::CloseRepository => {
                 // Close the current repository
                 tracing::info!("Closing repository...");
-                Command::perform(
+                Task::perform(
                     Self::close_repository_async(),
                     MainViewMessage::RepositoryOperationComplete,
                 )
@@ -303,12 +302,12 @@ impl MainView {
                     Ok(message) => {
                         tracing::info!("Repository operation completed: {}", message);
                         // Success messages are handled by the global toast system
-                        Command::none()
+                        Task::none()
                     }
                     Err(error) => {
                         tracing::error!("Repository operation failed: {}", error);
                         // Error messages are handled by the global toast system
-                        Command::none()
+                        Task::none()
                     }
                 }
             }
@@ -316,12 +315,12 @@ impl MainView {
             MainViewMessage::SessionTimeout => {
                 // This is handled by the helper method and parent application
                 // Just return none as the timeout has already been processed
-                Command::none()
+                Task::none()
             }
 
             MainViewMessage::CloseArchive => {
                 // This is handled at the application level in main.rs
-                Command::none()
+                Task::none()
             }
         }
     }
@@ -347,7 +346,7 @@ impl MainView {
         )
         .padding(utils::logo_container_padding())
         .width(Length::Fill)
-        .center_x();
+        .center_x(Length::Fill);
 
         let add_button = container(
             button(
@@ -357,36 +356,28 @@ impl MainView {
             )
             .on_press(MainViewMessage::AddCredential)
             .padding(12)
-            .style(button_styles::primary()),
+            .style(theme::button_styles::primary()),
         )
         .width(Length::Fill)
-        .center_x();
+        .center_x(Length::Fill);
 
-        let update_button = container(
-            button(
-                svg(theme::refresh_icon())
-                    .width(Length::Fixed(20.0))
-                    .height(Length::Fixed(20.0)),
-            )
-            .on_press(MainViewMessage::RefreshCredentials)
-            .padding(12)
-            .style(button_styles::secondary()),
-        )
+        let update_button = container(btn::icon_button(
+            svg(theme::refresh_icon())
+                .width(Length::Fixed(20.0))
+                .height(Length::Fixed(20.0)),
+            Some(MainViewMessage::RefreshCredentials),
+        ))
         .width(Length::Fill)
-        .center_x();
+        .center_x(Length::Fill);
 
-        let settings_button = container(
-            button(
-                svg(theme::settings_icon())
-                    .width(Length::Fixed(20.0))
-                    .height(Length::Fixed(20.0)),
-            )
-            .on_press(MainViewMessage::ShowSettings)
-            .padding(12)
-            .style(button_styles::secondary()),
-        )
+        let settings_button = container(btn::icon_button(
+            svg(theme::settings_icon())
+                .width(Length::Fixed(20.0))
+                .height(Length::Fixed(20.0)),
+            Some(MainViewMessage::ShowSettings),
+        ))
         .width(Length::Fill)
-        .center_x();
+        .center_x(Length::Fill);
 
         let close_button = container(
             button(
@@ -396,10 +387,10 @@ impl MainView {
             )
             .on_press(MainViewMessage::CloseArchive)
             .padding(12)
-            .style(button_styles::destructive()),
+            .style(theme::button_styles::destructive()),
         )
         .width(Length::Fill)
-        .center_x();
+        .center_x(Length::Fill);
 
         let sidebar_content = column![
             logo,
@@ -418,7 +409,6 @@ impl MainView {
         .height(Length::Fill);
 
         container(sidebar_content)
-            .style(container_styles::sidebar())
             .width(Length::Fixed(120.0))
             .height(Length::Fill)
             .into()
@@ -455,21 +445,16 @@ impl MainView {
                 .on_submit(MainViewMessage::SearchSubmitted)
                 .width(Length::FillPortion(3))
                 .padding(utils::search_bar_padding())
-                .style(theme::text_input_styles::standard())
-                .size(crate::ui::theme::utils::typography::text_input_size()),
+                .size(crate::ui::theme::utils::typography::text_input_size())
+                .style(theme::text_input_styles::standard()),
             Space::with_width(Length::Fixed(10.0)),
             if !self.search_query.is_empty() {
-                button("Clear")
-                    .on_press(MainViewMessage::ClearSearch)
-                    .padding(utils::small_button_padding())
-                    .style(button_styles::secondary())
+                btn::presets::clear_button(Some(MainViewMessage::ClearSearch))
             } else {
-                button("Clear")
-                    .padding(utils::small_button_padding())
-                    .style(button_styles::disabled())
+                btn::presets::clear_button(None)
             }
         ]
-        .align_items(Alignment::Center)
+        .align_y(Alignment::Center)
         .into()
     }
 
@@ -479,16 +464,12 @@ impl MainView {
             return column![
                 Space::with_height(Length::Fixed(50.0)),
                 text("Loading credentials...")
-                    .size(crate::ui::theme::utils::typography::medium_text_size())
-                    .style(iced::theme::Text::Color(theme::LOGO_PURPLE)),
+                    .size(crate::ui::theme::utils::typography::medium_text_size()),
                 Space::with_height(Length::Fixed(20.0)),
                 text("Please wait while we fetch your credentials from the backend...")
-                    .size(crate::ui::theme::utils::typography::small_text_size())
-                    .style(iced::theme::Text::Color(iced::Color::from_rgb(
-                        0.7, 0.7, 0.7
-                    ))),
+                    .size(crate::ui::theme::utils::typography::small_text_size()),
             ]
-            .align_items(Alignment::Center)
+            .align_x(Alignment::Center)
             .into();
         }
 
@@ -499,61 +480,35 @@ impl MainView {
                     container(
                         column![
                             text("No credentials yet!")
-                                .size(crate::ui::theme::utils::typography::header_text_size())
-                                .style(iced::theme::Text::Color(iced::Color::from_rgb(
-                                    0.4, 0.4, 0.4
-                                ))),
+                                .size(crate::ui::theme::utils::typography::header_text_size()),
                             Space::with_height(Length::Fixed(10.0)),
                             text("Let's add your first credential to get started")
-                                .size(crate::ui::theme::utils::typography::medium_text_size())
-                                .style(iced::theme::Text::Color(iced::Color::from_rgb(
-                                    0.6, 0.6, 0.6
-                                ))),
+                                .size(crate::ui::theme::utils::typography::medium_text_size()),
                             Space::with_height(Length::Fixed(30.0)),
-                            button(
-                                row![
-                                    svg(theme::plus_icon())
-                                        .width(Length::Fixed(18.0))
-                                        .height(Length::Fixed(18.0)),
-                                    Space::with_width(Length::Fixed(8.0)),
-                                    text("Add Your First Credential").size(
-                                        crate::ui::theme::utils::typography::medium_text_size()
-                                    )
-                                ]
-                                .align_items(Alignment::Center)
-                            )
-                            .on_press(MainViewMessage::AddCredential)
-                            .padding(utils::add_credential_button_padding())
-                            .style(button_styles::primary()),
+                            btn::primary_button(
+                                "Add Your First Credential",
+                                Some(MainViewMessage::AddCredential),
+                            ),
                             Space::with_height(Length::Fixed(20.0)),
                             text("or click 'Refresh' to reload from backend")
-                                .size(crate::ui::theme::utils::typography::small_text_size())
-                                .style(iced::theme::Text::Color(iced::Color::from_rgb(
-                                    0.7, 0.7, 0.7
-                                ))),
+                                .size(crate::ui::theme::utils::typography::small_text_size()),
                         ]
-                        .align_items(Alignment::Center),
+                        .align_x(Alignment::Center),
                     )
                     .width(Length::Fill)
                     .height(Length::Fill)
-                    .center_x()
-                    .center_y()
+                    .center_x(Length::Fill)
+                    .center_y(Length::Fill)
                     .into()
                 } else {
                     // Not authenticated - show locked state
                     column![
                         text("Database is locked")
-                            .size(crate::ui::theme::utils::typography::medium_text_size())
-                            .style(iced::theme::Text::Color(iced::Color::from_rgb(
-                                0.5, 0.5, 0.5
-                            ))),
+                            .size(crate::ui::theme::utils::typography::medium_text_size()),
                         text("Please unlock it first to view credentials.")
-                            .size(crate::ui::theme::utils::typography::normal_text_size())
-                            .style(iced::theme::Text::Color(iced::Color::from_rgb(
-                                0.7, 0.7, 0.7
-                            ))),
+                            .size(crate::ui::theme::utils::typography::normal_text_size()),
                     ]
-                    .align_items(Alignment::Center)
+                    .align_x(Alignment::Center)
                     .into()
                 }
             } else {
@@ -562,22 +517,16 @@ impl MainView {
                     column![
                         Space::with_height(Length::Fixed(50.0)),
                         text("No credentials found")
-                            .size(crate::ui::theme::utils::typography::medium_text_size())
-                            .style(iced::theme::Text::Color(iced::Color::from_rgb(
-                                0.5, 0.5, 0.5
-                            ))),
+                            .size(crate::ui::theme::utils::typography::medium_text_size()),
                         text("Try adjusting your search terms")
-                            .size(crate::ui::theme::utils::typography::normal_text_size())
-                            .style(iced::theme::Text::Color(iced::Color::from_rgb(
-                                0.7, 0.7, 0.7
-                            ))),
+                            .size(crate::ui::theme::utils::typography::normal_text_size()),
                     ]
-                    .align_items(Alignment::Center),
+                    .align_x(Alignment::Center),
                 )
                 .width(Length::Fill)
                 .height(Length::Fill)
-                .center_x()
-                .center_y()
+                .center_x(Length::Fill)
+                .center_y(Length::Fill)
                 .into()
             };
         }
@@ -598,20 +547,14 @@ impl MainView {
     }
 
     /// Render a single credential item
-    fn view_credential_item(&self, credential: &CredentialItem) -> Element<'_, MainViewMessage> {
+    fn view_credential_item<'a>(
+        &'a self,
+        credential: &'a CredentialItem,
+    ) -> Element<'a, MainViewMessage> {
         let is_selected = self.selected_credential.as_ref() == Some(&credential.id);
 
-        let background_color = if is_selected {
-            iced::Color::from_rgba(0.514, 0.220, 0.925, 0.1) // Light purple tint
-        } else {
-            iced::Color::WHITE
-        };
-
-        let border_color = if is_selected {
-            theme::LOGO_PURPLE
-        } else {
-            EXTRA_LIGHT_GRAY
-        };
+        // Visual feedback for selected state (currently unused but kept for future styling)
+        let _is_selected = is_selected;
 
         button(
             row![
@@ -625,14 +568,12 @@ impl MainView {
                 {
                     let mut content_elements = vec![text(&credential.title)
                         .size(crate::ui::theme::utils::typography::medium_text_size())
-                        .style(iced::theme::Text::Color(theme::DARK_TEXT))
                         .into()];
 
                     if let Some(url) = &credential.url {
                         content_elements.push(
                             text(url)
                                 .size(crate::ui::theme::utils::typography::small_text_size())
-                                .style(iced::theme::Text::Color(theme::LIGHT_GRAY_TEXT))
                                 .into(),
                         );
                     }
@@ -645,21 +586,16 @@ impl MainView {
                         }),
                     )
                     .width(Length::Fill)
-                    .center_y()
+                    .align_x(iced::alignment::Horizontal::Left)
                 }
             ]
             .spacing(12)
             .padding(15)
-            .align_items(Alignment::Center),
+            .align_y(Alignment::Center),
         )
         .on_press(MainViewMessage::EditCredential(credential.id.clone()))
         .width(Length::Fill)
-        .style(iced::theme::Button::Custom(Box::new(
-            CredentialItemButtonStyle {
-                background_color,
-                border_color,
-            },
-        )))
+        .style(theme::button_styles::credential_list_item())
         .into()
     }
 
@@ -741,7 +677,7 @@ impl MainView {
     fn handle_potential_session_timeout(
         &mut self,
         error_msg: &str,
-    ) -> Option<Command<MainViewMessage>> {
+    ) -> Option<Task<MainViewMessage>> {
         if error_msg.contains("session")
             && (error_msg.contains("timeout") || error_msg.contains("expired"))
         {
@@ -751,9 +687,7 @@ impl MainView {
             self.credentials.clear();
             // Session timeout handling is now done at the application level
             // Return command to trigger session timeout handling
-            Some(Command::perform(async {}, |_| {
-                MainViewMessage::SessionTimeout
-            }))
+            Some(Task::perform(async {}, |_| MainViewMessage::SessionTimeout))
         } else {
             None
         }
@@ -857,61 +791,6 @@ impl MainView {
                 tracing::error!("Failed to close repository: {}", e);
                 Err(format!("Failed to close repository: {}", e))
             }
-        }
-    }
-}
-
-/// Custom container style for credential items
-struct CredentialItemButtonStyle {
-    background_color: iced::Color,
-    border_color: iced::Color,
-}
-
-impl button::StyleSheet for CredentialItemButtonStyle {
-    type Style = iced::Theme;
-
-    fn active(&self, _style: &Self::Style) -> button::Appearance {
-        button::Appearance {
-            background: Some(iced::Background::Color(self.background_color)),
-            border: iced::Border {
-                color: self.border_color,
-                width: 1.0,
-                radius: iced::border::Radius::from(theme::utils::border_radius()),
-            },
-            text_color: theme::DARK_TEXT,
-            ..Default::default()
-        }
-    }
-
-    fn hovered(&self, _style: &Self::Style) -> button::Appearance {
-        button::Appearance {
-            background: Some(iced::Background::Color(iced::Color::from_rgba(
-                0.514, 0.220, 0.925, 0.05,
-            ))),
-            border: iced::Border {
-                color: theme::LOGO_PURPLE,
-                width: 1.0,
-                radius: iced::border::Radius::from(theme::utils::border_radius()),
-            },
-            text_color: theme::DARK_TEXT,
-            ..Default::default()
-        }
-    }
-
-    fn pressed(&self, style: &Self::Style) -> button::Appearance {
-        self.hovered(style)
-    }
-
-    fn disabled(&self, _style: &Self::Style) -> button::Appearance {
-        button::Appearance {
-            background: Some(iced::Background::Color(VERY_LIGHT_GRAY)),
-            border: iced::Border {
-                color: EXTRA_LIGHT_GRAY,
-                width: 1.0,
-                radius: iced::border::Radius::from(theme::utils::border_radius()),
-            },
-            text_color: LIGHT_GRAY_TEXT,
-            ..Default::default()
         }
     }
 }

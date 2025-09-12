@@ -8,5 +8,5 @@ pub mod theme;
 pub mod views;
 
 // Re-export only used UI components
-pub use theme::{button_styles, create_ziplock_theme, progress_bar_styles, utils};
+pub use theme::{create_ziplock_theme, utils};
 // Views are imported directly from their modules, so no re-exports needed

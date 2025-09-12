@@ -7,14 +7,16 @@ use iced::{
     widget::{
         button, column, container, progress_bar, row, scrollable, svg, text, text_input, Space,
     },
-    Alignment, Color, Command, Element, Length,
+    Alignment, Color, Element, Length, Task,
 };
 use rfd::AsyncFileDialog;
 use std::path::PathBuf;
 use tracing::{debug, error, info, warn};
 
-use crate::ui::theme::{utils, LIGHT_GRAY_TEXT, MEDIUM_GRAY, WARNING_YELLOW};
-use crate::ui::{button_styles, progress_bar_styles, theme};
+use crate::ui::{
+    components::button as btn,
+    theme::{self, utils, WARNING_YELLOW},
+};
 use ziplock_shared::{PasswordAnalyzer, PasswordStrength};
 
 /// Helper function to get theme color for strength level
@@ -130,12 +132,12 @@ impl RepositoryWizard {
     }
 
     /// Update wizard state based on message
-    pub fn update(&mut self, message: WizardMessage) -> Command<WizardMessage> {
+    pub fn update(&mut self, message: WizardMessage) -> Task<WizardMessage> {
         match message {
             WizardMessage::StartWizard => {
                 debug!("Starting repository wizard");
                 self.advance_step();
-                Command::none()
+                Task::none()
             }
 
             WizardMessage::NextStep => {
@@ -151,25 +153,25 @@ impl RepositoryWizard {
                     WizardStep::PassphraseSetup => {
                         text_input::focus(text_input::Id::new("master_passphrase"))
                     }
-                    _ => Command::none(),
+                    _ => Task::none(),
                 }
             }
 
             WizardMessage::PreviousStep => {
                 self.previous_step();
-                Command::none()
+                Task::none()
             }
 
             WizardMessage::Cancel => {
                 debug!("Wizard cancelled by user");
                 // Mark as cancelled
                 self.cancelled = true;
-                Command::none()
+                Task::none()
             }
 
             WizardMessage::SelectDirectory => {
                 self.is_loading = true;
-                Command::perform(
+                Task::perform(
                     Self::select_directory_async(),
                     WizardMessage::DirectorySelected,
                 )
@@ -183,7 +185,7 @@ impl RepositoryWizard {
                     info!("Directory selected: {:?}", dir);
                 }
                 self.update_can_proceed();
-                Command::none()
+                Task::none()
             }
 
             WizardMessage::DirectoryPathChanged(path) => {
@@ -195,30 +197,31 @@ impl RepositoryWizard {
                     self.selected_directory = None;
                 }
                 self.update_can_proceed();
-                Command::none()
+                Task::none()
             }
 
             WizardMessage::RepositoryNameChanged(name) => {
                 self.repository_name = name;
                 self.update_can_proceed();
-                Command::none()
+                Task::none()
             }
 
             WizardMessage::PassphraseChanged(passphrase) => {
                 self.passphrase = passphrase;
                 self.update_can_proceed();
-                Command::none()
+                Task::none()
             }
 
             WizardMessage::ConfirmPassphraseChanged(confirm) => {
+                debug!("Confirm passphrase changed (length: {})", confirm.len());
                 self.confirm_passphrase = confirm;
                 self.update_can_proceed();
-                Command::none()
+                Task::none()
             }
 
             WizardMessage::TogglePassphraseVisibility => {
                 self.show_passphrase = !self.show_passphrase;
-                Command::none()
+                Task::none()
             }
 
             WizardMessage::FocusNextField => {
@@ -230,7 +233,7 @@ impl RepositoryWizard {
                 if self.can_create_repository() {
                     self.current_step = WizardStep::Creating;
                     self.creation_progress = 0.0;
-                    Command::perform(
+                    Task::perform(
                         Self::create_repository_async(
                             self.selected_directory.as_ref().unwrap().clone(),
                             self.repository_name.clone(),
@@ -240,13 +243,13 @@ impl RepositoryWizard {
                     )
                 } else {
                     warn!("Attempted to create repository with invalid settings");
-                    Command::none()
+                    Task::none()
                 }
             }
 
             WizardMessage::CreationProgress(progress) => {
                 self.creation_progress = progress;
-                Command::none()
+                Task::none()
             }
 
             WizardMessage::CreationComplete(result) => {
@@ -262,13 +265,13 @@ impl RepositoryWizard {
                         // Stay on creation step to show error
                     }
                 }
-                Command::none()
+                Task::none()
             }
 
             WizardMessage::Finish => {
                 info!("Wizard completed successfully");
                 // This should trigger the parent to close the wizard
-                Command::none()
+                Task::none()
             }
         }
     }
@@ -298,7 +301,7 @@ impl RepositoryWizard {
                 .max_width(600),
             )
             .width(Length::Fill)
-            .center_x(),
+            .center_x(Length::Fill),
             Space::with_height(Length::Fixed(40.0)), // Bottom padding for centering effect
         ])
         .width(Length::Fill)
@@ -335,7 +338,7 @@ impl RepositoryWizard {
                 text("ZipLock Repository Setup")
                     .size(crate::ui::theme::utils::typography::extra_large_text_size()),
             ]
-            .align_items(Alignment::Center),
+            .align_y(Alignment::Center),
             Space::with_height(Length::Fixed(10.0)),
             progress_bar(0.0..=1.0, progress).height(Length::Fixed(4.0)),
             Space::with_height(Length::Fixed(10.0)),
@@ -362,7 +365,7 @@ impl RepositoryWizard {
             text("You can store this file anywhere - on your computer, in cloud storage, or on a USB drive.")
                 .size(crate::ui::theme::utils::typography::normal_text_size()),
         ]
-        .align_items(Alignment::Center)
+        .align_x(Alignment::Center)
         .into()
     }
 
@@ -381,15 +384,12 @@ impl RepositoryWizard {
                     .id(text_input::Id::new("directory_path"))
                     .on_submit(WizardMessage::NextStep)
                     .padding(theme::utils::text_input_padding())
-                    .style(theme::text_input_styles::standard())
-                    .size(crate::ui::theme::utils::typography::text_input_size()),
-                button("Browse...")
-                    .on_press(WizardMessage::SelectDirectory)
-                    .padding(utils::button_padding())
-                    .style(button_styles::secondary()),
+                    .size(crate::ui::theme::utils::typography::text_input_size())
+                    .style(theme::text_input_styles::standard()),
+                btn::presets::browse_button(Some(WizardMessage::SelectDirectory)),
             ]
             .spacing(10)
-            .align_items(Alignment::Center),
+            .align_y(Alignment::Center),
 
             Space::with_height(Length::Fixed(10.0)),
 
@@ -412,7 +412,7 @@ impl RepositoryWizard {
                 .size(crate::ui::theme::utils::typography::small_text_size())
                 ,
         ]
-        .align_items(Alignment::Start)
+        .align_x(Alignment::Start)
         .into()
     }
 
@@ -431,8 +431,8 @@ impl RepositoryWizard {
                     .id(text_input::Id::new("repository_name"))
                     .on_submit(WizardMessage::NextStep)
                     .padding(theme::utils::text_input_padding())
-                    .style(theme::text_input_styles::standard())
-                    .size(crate::ui::theme::utils::typography::text_input_size()),
+                    .size(crate::ui::theme::utils::typography::text_input_size())
+                    .style(theme::text_input_styles::standard()),
             ]
             .spacing(5),
             Space::with_height(Length::Fixed(20.0)),
@@ -448,7 +448,7 @@ impl RepositoryWizard {
                 column![]
             },
         ]
-        .align_items(Alignment::Start)
+        .align_x(Alignment::Start)
         .into()
     }
 
@@ -475,8 +475,8 @@ impl RepositoryWizard {
                     .secure(!self.show_passphrase)
                     .width(Length::Fill)
                     .padding(theme::utils::text_input_padding())
-                    .style(self.get_passphrase_style())
                     .size(crate::ui::theme::utils::typography::text_input_size())
+                    .style(theme::text_input_styles::standard())
                     .id(text_input::Id::new("master_passphrase"))
                     .on_submit(WizardMessage::FocusNextField),
 
@@ -485,14 +485,14 @@ impl RepositoryWizard {
                 row![
                     text(format!("Strength: {:?}", passphrase_analysis.strength))
                         .size(crate::ui::theme::utils::typography::small_text_size())
-                        .style(iced::theme::Text::Color(get_strength_color(&passphrase_analysis.strength))),
+                        .color(get_strength_color(&passphrase_analysis.strength)),
                     Space::with_width(Length::Fill),
-                    utils::password_visibility_toggle(
+                    theme::utils::password_visibility_toggle(
                         self.show_passphrase,
-                        WizardMessage::TogglePassphraseVisibility,
+                        WizardMessage::TogglePassphraseVisibility
                     ),
                 ]
-                .align_items(Alignment::Center),
+                .align_y(Alignment::Center),
             ]
             .spacing(5),
 
@@ -506,8 +506,8 @@ impl RepositoryWizard {
                     .secure(!self.show_passphrase)
                     .width(Length::Fill)
                     .padding(theme::utils::text_input_padding())
-                    .style(self.get_confirm_passphrase_style())
                     .size(crate::ui::theme::utils::typography::text_input_size())
+                    .style(theme::text_input_styles::standard())
                     .id(text_input::Id::new("confirm_passphrase"))
                     .on_submit(WizardMessage::CreateRepository),
 
@@ -517,9 +517,11 @@ impl RepositoryWizard {
                     if passphrases_match {
                         text("✓ Passphrases match")
                             .size(crate::ui::theme::utils::typography::small_text_size())
+                            .color(theme::SUCCESS_GREEN)
                     } else {
                         text("✗ Passphrases do not match")
                             .size(crate::ui::theme::utils::typography::small_text_size())
+                            .color(theme::ERROR_RED)
                     }
                 } else {
                     text("")
@@ -532,7 +534,7 @@ impl RepositoryWizard {
             // Passphrase requirements and validation feedback
             if !self.passphrase.is_empty() {
                 column![
-                    text("Passphrase Requirements:").size(crate::ui::theme::utils::typography::small_text_size()).style(iced::theme::Text::Color(MEDIUM_GRAY)),
+                    text("Passphrase Requirements:").size(crate::ui::theme::utils::typography::small_text_size()),
                     Space::with_height(Length::Fixed(5.0)),
 
                     // Show feedback if any
@@ -540,15 +542,17 @@ impl RepositoryWizard {
                         column(
                             passphrase_analysis.feedback
                                 .iter()
+                                .cloned()
                                 .map(|feedback_msg| {
                                     row![
-                                        text("ℹ").style(iced::theme::Text::Color(WARNING_YELLOW)),
+                                        text("ℹ"),
                                         Space::with_width(Length::Fixed(5.0)),
-                                        text(feedback_msg).size(crate::ui::theme::utils::typography::small_text_size()).style(iced::theme::Text::Color(LIGHT_GRAY_TEXT))
+                                        text(feedback_msg).size(crate::ui::theme::utils::typography::small_text_size())
                                     ].into()
                                 })
-                                .collect::<Vec<Element<WizardMessage>>>()
-                        ).spacing(3)
+                                .collect::<Vec<_>>()
+                        )
+                        .spacing(2)
                     } else {
                         column![]
                     },
@@ -556,24 +560,22 @@ impl RepositoryWizard {
                     // Show score and entropy info
                     row![
                         text(format!("Score: {}/100", passphrase_analysis.score))
-                            .size(crate::ui::theme::utils::typography::small_text_size())
-                            .style(iced::theme::Text::Color(MEDIUM_GRAY)),
+                            .size(crate::ui::theme::utils::typography::small_text_size()),
                         Space::with_width(Length::Fixed(10.0)),
                         text(format!("Entropy: {:.1} bits", passphrase_analysis.entropy))
                             .size(crate::ui::theme::utils::typography::small_text_size())
-                            .style(iced::theme::Text::Color(MEDIUM_GRAY))
-                    ].align_items(Alignment::Center),
+                    ].align_y(Alignment::Center),
                 ]
                 .spacing(8)
             } else {
                 column![
-                    text("Passphrase Requirements:").size(crate::ui::theme::utils::typography::small_text_size()).style(iced::theme::Text::Color(MEDIUM_GRAY)),
+                    text("Passphrase Requirements:").size(crate::ui::theme::utils::typography::small_text_size()),
                     Space::with_height(Length::Fixed(5.0)),
-                    text("• At least 12 characters long").size(crate::ui::theme::utils::typography::small_text_size()).style(iced::theme::Text::Color(LIGHT_GRAY_TEXT)),
-                    text("• Contains uppercase letters").size(crate::ui::theme::utils::typography::small_text_size()).style(iced::theme::Text::Color(LIGHT_GRAY_TEXT)),
-                    text("• Contains lowercase letters").size(crate::ui::theme::utils::typography::small_text_size()).style(iced::theme::Text::Color(LIGHT_GRAY_TEXT)),
-                    text("• Contains numbers").size(crate::ui::theme::utils::typography::small_text_size()).style(iced::theme::Text::Color(LIGHT_GRAY_TEXT)),
-                    text("• Contains special characters").size(crate::ui::theme::utils::typography::small_text_size()).style(iced::theme::Text::Color(LIGHT_GRAY_TEXT)),
+                    text("• At least 12 characters long").size(crate::ui::theme::utils::typography::small_text_size()),
+                    text("• Contains uppercase letters").size(crate::ui::theme::utils::typography::small_text_size()),
+                    text("• Contains lowercase letters").size(crate::ui::theme::utils::typography::small_text_size()),
+                    text("• Contains numbers").size(crate::ui::theme::utils::typography::small_text_size()),
+                    text("• Contains special characters").size(crate::ui::theme::utils::typography::small_text_size()),
                 ]
                 .spacing(3)
             },
@@ -583,7 +585,7 @@ impl RepositoryWizard {
             text("⚠️ Important: There is no way to recover your repository if you forget your master passphrase. Write it down and keep it safe!")
                 .size(crate::ui::theme::utils::typography::small_text_size()),
         ]
-        .align_items(Alignment::Start)
+        .align_x(Alignment::Center)
         .into()
     }
 
@@ -597,34 +599,25 @@ impl RepositoryWizard {
                 container(
                     column![
                         text("❌ Creation Failed")
-                            .size(crate::ui::theme::utils::typography::medium_text_size())
-                            .style(iced::theme::Text::Color(theme::ERROR_RED)),
+                            .size(crate::ui::theme::utils::typography::medium_text_size()),
                         Space::with_height(Length::Fixed(8.0)),
-                        text(error)
-                            .size(crate::ui::theme::utils::typography::small_text_size())
-                            .style(iced::theme::Text::Color(theme::DARK_TEXT)),
+                        text(error).size(crate::ui::theme::utils::typography::small_text_size()),
                     ]
                     .spacing(4)
                 )
                 .padding(utils::error_container_padding())
-                .width(Length::Fill)
-                .style(crate::ui::theme::container_styles::error_alert()),
+                .width(Length::Fill),
                 Space::with_height(Length::Fixed(20.0)),
-                button("Try Again")
-                    .on_press(WizardMessage::CreateRepository)
-                    .padding(utils::standard_button_padding())
-                    .style(button_styles::primary()),
+                btn::presets::try_again_button(Some(WizardMessage::CreateRepository)),
             ]
-            .align_items(Alignment::Center)
+            .align_x(Alignment::Center)
             .into()
         } else {
             column![
                 text("Creating Repository...")
                     .size(crate::ui::theme::utils::typography::large_text_size()),
                 Space::with_height(Length::Fixed(30.0)),
-                progress_bar(0.0..=1.0, self.creation_progress)
-                    .height(Length::Fixed(20.0))
-                    .style(progress_bar_styles::primary()),
+                progress_bar(0.0..=1.0, self.creation_progress).height(Length::Fixed(20.0)),
                 Space::with_height(Length::Fixed(10.0)),
                 text(format!("{}%", (self.creation_progress * 100.0) as u32))
                     .size(crate::ui::theme::utils::typography::normal_text_size()),
@@ -632,7 +625,7 @@ impl RepositoryWizard {
                 text("Setting up encrypted archive structure...")
                     .size(crate::ui::theme::utils::typography::small_text_size()),
             ]
-            .align_items(Alignment::Center)
+            .align_x(Alignment::Center)
             .into()
         }
     }
@@ -662,11 +655,9 @@ impl RepositoryWizard {
 
             Space::with_height(Length::Fixed(20.0)),
 
-            button("Start Using ZipLock")
-                .on_press(WizardMessage::Finish)
-                .padding(utils::completion_button_padding()),
+            btn::presets::start_using_button(Some(WizardMessage::Finish)),
         ]
-        .align_items(Alignment::Center)
+        .align_x(Alignment::Center)
         .into()
     }
 
@@ -686,15 +677,9 @@ impl RepositoryWizard {
 
         row![
             if can_go_back {
-                button("Back")
-                    .on_press(WizardMessage::PreviousStep)
-                    .padding(utils::button_padding())
-                    .style(button_styles::secondary())
+                btn::presets::back_button(Some(WizardMessage::PreviousStep))
             } else {
-                button("Cancel")
-                    .on_press(WizardMessage::Cancel)
-                    .padding(utils::button_padding())
-                    .style(button_styles::destructive())
+                btn::presets::cancel_button(Some(WizardMessage::Cancel))
             },
             Space::with_width(Length::Fill),
             if show_next_button {
@@ -709,7 +694,7 @@ impl RepositoryWizard {
                 Space::with_width(Length::Shrink).into()
             }
         ]
-        .align_items(Alignment::Center)
+        .align_y(Alignment::Center)
         .into()
     }
 
@@ -858,53 +843,25 @@ impl RepositoryWizard {
     /// Helper function to create next button with proper typing
     fn create_next_button<'a>(&self, label: &'a str, enabled: bool) -> Element<'a, WizardMessage> {
         if enabled {
-            button(label)
-                .padding(utils::button_padding())
-                .style(button_styles::primary())
-                .on_press(if self.current_step == WizardStep::PassphraseSetup {
-                    WizardMessage::CreateRepository
-                } else {
-                    WizardMessage::NextStep
-                })
-                .into()
-        } else {
-            button(label)
-                .padding(utils::button_padding())
-                .style(button_styles::disabled())
-                .into()
-        }
-    }
-
-    /// Get the style for the passphrase field
-    fn get_passphrase_style(&self) -> iced::theme::TextInput {
-        if self.passphrase.is_empty() {
-            theme::text_input_styles::standard()
-        } else {
-            let analysis = PasswordAnalyzer::analyze(&self.passphrase);
-            if matches!(
-                analysis.strength,
-                PasswordStrength::Good | PasswordStrength::Strong | PasswordStrength::VeryStrong
-            ) {
-                // Green border for strong passphrase
-                theme::text_input_styles::valid()
-            } else {
-                // Red border for weak passphrase
-                theme::text_input_styles::invalid()
+            match label {
+                "Get Started" => btn::presets::get_started_button(Some(WizardMessage::NextStep)),
+                "Create Repository" => {
+                    btn::presets::create_repository_button(Some(WizardMessage::CreateRepository))
+                }
+                _ => btn::presets::next_button(Some(
+                    if self.current_step == WizardStep::PassphraseSetup {
+                        WizardMessage::CreateRepository
+                    } else {
+                        WizardMessage::NextStep
+                    },
+                )),
             }
-        }
-    }
-
-    /// Get the style for the confirm passphrase field
-    fn get_confirm_passphrase_style(&self) -> iced::theme::TextInput {
-        if self.confirm_passphrase.is_empty() {
-            theme::text_input_styles::standard()
-        } else if !self.confirm_passphrase.is_empty() && self.passphrase == self.confirm_passphrase
-        {
-            // Green border when passphrases match
-            theme::text_input_styles::valid()
         } else {
-            // Red border when passphrases don't match
-            theme::text_input_styles::invalid()
+            match label {
+                "Get Started" => btn::presets::get_started_button(None),
+                "Create Repository" => btn::presets::create_repository_button(None),
+                _ => btn::presets::next_button(None),
+            }
         }
     }
 }

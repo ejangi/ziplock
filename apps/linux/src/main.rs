@@ -3,9 +3,12 @@
 //! This is the Linux desktop app for ZipLock, built with the Iced GUI framework.
 //! It provides a native Linux interface for managing encrypted password archives.
 
-use iced::{widget::svg, Application, Command, Element, Settings, Theme};
+use iced::{
+    widget::{button, svg, text},
+    Element, Task, Theme,
+};
 use tracing::{debug, error, info, warn};
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+
 // Import removed - these types are used in the actual code through other paths
 
 mod config;
@@ -14,6 +17,8 @@ mod config;
 mod logging;
 mod services;
 mod ui;
+
+use ui::components::button::{destructive_button, primary_button, secondary_button};
 
 use services::{ClipboardManager, UpdateChecker};
 
@@ -148,13 +153,8 @@ pub struct ZipLockApp {
     clipboard_manager: ClipboardManager,
 }
 
-impl Application for ZipLockApp {
-    type Message = Message;
-    type Theme = Theme;
-    type Executor = iced::executor::Default;
-    type Flags = ();
-
-    fn new(_flags: ()) -> (Self, Command<Message>) {
+impl ZipLockApp {
+    pub fn new() -> (Self, Task<Message>) {
         info!("Initializing ZipLock Linux app with unified architecture");
 
         // Initialize shared library
@@ -173,13 +173,12 @@ impl Application for ZipLockApp {
             clipboard_manager: ClipboardManager::new(),
         };
 
-        let load_config_command =
-            Command::perform(Self::load_config_async(), Message::ConfigLoaded);
+        let load_config_task = Task::perform(Self::load_config_async(), Message::ConfigLoaded);
 
-        (app, load_config_command)
+        (app, load_config_task)
     }
 
-    fn title(&self) -> String {
+    pub fn title(&self) -> String {
         match &self.state {
             AppState::Loading => "ZipLock - Loading...".to_string(),
             AppState::DetectingRepositories => "ZipLock - Detecting Repositories...".to_string(),
@@ -197,15 +196,15 @@ impl Application for ZipLockApp {
         }
     }
 
-    fn update(&mut self, message: Message) -> Command<Message> {
+    pub fn update(&mut self, message: Message) -> Task<Message> {
         match message {
             Message::ConfigLoaded(error_message) => {
                 if error_message.is_empty() {
-                    Command::perform(async {}, |_| Message::ConfigReady)
+                    Task::perform(async {}, |_| Message::ConfigReady)
                 } else {
                     error!("Failed to load configuration: {}", error_message);
                     self.state = AppState::Error(format!("Configuration error: {}", error_message));
-                    Command::none()
+                    Task::none()
                 }
             }
 
@@ -220,16 +219,16 @@ impl Application for ZipLockApp {
                     info!("Configuration loaded successfully");
 
                     // Initialize typography with font size from config
-                    ui::theme::utils::typography::init_font_size(
-                        config_manager.config().ui.font_scale.unwrap_or(1.0),
-                    );
+                    let font_scale = config_manager.config().ui.font_scale.unwrap_or(1.0);
+                    ui::theme::utils::typography::init_font_size(font_scale);
+                    info!("Font scaling initialized with scale factor: {}", font_scale);
 
                     // Check if we should show the wizard immediately
                     if config_manager.should_show_wizard() {
                         debug!("No repositories found, showing setup wizard");
                         self.state = AppState::WizardRequired;
                         self.config_manager = Some(config_manager);
-                        return Command::none();
+                        return Task::none();
                     }
 
                     // Check for most recently used repository first
@@ -251,7 +250,7 @@ impl Application for ZipLockApp {
                             OpenRepositoryView::with_repository(most_recent_path.clone().into());
                         self.state = AppState::OpenRepositoryActive(open_view);
                         self.config_manager = Some(config_manager);
-                        return Command::none();
+                        return Task::none();
                     } else {
                         debug!("No recent accessible repository found");
                     }
@@ -262,10 +261,10 @@ impl Application for ZipLockApp {
                     let repositories = config_manager.detect_all_accessible_repositories();
                     self.config_manager = Some(config_manager);
 
-                    Command::perform(async move { repositories }, Message::RepositoriesDetected)
+                    Task::perform(async move { repositories }, Message::RepositoriesDetected)
                 } else {
                     self.state = AppState::Error("Failed to initialize configuration".to_string());
-                    Command::none()
+                    Task::none()
                 }
             }
 
@@ -287,7 +286,7 @@ impl Application for ZipLockApp {
                     debug!("Multiple repositories found, showing selection");
                     self.state = AppState::RepositorySelection(repositories);
                 }
-                Command::none()
+                Task::none()
             }
 
             Message::RepositoryValidated(result) => {
@@ -305,26 +304,28 @@ impl Application for ZipLockApp {
                         self.state = AppState::WizardRequired;
                     }
                 }
-                Command::none()
+                Task::none()
             }
 
             Message::ConfigSaved => {
                 debug!("Configuration saved");
-                Command::none()
+                Task::none()
             }
 
             Message::ShowWizard => {
                 debug!("Starting repository setup wizard");
                 let wizard = RepositoryWizard::new();
                 self.state = AppState::WizardActive(wizard);
-                Command::none()
+                Task::none()
             }
 
             Message::HideWizard => {
                 debug!("Hiding wizard, returning to main interface");
                 self.state = AppState::MainInterface(MainView::new());
                 // Try to connect to backend after wizard completion
-                Command::perform(Self::connect_backend_async(), Message::BackendConnected)
+                Task::perform(Self::connect_backend_async(), |result| {
+                    Message::BackendConnected(result.map_err(|e| e.to_string()))
+                })
             }
 
             Message::Wizard(wizard_msg) => {
@@ -349,19 +350,16 @@ impl Application for ZipLockApp {
                             {
                                 Ok(()) => {
                                     info!("Repository path saved to configuration");
-                                    return Command::batch([
+                                    return Task::batch([
                                         command,
-                                        Command::perform(async {}, |_| Message::HideWizard),
+                                        Task::perform(async {}, |_| Message::HideWizard),
                                     ]);
                                 }
                                 Err(e) => {
                                     error!("Failed to save repository path: {}", e);
-                                    return Command::batch([
+                                    return Task::batch([
                                         command,
-                                        Command::perform(
-                                            async move { e.to_string() },
-                                            Message::Error,
-                                        ),
+                                        Task::perform(async move { e.to_string() }, Message::Error),
                                     ]);
                                 }
                             }
@@ -370,14 +368,14 @@ impl Application for ZipLockApp {
 
                     return command;
                 }
-                Command::none()
+                Task::none()
             }
 
             Message::ShowOpenRepository => {
                 debug!("Starting open repository dialog");
                 let open_view = OpenRepositoryView::new();
                 self.state = AppState::OpenRepositoryActive(open_view);
-                Command::none()
+                Task::none()
             }
 
             Message::HideOpenRepository => {
@@ -409,7 +407,7 @@ impl Application for ZipLockApp {
                     }
                 }
 
-                Command::none()
+                Task::none()
             }
 
             Message::OpenRepository(open_msg) => {
@@ -445,9 +443,9 @@ impl Application for ZipLockApp {
                             self.auto_lock_enabled = true;
                             self.last_activity = std::time::Instant::now();
                             // Trigger initial refresh to update authentication state
-                            return Command::batch([
+                            return Task::batch([
                                 command,
-                                Command::perform(async {}, |_| {
+                                Task::perform(async {}, |_| {
                                     Message::MainView(MainViewMessage::RefreshCredentials)
                                 }),
                             ]);
@@ -463,13 +461,13 @@ impl Application for ZipLockApp {
 
                     command
                 } else {
-                    Command::none()
+                    Task::none()
                 }
             }
 
             Message::CreateRepository => {
                 debug!("User requested to create new repository");
-                Command::perform(async {}, |_| Message::ShowWizard)
+                Task::perform(async {}, |_| Message::ShowWizard)
             }
 
             Message::BackendConnected(result) => {
@@ -483,38 +481,38 @@ impl Application for ZipLockApp {
                         // Continue anyway, some operations might still work
                     }
                 }
-                Command::none()
+                Task::none()
             }
 
             Message::Error(error) => {
                 error!("Application error: {}", error);
                 self.state = AppState::Error(error);
-                Command::none()
+                Task::none()
             }
 
             Message::ShowAlert(alert) => {
                 self.current_alert = Some(alert);
-                Command::none()
+                Task::none()
             }
 
             Message::DismissAlert => {
                 self.current_alert = None;
-                Command::none()
+                Task::none()
             }
 
             Message::ShowToast(alert) => {
                 self.toast_manager.add_toast(alert);
-                Command::none()
+                Task::none()
             }
 
             Message::DismissToast(toast_id) => {
                 self.toast_manager.remove_toast(toast_id);
-                Command::none()
+                Task::none()
             }
 
             Message::UpdateToasts => {
                 self.toast_manager.remove_expired_toasts();
-                Command::none()
+                Task::none()
             }
 
             Message::OperationResult(result) => {
@@ -525,12 +523,12 @@ impl Application for ZipLockApp {
                     Err(error_msg) => {
                         // Check if this is a session timeout error
                         if error_msg.contains("session") || error_msg.contains("timeout") {
-                            return Command::perform(async {}, |_| Message::SessionTimeout);
+                            return Task::perform(async {}, |_| Message::SessionTimeout);
                         }
                         self.toast_manager.error(error_msg);
                     }
                 }
-                Command::none()
+                Task::none()
             }
 
             Message::MainView(main_msg) => {
@@ -539,64 +537,61 @@ impl Application for ZipLockApp {
                         MainViewMessage::ShowError(error) => {
                             // Check if this is a session timeout error
                             if error.contains("session") || error.contains("timeout") {
-                                return Command::perform(async {}, |_| Message::SessionTimeout);
+                                return Task::perform(async {}, |_| Message::SessionTimeout);
                             }
                             self.toast_manager.error(error);
-                            Command::none()
+                            Task::none()
                         }
                         MainViewMessage::SessionTimeout => {
                             // Forward session timeout to main application handler
-                            Command::perform(async {}, |_| Message::SessionTimeout)
+                            Task::perform(async {}, |_| Message::SessionTimeout)
                         }
                         MainViewMessage::AddCredential => {
                             // Show add credential view
-                            Command::perform(async {}, |_| Message::ShowAddCredential)
+                            Task::perform(async {}, |_| Message::ShowAddCredential)
                         }
                         MainViewMessage::EditCredential(credential_id) => {
                             // Show edit credential view
-                            Command::perform(
-                                async move { credential_id },
-                                Message::ShowEditCredential,
-                            )
+                            Task::perform(async move { credential_id }, Message::ShowEditCredential)
                         }
                         MainViewMessage::ShowSettings => {
                             // Show settings view
-                            Command::perform(async {}, |_| Message::ShowSettings)
+                            Task::perform(async {}, |_| Message::ShowSettings)
                         }
                         MainViewMessage::CloseArchive => {
                             // Close archive and return to repository selection
-                            Command::perform(async {}, |_| Message::CloseArchive)
+                            Task::perform(async {}, |_| Message::CloseArchive)
                         }
                         MainViewMessage::CheckForUpdates => {
                             // Trigger update check
-                            Command::perform(async {}, |_| Message::CheckForUpdates)
+                            Task::perform(async {}, |_| Message::CheckForUpdates)
                         }
                         MainViewMessage::TriggerConnectionError => {
                             self.toast_manager.ipc_error(
                                 "Unable to connect to the ZipLock backend service. Please ensure the daemon is running."
                             );
-                            Command::none()
+                            Task::none()
                         }
                         MainViewMessage::TriggerAuthError => {
                             self.toast_manager.ipc_error(
                                 "Authentication failed. Please check your passphrase and try again."
                             );
-                            Command::none()
+                            Task::none()
                         }
                         MainViewMessage::TriggerValidationError => {
                             self.toast_manager.error(
                                 "Invalid data provided. Please check your input and try again.",
                             );
-                            Command::none()
+                            Task::none()
                         }
                         MainViewMessage::OperationCompleted(result) => {
                             // Forward operation results to main app for toast handling
-                            Command::perform(async move { result }, Message::OperationResult)
+                            Task::perform(async move { result }, Message::OperationResult)
                         }
                         _ => main_view.update(main_msg).map(Message::MainView),
                     }
                 } else {
-                    Command::none()
+                    Task::none()
                 }
             }
 
@@ -604,7 +599,7 @@ impl Application for ZipLockApp {
                 debug!("Showing add credential view");
                 let add_view = AddCredentialView::with_session(self.session_id.clone());
                 self.state = AppState::AddCredentialActive(add_view);
-                Command::none()
+                Task::none()
             }
 
             Message::HideAddCredential => {
@@ -614,20 +609,20 @@ impl Application for ZipLockApp {
                     main_view.set_session_id(Some(session_id.clone()));
                     self.state = AppState::MainInterface(main_view);
                     // Trigger refresh to reload credentials
-                    return Command::perform(async {}, |_| {
+                    return Task::perform(async {}, |_| {
                         Message::MainView(MainViewMessage::RefreshCredentials)
                     });
                 } else {
                     self.state = AppState::MainInterface(MainView::new());
                 }
-                Command::none()
+                Task::none()
             }
 
             Message::AddCredential(add_msg) => {
                 if let AppState::AddCredentialActive(add_view) = &mut self.state {
                     match add_msg {
                         AddCredentialMessage::Cancel => {
-                            return Command::perform(async {}, |_| Message::HideAddCredential);
+                            return Task::perform(async {}, |_| Message::HideAddCredential);
                         }
                         AddCredentialMessage::ShowError(ref error) => {
                             self.toast_manager.error(error.clone());
@@ -637,9 +632,9 @@ impl Application for ZipLockApp {
                         AddCredentialMessage::ShowSuccess(ref success) => {
                             self.toast_manager.success(success.clone());
                             let command = add_view.update(add_msg).map(Message::AddCredential);
-                            return Command::batch([
+                            return Task::batch([
                                 command,
-                                Command::perform(async {}, |_| Message::HideAddCredential),
+                                Task::perform(async {}, |_| Message::HideAddCredential),
                             ]);
                         }
                         AddCredentialMessage::ShowValidationError(ref error) => {
@@ -652,7 +647,7 @@ impl Application for ZipLockApp {
                             content_type,
                         } => {
                             // Forward clipboard operations to main app
-                            return Command::perform(
+                            return Task::perform(
                                 async move { (content, content_type) },
                                 |(content, content_type)| Message::CopyToClipboard {
                                     content,
@@ -665,9 +660,9 @@ impl Application for ZipLockApp {
 
                             // Check if add credential completed
                             if add_view.is_complete() {
-                                return Command::batch([
+                                return Task::batch([
                                     command,
-                                    Command::perform(async {}, |_| Message::HideAddCredential),
+                                    Task::perform(async {}, |_| Message::HideAddCredential),
                                 ]);
                             }
 
@@ -675,7 +670,7 @@ impl Application for ZipLockApp {
                         }
                     }
                 }
-                Command::none()
+                Task::none()
             }
 
             Message::ShowEditCredential(credential_id) => {
@@ -684,7 +679,7 @@ impl Application for ZipLockApp {
                     EditCredentialView::with_session(credential_id, self.session_id.clone());
                 self.state = AppState::EditCredentialActive(edit_view);
                 // Load the credential data
-                Command::perform(async {}, |_| {
+                Task::perform(async {}, |_| {
                     Message::EditCredential(EditCredentialMessage::LoadCredential)
                 })
             }
@@ -696,20 +691,20 @@ impl Application for ZipLockApp {
                     main_view.set_session_id(Some(session_id.clone()));
                     self.state = AppState::MainInterface(main_view);
                     // Trigger refresh to reload credentials
-                    return Command::perform(async {}, |_| {
+                    return Task::perform(async {}, |_| {
                         Message::MainView(MainViewMessage::RefreshCredentials)
                     });
                 } else {
                     self.state = AppState::MainInterface(MainView::new());
                 }
-                Command::none()
+                Task::none()
             }
 
             Message::EditCredential(edit_msg) => {
                 if let AppState::EditCredentialActive(edit_view) = &mut self.state {
                     match edit_msg {
                         EditCredentialMessage::Cancel => {
-                            return Command::perform(async {}, |_| Message::HideEditCredential);
+                            return Task::perform(async {}, |_| Message::HideEditCredential);
                         }
                         EditCredentialMessage::ShowError(ref error) => {
                             self.toast_manager.error(error.clone());
@@ -719,9 +714,9 @@ impl Application for ZipLockApp {
                         EditCredentialMessage::ShowSuccess(ref success) => {
                             self.toast_manager.success(success.clone());
                             let command = edit_view.update(edit_msg).map(Message::EditCredential);
-                            return Command::batch([
+                            return Task::batch([
                                 command,
-                                Command::perform(async {}, |_| Message::HideEditCredential),
+                                Task::perform(async {}, |_| Message::HideEditCredential),
                             ]);
                         }
                         EditCredentialMessage::ShowValidationError(ref error) => {
@@ -734,7 +729,7 @@ impl Application for ZipLockApp {
                             content_type,
                         } => {
                             // Forward clipboard operations to main app
-                            return Command::perform(
+                            return Task::perform(
                                 async move { (content, content_type) },
                                 |(content, content_type)| Message::CopyToClipboard {
                                     content,
@@ -747,9 +742,9 @@ impl Application for ZipLockApp {
 
                             // Check if edit credential completed
                             if edit_view.is_complete() {
-                                return Command::batch([
+                                return Task::batch([
                                     command,
-                                    Command::perform(async {}, |_| Message::HideEditCredential),
+                                    Task::perform(async {}, |_| Message::HideEditCredential),
                                 ]);
                             }
 
@@ -757,7 +752,7 @@ impl Application for ZipLockApp {
                         }
                     }
                 }
-                Command::none()
+                Task::none()
             }
 
             Message::ShowSettings => {
@@ -769,7 +764,7 @@ impl Application for ZipLockApp {
                     self.toast_manager
                         .error("Configuration not available".to_string());
                 }
-                Command::none()
+                Task::none()
             }
 
             Message::HideSettings => {
@@ -779,20 +774,20 @@ impl Application for ZipLockApp {
                     main_view.set_session_id(Some(session_id.clone()));
                     self.state = AppState::MainInterface(main_view);
                     // Trigger refresh to reload credentials
-                    return Command::perform(async {}, |_| {
+                    return Task::perform(async {}, |_| {
                         Message::MainView(MainViewMessage::RefreshCredentials)
                     });
                 } else {
                     self.state = AppState::MainInterface(MainView::new());
                 }
-                Command::none()
+                Task::none()
             }
 
             Message::Settings(settings_msg) => {
                 if let AppState::SettingsActive(settings_view) = &mut self.state {
                     match &settings_msg {
                         SettingsMessage::Cancel => {
-                            return Command::perform(async {}, |_| Message::HideSettings);
+                            return Task::perform(async {}, |_| Message::HideSettings);
                         }
                         SettingsMessage::Save => {
                             // Handle settings save
@@ -812,7 +807,7 @@ impl Application for ZipLockApp {
                                         Ok(_) => {
                                             self.toast_manager
                                                 .success("Settings saved successfully".to_string());
-                                            return Command::perform(async {}, |_| {
+                                            return Task::perform(async {}, |_| {
                                                 Message::HideSettings
                                             });
                                         }
@@ -837,7 +832,7 @@ impl Application for ZipLockApp {
                         }
                     }
                 }
-                Command::none()
+                Task::none()
             }
 
             Message::SessionTimeout => {
@@ -852,7 +847,7 @@ impl Application for ZipLockApp {
                         // Try to detect repositories again
                         if let Some(config_manager) = &self.config_manager {
                             let repositories = config_manager.detect_all_accessible_repositories();
-                            return Command::perform(
+                            return Task::perform(
                                 async move { repositories },
                                 Message::RepositoriesDetected,
                             );
@@ -869,7 +864,7 @@ impl Application for ZipLockApp {
                 // Reset auto-lock timer when session times out
                 self.last_activity = std::time::Instant::now();
                 self.auto_lock_enabled = false;
-                Command::none()
+                Task::none()
             }
 
             Message::AutoLockTimerTick => {
@@ -884,25 +879,25 @@ impl Application for ZipLockApp {
                             if self.last_activity.elapsed() >= timeout_duration {
                                 info!("Auto-lock timeout reached, locking application");
                                 // Trigger session timeout to lock the application
-                                return Command::perform(async {}, |_| Message::SessionTimeout);
+                                return Task::perform(async {}, |_| Message::SessionTimeout);
                             }
                         }
                     }
                 }
-                Command::none()
+                Task::none()
             }
 
             Message::UserActivity => {
                 // Reset the activity timer
                 self.last_activity = std::time::Instant::now();
-                Command::none()
+                Task::none()
             }
 
             Message::CheckForUpdates => {
                 info!("Manual update check requested");
                 // Clone the update checker to avoid borrowing issues
                 let mut update_checker = self.update_checker.clone();
-                Command::perform(
+                Task::perform(
                     async move { update_checker.check_for_updates().await },
                     |result| Message::UpdateCheckResult(result.map_err(|e| e.to_string())),
                 )
@@ -919,26 +914,26 @@ impl Application for ZipLockApp {
                                 .unwrap_or(&"unknown".to_string())
                         );
 
-                        Command::perform(async move { update_result }, Message::ShowUpdateDialog)
+                        Task::perform(async move { update_result }, Message::ShowUpdateDialog)
                     } else {
                         info!("No updates available");
                         self.toast_manager
                             .success("You are running the latest version of ZipLock!");
-                        Command::none()
+                        Task::none()
                     }
                 }
                 Err(error) => {
                     error!("Update check failed: {}", error);
                     self.toast_manager
                         .error(format!("Failed to check for updates: {}", error));
-                    Command::none()
+                    Task::none()
                 }
             },
 
             Message::ShowUpdateDialog(update_result) => {
                 let update_dialog = UpdateDialog::new(update_result);
                 self.state = AppState::UpdateDialogActive(update_dialog);
-                Command::none()
+                Task::none()
             }
 
             Message::HideUpdateDialog => {
@@ -946,12 +941,12 @@ impl Application for ZipLockApp {
                 if self.config_manager.is_some() && self.session_id.is_some() {
                     let main_view = MainView::new();
                     self.state = AppState::MainInterface(main_view);
-                    return Command::perform(async {}, |_| {
+                    return Task::perform(async {}, |_| {
                         Message::MainView(MainViewMessage::RefreshCredentials)
                     });
                 }
                 self.state = AppState::MainInterface(MainView::new());
-                Command::none()
+                Task::none()
             }
 
             Message::AutoUpdateCheck => {
@@ -963,13 +958,13 @@ impl Application for ZipLockApp {
                         info!("Performing automatic update check");
                         // Clone the update checker for async operation
                         let mut update_checker = self.update_checker.clone();
-                        return Command::perform(
+                        return Task::perform(
                             async move { update_checker.check_for_updates().await },
                             |result| Message::UpdateCheckResult(result.map_err(|e| e.to_string())),
                         );
                     }
                 }
-                Command::none()
+                Task::none()
             }
 
             Message::CopyToClipboard {
@@ -992,7 +987,7 @@ impl Application for ZipLockApp {
                 tracing::debug!("Using clipboard timeout: {}s (0=disabled)", timeout_seconds);
 
                 let clipboard_manager = self.clipboard_manager.clone();
-                Command::perform(
+                Task::perform(
                     async move {
                         clipboard_manager
                             .copy_with_timeout(content, content_type, timeout_seconds)
@@ -1055,9 +1050,9 @@ impl Application for ZipLockApp {
                         }
                     }
 
-                    Command::perform(async move { sorted_repos }, Message::RepositoriesDetected)
+                    Task::perform(async move { sorted_repos }, Message::RepositoriesDetected)
                 } else {
-                    Command::none()
+                    Task::none()
                 }
             }
 
@@ -1073,7 +1068,7 @@ impl Application for ZipLockApp {
                 // If we have an active session, try to logout first
                 if self.session_id.is_some() {
                     info!("Active session detected, logging out before quit");
-                    Command::perform(Self::logout_and_quit_async(self.session_id.clone()), |_| {
+                    Task::perform(Self::logout_and_quit_async(self.session_id.clone()), |_| {
                         Message::QuittingWithLogout
                     })
                 } else {
@@ -1089,7 +1084,7 @@ impl Application for ZipLockApp {
         }
     }
 
-    fn view(&self) -> Element<'_, Message> {
+    pub fn view(&self) -> Element<'_, Message> {
         let main_content = match &self.state {
             AppState::Loading => self.view_loading(),
             AppState::DetectingRepositories => self.view_detecting_repositories(),
@@ -1142,20 +1137,20 @@ impl Application for ZipLockApp {
         self.wrap_with_toasts(main_content)
     }
 
-    fn theme(&self) -> Theme {
+    pub fn theme(&self) -> Theme {
         self.theme.clone()
     }
 
-    fn subscription(&self) -> iced::Subscription<Message> {
+    pub fn subscription(&self) -> iced::Subscription<Message> {
         use iced::time;
 
-        let close_subscription = iced::event::listen_with(|event, _status| match event {
-            iced::Event::Window(_, iced::window::Event::CloseRequested) => Some(Message::Quit),
+        let close_subscription = iced::event::listen_with(|event, _status, _id| match event {
+            iced::Event::Window(iced::window::Event::CloseRequested) => Some(Message::Quit),
             _ => None,
         });
 
         // Track user activity for auto-lock
-        let activity_subscription = iced::event::listen_with(|event, _status| match event {
+        let activity_subscription = iced::event::listen_with(|event, _status, _id| match event {
             iced::Event::Mouse(_) | iced::Event::Keyboard(_) | iced::Event::Touch(_) => {
                 Some(Message::UserActivity)
             }
@@ -1252,19 +1247,19 @@ impl ZipLockApp {
                 Space::with_height(Length::Fill),
                 text("Loading ZipLock...")
                     .size(24)
-                    .horizontal_alignment(iced::alignment::Horizontal::Center),
+                    .align_x(iced::alignment::Horizontal::Center),
                 Space::with_height(Length::Fixed(20.0)),
                 text("Initializing configuration...")
                     .size(14)
-                    .horizontal_alignment(iced::alignment::Horizontal::Center),
+                    .align_x(iced::alignment::Horizontal::Center),
                 Space::with_height(Length::Fill),
             ]
-            .align_items(Alignment::Center),
+            .align_x(Alignment::Center),
         )
         .width(Length::Fill)
         .height(Length::Fill)
-        .center_x()
-        .center_y()
+        .center_x(Length::Fill)
+        .center_y(Length::Fill)
         .into()
     }
 
@@ -1278,24 +1273,27 @@ impl ZipLockApp {
                 Space::with_height(Length::Fill),
                 text("Detecting Repositories...")
                     .size(24)
-                    .horizontal_alignment(iced::alignment::Horizontal::Center),
+                    .align_x(iced::alignment::Horizontal::Center),
                 Space::with_height(Length::Fixed(20.0)),
                 text("Searching for existing password repositories...")
                     .size(14)
-                    .horizontal_alignment(iced::alignment::Horizontal::Center),
+                    .align_x(iced::alignment::Horizontal::Center),
                 Space::with_height(Length::Fill),
             ]
-            .align_items(Alignment::Center),
+            .align_x(Alignment::Center),
         )
         .width(Length::Fill)
         .height(Length::Fill)
-        .center_x()
-        .center_y()
+        .center_x(Length::Fill)
+        .center_y(Length::Fill)
         .into()
     }
 
     /// View repository selection screen
-    fn view_repository_selection(&self, repositories: &[RepositoryInfo]) -> Element<'_, Message> {
+    fn view_repository_selection<'a>(
+        &'a self,
+        repositories: &'a [RepositoryInfo],
+    ) -> Element<'a, Message> {
         use iced::widget::{button, column, container, row, text, Space};
         use iced::{Alignment, Length};
 
@@ -1324,13 +1322,14 @@ impl ZipLockApp {
             let repo_button = button(
                 column![
                     text(display_name).size(16),
-                    text(&path_text).size(12),
-                    text(&size_text).size(10),
+                    text(path_text).size(12),
+                    text(size_text).size(10),
                 ]
                 .spacing(2),
             )
             .width(Length::Fill)
             .padding(theme::utils::repository_button_padding())
+            .style(theme::button_styles::secondary())
             .on_press(Message::OpenRepository(
                 OpenRepositoryMessage::SelectSpecificFile(repo.path.clone().into()),
             ));
@@ -1347,36 +1346,36 @@ impl ZipLockApp {
                 Space::with_height(Length::Fixed(20.0)),
                 text("Select Repository")
                     .size(28)
-                    .horizontal_alignment(iced::alignment::Horizontal::Center),
+                    .align_x(iced::alignment::Horizontal::Center),
                 Space::with_height(Length::Fixed(10.0)),
                 text(format!(
                     "Found {} password repositories",
                     repositories.len()
                 ))
                 .size(14)
-                .horizontal_alignment(iced::alignment::Horizontal::Center),
+                .align_x(iced::alignment::Horizontal::Center),
                 Space::with_height(Length::Fixed(30.0)),
                 container(repo_buttons).width(Length::Fixed(400.0)),
                 Space::with_height(Length::Fixed(30.0)),
+                // Action buttons
                 row![
-                    button("Create New Repository")
-                        .on_press(Message::ShowWizard)
-                        .padding(theme::utils::standard_button_padding()),
+                    primary_button("Create New Repository", Some(Message::ShowWizard)),
                     Space::with_width(Length::Fixed(20.0)),
-                    button("Browse for Repository...")
-                        .on_press(Message::ShowOpenRepository)
-                        .padding(theme::utils::standard_button_padding()),
+                    secondary_button(
+                        "Browse for Repository...",
+                        Some(Message::ShowOpenRepository),
+                    ),
                 ]
                 .spacing(10),
                 Space::with_height(Length::Fill),
             ]
-            .align_items(Alignment::Center)
+            .align_x(Alignment::Center)
             .max_width(500),
         )
         .width(Length::Fill)
         .height(Length::Fill)
-        .center_x()
-        .center_y()
+        .center_x(Length::Fill)
+        .center_y(Length::Fill)
         .into()
     }
 
@@ -1394,35 +1393,35 @@ impl ZipLockApp {
                 Space::with_height(Length::Fixed(20.0)),
                 text("Welcome to ZipLock!")
                     .size(32)
-                    .horizontal_alignment(iced::alignment::Horizontal::Center),
+                    .align_x(iced::alignment::Horizontal::Center),
                 Space::with_height(Length::Fixed(30.0)),
                 text("Get started by setting up your first password repository.")
                     .size(16)
-                    .horizontal_alignment(iced::alignment::Horizontal::Center),
+                    .align_x(iced::alignment::Horizontal::Center),
                 Space::with_height(Length::Fixed(40.0)),
-                button("Setup Repository")
+                button(text("Setup Repository"))
                     .on_press(Message::ShowWizard)
                     .padding(theme::utils::setup_button_padding())
                     .style(theme::button_styles::primary()),
                 Space::with_height(Length::Fixed(20.0)),
-                button("Open Existing Repository")
-                    .on_press(Message::ShowOpenRepository)
-                    .padding(theme::utils::standard_button_padding())
-                    .style(theme::button_styles::secondary()),
+                secondary_button(
+                    "Open Existing Repository",
+                    Some(Message::ShowOpenRepository),
+                ),
                 Space::with_height(Length::Fill),
             ]
-            .align_items(Alignment::Center)
+            .align_x(Alignment::Center)
             .max_width(500),
         )
         .width(Length::Fill)
         .height(Length::Fill)
-        .center_x()
-        .center_y()
+        .center_x(Length::Fill)
+        .center_y(Length::Fill)
         .into()
     }
 
     /// View error screen
-    fn view_error(&self, error: &str) -> Element<'_, Message> {
+    fn view_error<'a>(&'a self, error: &'a str) -> Element<'a, Message> {
         use iced::widget::{button, column, container, text, Space};
         use iced::{Alignment, Length};
 
@@ -1435,24 +1434,22 @@ impl ZipLockApp {
                 Space::with_height(Length::Fixed(20.0)),
                 text("❌ Error")
                     .size(32)
-                    .horizontal_alignment(iced::alignment::Horizontal::Center),
+                    .align_x(iced::alignment::Horizontal::Center),
                 Space::with_height(Length::Fixed(20.0)),
                 text(error)
                     .size(14)
-                    .horizontal_alignment(iced::alignment::Horizontal::Center),
+                    .align_x(iced::alignment::Horizontal::Center),
                 Space::with_height(Length::Fixed(30.0)),
-                button("Quit")
-                    .on_press(Message::Quit)
-                    .padding(theme::utils::standard_button_padding()),
+                destructive_button("Quit", Some(Message::Quit)),
                 Space::with_height(Length::Fill),
             ]
-            .align_items(Alignment::Center)
+            .align_x(Alignment::Center)
             .max_width(500),
         )
         .width(Length::Fill)
         .height(Length::Fill)
-        .center_x()
-        .center_y()
+        .center_x(Length::Fill)
+        .center_y(Length::Fill)
         .into()
     }
 
@@ -1491,26 +1488,17 @@ impl ZipLockApp {
         // Repository service is already initialized and available
         info!("Repository service ready for operations");
 
-        // Repository service is self-contained and doesn't need explicit connection
+        // Test basic functionality (in a real app, this might involve actual connections)
         info!("Hybrid client initialization test successful");
         Ok(())
     }
 }
 
 fn main() -> iced::Result {
-    // Initialize comprehensive logging system
-    if let Err(e) = logging::initialize_default_logging() {
+    // Initialize logging first
+    let logging_config = logging::LoggingConfig::default();
+    if let Err(e) = logging::initialize_logging(logging_config) {
         eprintln!("Failed to initialize logging: {}", e);
-        // Fallback to basic console logging
-        tracing_subscriber::registry()
-            .with(
-                tracing_subscriber::fmt::layer()
-                    .with_target(false)
-                    .with_thread_ids(false)
-                    .with_level(true),
-            )
-            .with(tracing_subscriber::filter::LevelFilter::INFO)
-            .init();
     }
 
     info!("Starting ZipLock Linux app");
@@ -1524,19 +1512,15 @@ fn main() -> iced::Result {
         }
     );
 
-    // Configure application settings
-    let settings = Settings {
-        window: iced::window::Settings {
-            size: iced::Size::new(1000.0, 700.0),
-            min_size: Some(iced::Size::new(800.0, 600.0)),
-            position: iced::window::Position::Centered,
-            ..Default::default()
-        },
-        fonts: vec![],
-        default_font: iced::Font::DEFAULT,
-        antialiasing: true,
-        ..Default::default()
-    };
-
-    ZipLockApp::run(settings)
+    // Use new Iced 0.13 application architecture
+    iced::application(
+        "ZipLock Password Manager",
+        ZipLockApp::update,
+        ZipLockApp::view,
+    )
+    .subscription(ZipLockApp::subscription)
+    .theme(ZipLockApp::theme)
+    .window_size((1000.0, 700.0))
+    .antialiasing(true)
+    .run_with(ZipLockApp::new)
 }

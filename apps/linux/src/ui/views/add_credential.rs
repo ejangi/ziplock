@@ -10,13 +10,15 @@ use crate::services::get_repository_service;
 use iced::{
     alignment,
     widget::{button, column, container, row, scrollable, svg, text, Space},
-    Alignment, Command, Element, Length,
+    Alignment, Element, Length, Task,
 };
 use std::collections::HashMap;
 use ziplock_shared::models::{CommonTemplates, CredentialField, CredentialTemplate, FieldType};
 
-use crate::ui::components::{CredentialForm, CredentialFormConfig, CredentialFormMessage};
-use crate::ui::theme::{button_styles, container_styles, utils};
+use crate::ui::components::{
+    button as btn, CredentialForm, CredentialFormConfig, CredentialFormMessage,
+};
+use crate::ui::theme;
 
 /// Messages for the add credential view
 #[derive(Debug, Clone)]
@@ -164,11 +166,11 @@ impl AddCredentialView {
     }
 
     /// Update the view based on a message
-    pub fn update(&mut self, message: AddCredentialMessage) -> Command<AddCredentialMessage> {
+    pub fn update(&mut self, message: AddCredentialMessage) -> Task<AddCredentialMessage> {
         match message {
             AddCredentialMessage::Cancel => {
                 // Parent view will handle transition back to main view
-                Command::none()
+                Task::none()
             }
 
             AddCredentialMessage::TypeSelected(type_name) => {
@@ -197,10 +199,10 @@ impl AddCredentialView {
 
                     self.state = AddCredentialState::FillingForm;
                 }
-                Command::none()
+                Task::none()
             }
 
-            AddCredentialMessage::RefreshTypes => Command::perform(
+            AddCredentialMessage::RefreshTypes => Task::perform(
                 Self::load_credential_types_async(self.session_id.clone()),
                 AddCredentialMessage::TypesLoaded,
             ),
@@ -219,18 +221,18 @@ impl AddCredentialView {
                         );
                     }
                 }
-                Command::none()
+                Task::none()
             }
 
             AddCredentialMessage::FormMessage(form_msg) => {
                 match form_msg {
                     CredentialFormMessage::Save => {
                         tracing::debug!("Save button clicked in add credential view");
-                        Command::perform(async {}, |_| AddCredentialMessage::CreateCredential)
+                        Task::perform(async {}, |_| AddCredentialMessage::CreateCredential)
                     }
                     CredentialFormMessage::Cancel => {
                         tracing::debug!("Cancel button clicked in add credential view");
-                        Command::perform(async {}, |_| AddCredentialMessage::Cancel)
+                        Task::perform(async {}, |_| AddCredentialMessage::Cancel)
                     }
                     CredentialFormMessage::CopyToClipboard {
                         content,
@@ -242,7 +244,7 @@ impl AddCredentialView {
                             content.len()
                         );
                         // Forward clipboard operations to main app
-                        Command::perform(
+                        Task::perform(
                             async move { (content, content_type) },
                             |(content, content_type)| AddCredentialMessage::CopyToClipboard {
                                 content,
@@ -261,7 +263,7 @@ impl AddCredentialView {
                             content.len()
                         );
                         // Forward clipboard operations to main app
-                        Command::perform(
+                        Task::perform(
                             async move { (content, content_type) },
                             |(content, content_type)| AddCredentialMessage::CopyToClipboard {
                                 content,
@@ -281,7 +283,7 @@ impl AddCredentialView {
                 tracing::debug!("Processing CreateCredential message");
                 if !self.form.is_valid() {
                     tracing::warn!("Form validation failed in add credential");
-                    return Command::perform(
+                    return Task::perform(
                         async { "Please fill in all required fields".to_string() },
                         AddCredentialMessage::ShowValidationError,
                     );
@@ -302,7 +304,7 @@ impl AddCredentialView {
                 };
                 self.form.set_config(config);
 
-                Command::perform(
+                Task::perform(
                     Self::create_credential_async(
                         self.session_id.clone(),
                         self.form.title().to_string(),
@@ -322,7 +324,7 @@ impl AddCredentialView {
                     Ok(_id) => {
                         tracing::info!("Credential created successfully");
                         self.state = AddCredentialState::Complete;
-                        Command::perform(
+                        Task::perform(
                             async { "Credential created successfully".to_string() },
                             AddCredentialMessage::ShowSuccess,
                         )
@@ -341,28 +343,28 @@ impl AddCredentialView {
                         };
                         self.form.set_config(config);
 
-                        Command::perform(async move { e }, AddCredentialMessage::ShowError)
+                        Task::perform(async move { e }, AddCredentialMessage::ShowError)
                     }
                 }
             }
 
             AddCredentialMessage::ShowError(_) => {
                 // Error handling is now done at the application level via toast system
-                Command::none()
+                Task::none()
             }
 
             AddCredentialMessage::ShowSuccess(_) => {
                 // Success handling is now done at the application level via toast system
-                Command::none()
+                Task::none()
             }
 
             AddCredentialMessage::ShowValidationError(_) => {
                 // Validation error handling is now done at the application level via toast system
-                Command::none()
+                Task::none()
             }
             AddCredentialMessage::CopyToClipboard { .. } => {
                 // This should be handled by the parent component (main app)
-                Command::none()
+                Task::none()
             }
         }
     }
@@ -401,25 +403,25 @@ impl AddCredentialView {
                                 .height(Length::Fixed(24.0))
                         )
                         .width(Length::Fill)
-                        .center_x(),
+                        .center_x(Length::Fill),
                         Space::with_height(Length::Fixed(12.0)),
                         container(
                             text(template.to_display_name())
                                 .size(crate::ui::theme::utils::typography::medium_text_size())
-                                .horizontal_alignment(alignment::Horizontal::Center)
+                                .align_x(alignment::Horizontal::Center)
                         )
                         .width(Length::Fill)
-                        .center_x()
+                        .center_x(Length::Fill)
                     ]
-                    .align_items(Alignment::Center)
+                    .align_x(Alignment::Center)
                     .spacing(0)
                     .width(Length::Fill),
                 )
                 .on_press(AddCredentialMessage::TypeSelected(template.name.clone()))
-                .style(button_styles::primary())
                 .width(Length::Fill)
                 .height(Length::Fixed(90.0))
-                .padding([15, 10]);
+                .padding([15, 10])
+                .style(crate::ui::theme::button_styles::secondary());
 
                 row_buttons.push(button_element.into());
             }
@@ -443,33 +445,29 @@ impl AddCredentialView {
         .padding([0, 30]); // More horizontal padding for better spacing
 
         // Cancel button at the bottom
-        let cancel_button = container(
-            button("Cancel")
-                .on_press(AddCredentialMessage::Cancel)
-                .style(button_styles::secondary())
-                .padding(utils::button_padding()),
-        )
+        let cancel_button = container(btn::presets::cancel_button(Some(
+            AddCredentialMessage::Cancel,
+        )))
         .width(Length::Fill)
-        .center_x();
+        .center_x(Length::Fill);
 
         container(
             column![
                 Space::with_height(Length::Fixed(20.0)),
                 text("What type of information are we storing?")
                     .size(crate::ui::theme::utils::typography::large_text_size())
-                    .horizontal_alignment(alignment::Horizontal::Center),
+                    .align_x(alignment::Horizontal::Center),
                 Space::with_height(Length::Fixed(25.0)),
                 grid_container,
                 Space::with_height(Length::Fixed(20.0)),
                 cancel_button,
             ]
             .spacing(0)
-            .align_items(Alignment::Center),
+            .align_x(Alignment::Center),
         )
         .padding([30, 20]) // Reduced vertical padding, maintained horizontal
         .width(Length::Fill)
         .height(Length::Fill)
-        .style(container_styles::sidebar())
         .into()
     }
 
@@ -483,8 +481,6 @@ impl AddCredentialView {
             .spacing(10),
         )
         .padding(40)
-        .height(Length::Fill)
-        .style(container_styles::sidebar())
         .into()
     }
 
@@ -499,8 +495,6 @@ impl AddCredentialView {
             .spacing(10),
         )
         .padding(40)
-        .height(Length::Fill)
-        .style(container_styles::sidebar())
         .into()
     }
 
@@ -510,10 +504,7 @@ impl AddCredentialView {
             column![
                 Space::with_height(Length::Fixed(40.0)),
                 text("✅ Credential created successfully!")
-                    .size(crate::ui::theme::utils::typography::large_text_size())
-                    .style(iced::theme::Text::Color(iced::Color::from_rgb(
-                        0.02, 0.84, 0.63
-                    ))), // Success green
+                    .size(crate::ui::theme::utils::typography::large_text_size()),
                 Space::with_height(Length::Fixed(20.0)),
                 text("You will be returned to the main view shortly.")
                     .size(crate::ui::theme::utils::typography::normal_text_size()),
@@ -521,8 +512,6 @@ impl AddCredentialView {
             .spacing(10),
         )
         .padding(40)
-        .height(Length::Fill)
-        .style(container_styles::sidebar())
         .into()
     }
 
@@ -535,22 +524,13 @@ impl AddCredentialView {
                 Space::with_height(Length::Fixed(20.0)),
                 text("Error creating credential:")
                     .size(crate::ui::theme::utils::typography::medium_text_size()),
-                text(error_message)
-                    .size(crate::ui::theme::utils::typography::normal_text_size())
-                    .style(iced::theme::Text::Color(iced::Color::from_rgb(
-                        0.94, 0.28, 0.44
-                    ))), // Error red
+                text(error_message).size(crate::ui::theme::utils::typography::normal_text_size()),
                 Space::with_height(Length::Fixed(20.0)),
-                button("Try Again")
-                    .on_press(AddCredentialMessage::RefreshTypes)
-                    .padding(utils::button_padding())
-                    .style(button_styles::primary()),
+                btn::presets::try_again_button(Some(AddCredentialMessage::RefreshTypes)),
             ]
             .spacing(10),
         )
         .padding(40)
-        .height(Length::Fill)
-        .style(container_styles::sidebar())
         .into()
     }
 

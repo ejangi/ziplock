@@ -43,7 +43,7 @@ tempfile = "3.8"
 
 
 # GUI frameworks (conditional)
-iced = { version = "0.12" }
+iced = { version = "0.13" }
 tauri = { version = "1.5", features = ["api-all"] }
 
 [profile.release]

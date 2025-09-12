@@ -1,12 +1,15 @@
 use iced::{
     widget::{button, checkbox, column, container, row, scrollable, text, text_input, Space},
-    Alignment, Element, Length,
+    Alignment, Element, Length, Task,
 };
 
 use std::path::PathBuf;
 use tracing::info;
 
-use crate::ui::theme::{self, button_styles, text_input_styles, utils};
+use crate::ui::{
+    components::button as btn,
+    theme::{self, utils},
+};
 use ziplock_shared::config::{
     AppBehaviorConfig, AppConfig, RepositoryManagementConfig, SecurityConfig, UiConfig,
 };
@@ -219,11 +222,11 @@ impl SettingsView {
         result
     }
 
-    pub fn update(&mut self, message: SettingsMessage) -> iced::Command<SettingsMessage> {
+    pub fn update(&mut self, message: SettingsMessage) -> Task<SettingsMessage> {
         match message {
             SettingsMessage::SelectTab(tab) => {
                 self.current_tab = tab;
-                iced::Command::none()
+                Task::none()
             }
 
             // UI Settings
@@ -240,7 +243,7 @@ impl SettingsView {
                 }
                 self.check_for_changes();
                 self.validate();
-                iced::Command::none()
+                Task::none()
             }
             SettingsMessage::FontSizeIncrement => {
                 if let Ok(mut size) = self.font_size.parse::<f32>() {
@@ -251,7 +254,7 @@ impl SettingsView {
                         self.validate();
                     }
                 }
-                iced::Command::none()
+                Task::none()
             }
             SettingsMessage::FontSizeDecrement => {
                 if let Ok(mut size) = self.font_size.parse::<f32>() {
@@ -265,13 +268,13 @@ impl SettingsView {
                         self.validate();
                     }
                 }
-                iced::Command::none()
+                Task::none()
             }
             SettingsMessage::ShowWizardOnStartupToggled(value) => {
                 self.show_wizard_on_startup = value;
                 self.check_for_changes();
                 self.validate();
-                iced::Command::none()
+                Task::none()
             }
 
             // App Settings
@@ -279,7 +282,7 @@ impl SettingsView {
                 self.auto_lock_timeout = value;
                 self.check_for_changes();
                 self.validate();
-                iced::Command::none()
+                Task::none()
             }
             SettingsMessage::AutoLockTimeoutIncrement => {
                 if let Ok(mut timeout) = self.auto_lock_timeout.parse::<u32>() {
@@ -290,7 +293,7 @@ impl SettingsView {
                         self.validate();
                     }
                 }
-                iced::Command::none()
+                Task::none()
             }
             SettingsMessage::AutoLockTimeoutDecrement => {
                 if let Ok(mut timeout) = self.auto_lock_timeout.parse::<u32>() {
@@ -301,13 +304,13 @@ impl SettingsView {
                         self.validate();
                     }
                 }
-                iced::Command::none()
+                Task::none()
             }
             SettingsMessage::ClipboardTimeoutChanged(value) => {
                 self.clipboard_timeout = value;
                 self.check_for_changes();
                 self.validate();
-                iced::Command::none()
+                Task::none()
             }
             SettingsMessage::ClipboardTimeoutIncrement => {
                 if let Ok(mut timeout) = self.clipboard_timeout.parse::<u32>() {
@@ -318,7 +321,7 @@ impl SettingsView {
                         self.validate();
                     }
                 }
-                iced::Command::none()
+                Task::none()
             }
             SettingsMessage::ClipboardTimeoutDecrement => {
                 if let Ok(mut timeout) = self.clipboard_timeout.parse::<u32>() {
@@ -329,19 +332,19 @@ impl SettingsView {
                         self.validate();
                     }
                 }
-                iced::Command::none()
+                Task::none()
             }
             SettingsMessage::EnableBackupToggled(value) => {
                 self.enable_backup = value;
                 self.check_for_changes();
                 self.validate();
-                iced::Command::none()
+                Task::none()
             }
             SettingsMessage::BackupCountChanged(value) => {
                 self.backup_count = value;
                 self.check_for_changes();
                 self.validate();
-                iced::Command::none()
+                Task::none()
             }
             SettingsMessage::BackupCountIncrement => {
                 if let Ok(mut count) = self.backup_count.parse::<u32>() {
@@ -352,7 +355,7 @@ impl SettingsView {
                         self.validate();
                     }
                 }
-                iced::Command::none()
+                Task::none()
             }
             SettingsMessage::BackupCountDecrement => {
                 if let Ok(mut count) = self.backup_count.parse::<u32>() {
@@ -363,31 +366,31 @@ impl SettingsView {
                         self.validate();
                     }
                 }
-                iced::Command::none()
+                Task::none()
             }
             SettingsMessage::ShowPasswordStrengthToggled(value) => {
                 self.show_password_strength = value;
                 self.check_for_changes();
                 self.validate();
-                iced::Command::none()
+                Task::none()
             }
             SettingsMessage::MinimizeToTrayToggled(value) => {
                 self.minimize_to_tray = value;
                 self.check_for_changes();
                 self.validate();
-                iced::Command::none()
+                Task::none()
             }
             SettingsMessage::StartMinimizedToggled(value) => {
                 self.start_minimized = value;
                 self.check_for_changes();
                 self.validate();
-                iced::Command::none()
+                Task::none()
             }
             SettingsMessage::AutoCheckUpdatesToggled(value) => {
                 self.auto_check_updates = value;
                 self.check_for_changes();
                 self.validate();
-                iced::Command::none()
+                Task::none()
             }
 
             // Repository Settings
@@ -395,17 +398,17 @@ impl SettingsView {
                 self.default_directory = value;
                 self.check_for_changes();
                 self.validate();
-                iced::Command::none()
+                Task::none()
             }
             SettingsMessage::BrowseDefaultDirectory => {
                 // TODO: Open file dialog
-                iced::Command::none()
+                Task::none()
             }
             SettingsMessage::AutoDetectToggled(value) => {
                 self.auto_detect = value;
                 self.check_for_changes();
                 self.validate();
-                iced::Command::none()
+                Task::none()
             }
 
             // Security Settings
@@ -413,7 +416,7 @@ impl SettingsView {
                 self.min_password_length = value;
                 self.check_for_changes();
                 self.validate();
-                iced::Command::none()
+                Task::none()
             }
             SettingsMessage::MinPasswordLengthIncrement => {
                 if let Ok(mut len) = self.min_password_length.parse::<usize>() {
@@ -424,7 +427,7 @@ impl SettingsView {
                         self.validate();
                     }
                 }
-                iced::Command::none()
+                Task::none()
             }
             SettingsMessage::MinPasswordLengthDecrement => {
                 if let Ok(mut len) = self.min_password_length.parse::<usize>() {
@@ -435,37 +438,37 @@ impl SettingsView {
                         self.validate();
                     }
                 }
-                iced::Command::none()
+                Task::none()
             }
             SettingsMessage::RequireLowercaseToggled(value) => {
                 self.require_lowercase = value;
                 self.check_for_changes();
                 self.validate();
-                iced::Command::none()
+                Task::none()
             }
             SettingsMessage::RequireUppercaseToggled(value) => {
                 self.require_uppercase = value;
                 self.check_for_changes();
                 self.validate();
-                iced::Command::none()
+                Task::none()
             }
             SettingsMessage::RequireNumericToggled(value) => {
                 self.require_numeric = value;
                 self.check_for_changes();
                 self.validate();
-                iced::Command::none()
+                Task::none()
             }
             SettingsMessage::RequireSpecialToggled(value) => {
                 self.require_special = value;
                 self.check_for_changes();
                 self.validate();
-                iced::Command::none()
+                Task::none()
             }
             SettingsMessage::MaxPasswordLengthChanged(value) => {
                 self.max_password_length = value;
                 self.check_for_changes();
                 self.validate();
-                iced::Command::none()
+                Task::none()
             }
             SettingsMessage::MaxPasswordLengthIncrement => {
                 if let Ok(mut len) = self.max_password_length.parse::<usize>() {
@@ -480,7 +483,7 @@ impl SettingsView {
                     self.check_for_changes();
                     self.validate();
                 }
-                iced::Command::none()
+                Task::none()
             }
             SettingsMessage::MaxPasswordLengthDecrement => {
                 if let Ok(mut len) = self.max_password_length.parse::<usize>() {
@@ -493,13 +496,13 @@ impl SettingsView {
                     self.check_for_changes();
                     self.validate();
                 }
-                iced::Command::none()
+                Task::none()
             }
             SettingsMessage::MinUniqueCharsChanged(value) => {
                 self.min_unique_chars = value;
                 self.check_for_changes();
                 self.validate();
-                iced::Command::none()
+                Task::none()
             }
             SettingsMessage::MinUniqueCharsIncrement => {
                 if let Ok(mut chars) = self.min_unique_chars.parse::<usize>() {
@@ -510,7 +513,7 @@ impl SettingsView {
                         self.validate();
                     }
                 }
-                iced::Command::none()
+                Task::none()
             }
             SettingsMessage::MinUniqueCharsDecrement => {
                 if let Ok(mut chars) = self.min_unique_chars.parse::<usize>() {
@@ -521,7 +524,7 @@ impl SettingsView {
                         self.validate();
                     }
                 }
-                iced::Command::none()
+                Task::none()
             }
 
             SettingsMessage::DirectorySelected(path) => {
@@ -530,7 +533,7 @@ impl SettingsView {
                     self.check_for_changes();
                     self.validate();
                 }
-                iced::Command::none()
+                Task::none()
             }
 
             // Actions
@@ -540,15 +543,15 @@ impl SettingsView {
                     // TODO: Implement save functionality
                     info!("Saving settings configuration");
                 }
-                iced::Command::none()
+                Task::none()
             }
             SettingsMessage::Reset => {
                 self.reset_to_original();
-                iced::Command::none()
+                Task::none()
             }
             SettingsMessage::Cancel => {
                 // TODO: Signal to parent to close settings view
-                iced::Command::none()
+                Task::none()
             }
         }
     }
@@ -556,25 +559,15 @@ impl SettingsView {
     pub fn view(&self) -> Element<'_, SettingsMessage> {
         let header = container(
             row![
-                text("Settings")
-                    .size(crate::ui::theme::utils::typography::header_text_size())
-                    .style(iced::theme::Text::Color(theme::DARK_TEXT)),
+                text("Settings").size(crate::ui::theme::utils::typography::header_text_size()),
                 Space::with_width(Length::Fill),
                 if self.has_changes {
-                    button("Reset")
-                        .on_press(SettingsMessage::Reset)
-                        .style(button_styles::secondary())
-                        .padding(utils::standard_button_padding())
+                    btn::secondary_button("Reset", Some(SettingsMessage::Reset))
                 } else {
-                    button("Reset")
-                        .style(button_styles::disabled())
-                        .padding(utils::standard_button_padding())
+                    btn::secondary_button("Reset", None)
                 },
                 Space::with_width(Length::Fixed(10.0)),
-                button("Cancel")
-                    .on_press(SettingsMessage::Cancel)
-                    .style(button_styles::secondary())
-                    .padding(utils::standard_button_padding()),
+                btn::presets::cancel_button(Some(SettingsMessage::Cancel)),
                 Space::with_width(Length::Fixed(10.0)),
                 {
                     let save_enabled = self.has_changes && self.validation_errors.is_empty();
@@ -587,20 +580,15 @@ impl SettingsView {
                     );
 
                     if save_enabled {
-                        button("Save")
-                            .on_press(SettingsMessage::Save)
-                            .style(button_styles::primary())
-                            .padding(utils::standard_button_padding())
+                        btn::presets::save_button(Some(SettingsMessage::Save))
                     } else {
-                        button("Save")
-                            .style(button_styles::disabled())
-                            .padding(utils::standard_button_padding())
+                        btn::presets::save_button(None)
                     }
                 }
             ]
-            .align_items(Alignment::Center),
+            .align_y(Alignment::Center),
         )
-        .padding([20, 20, 20, 20]) // Add top padding for header spacing
+        .padding(20) // Add padding for header spacing
         .width(Length::Fill);
 
         let tabs = self.view_tabs();
@@ -627,24 +615,18 @@ impl SettingsView {
         let tab_buttons: Vec<Element<'_, SettingsMessage>> = SettingsTab::all()
             .iter()
             .map(|&tab| {
-                let style = if tab == self.current_tab {
-                    button_styles::primary()
-                } else {
-                    button_styles::secondary()
-                };
-
                 button(
                     text(tab.label()).size(crate::ui::theme::utils::typography::normal_text_size()),
                 )
                 .on_press(SettingsMessage::SelectTab(tab))
-                .style(style)
                 .padding(utils::standard_button_padding())
+                .style(theme::button_styles::secondary())
                 .into()
             })
             .collect();
 
         let tabs_row = tab_buttons.into_iter().fold(
-            row![].spacing(5).align_items(Alignment::Center),
+            row![].spacing(5).align_y(Alignment::Center),
             |row, button| row.push(button),
         );
 
@@ -670,17 +652,13 @@ impl SettingsView {
 
     fn view_interface_settings(&self) -> Element<'_, SettingsMessage> {
         let interface_settings = column![
-            text("Interface Settings")
-                .size(crate::ui::theme::utils::typography::large_text_size())
-                .style(iced::theme::Text::Color(theme::DARK_TEXT)),
+            text("Interface Settings").size(crate::ui::theme::utils::typography::large_text_size()),
             Space::with_height(Length::Fixed(10.0)),
         ]
         .spacing(10);
 
         let appearance_settings = column![
-            text("Appearance")
-                .size(crate::ui::theme::utils::typography::large_text_size())
-                .style(iced::theme::Text::Color(theme::DARK_TEXT)),
+            text("Appearance").size(crate::ui::theme::utils::typography::large_text_size()),
             Space::with_height(Length::Fixed(10.0)),
             self.create_number_input_row(
                 "Font Size:",
@@ -694,9 +672,7 @@ impl SettingsView {
         .spacing(10);
 
         let startup_settings = column![
-            text("Startup")
-                .size(crate::ui::theme::utils::typography::large_text_size())
-                .style(iced::theme::Text::Color(theme::DARK_TEXT)),
+            text("Startup").size(crate::ui::theme::utils::typography::large_text_size()),
             Space::with_height(Length::Fixed(10.0)),
             self.create_checkbox_row(
                 "Show setup wizard on startup if no repository is configured",
@@ -719,9 +695,7 @@ impl SettingsView {
 
     fn view_application_settings(&self) -> Element<'_, SettingsMessage> {
         let security_settings = column![
-            text("Security")
-                .size(crate::ui::theme::utils::typography::large_text_size())
-                .style(iced::theme::Text::Color(theme::DARK_TEXT)),
+            text("Security").size(crate::ui::theme::utils::typography::large_text_size()),
             Space::with_height(Length::Fixed(10.0)),
             self.create_number_input_row(
                 "Auto-lock timeout (minutes):",
@@ -748,9 +722,7 @@ impl SettingsView {
         .spacing(10);
 
         let system_settings = column![
-            text("System Integration")
-                .size(crate::ui::theme::utils::typography::large_text_size())
-                .style(iced::theme::Text::Color(theme::DARK_TEXT)),
+            text("System Integration").size(crate::ui::theme::utils::typography::large_text_size()),
             Space::with_height(Length::Fixed(10.0)),
             self.create_checkbox_row(
                 "Minimize to system tray on close",
@@ -782,8 +754,7 @@ impl SettingsView {
     fn view_repository_settings(&self) -> Element<'_, SettingsMessage> {
         let repository_settings = column![
             text("Repository Management")
-                .size(crate::ui::theme::utils::typography::large_text_size())
-                .style(iced::theme::Text::Color(theme::DARK_TEXT)),
+                .size(crate::ui::theme::utils::typography::large_text_size()),
             Space::with_height(Length::Fixed(10.0)),
             self.create_directory_input_row(
                 "Default directory:",
@@ -799,9 +770,7 @@ impl SettingsView {
         .spacing(10);
 
         let backup_settings = column![
-            text("Backup & Storage")
-                .size(crate::ui::theme::utils::typography::large_text_size())
-                .style(iced::theme::Text::Color(theme::DARK_TEXT)),
+            text("Backup & Storage").size(crate::ui::theme::utils::typography::large_text_size()),
             Space::with_height(Length::Fixed(10.0)),
             self.create_checkbox_row(
                 "Enable automatic backups",
@@ -835,8 +804,7 @@ impl SettingsView {
     fn view_security_settings(&self) -> Element<'_, SettingsMessage> {
         let password_settings = column![
             text("Master Password Requirements")
-                .size(crate::ui::theme::utils::typography::large_text_size())
-                .style(iced::theme::Text::Color(theme::DARK_TEXT)),
+                .size(crate::ui::theme::utils::typography::large_text_size()),
             Space::with_height(Length::Fixed(10.0)),
             self.create_number_input_row(
                 "Minimum length:",
@@ -890,85 +858,78 @@ impl SettingsView {
 
     // Helper methods for creating form elements
 
-    fn create_number_input_row<F>(
-        &self,
-        label: &str,
-        value: &str,
+    fn create_number_input_row<'a, F>(
+        &'a self,
+        label: &'a str,
+        value: &'a str,
         on_change: F,
         on_increment: SettingsMessage,
         on_decrement: SettingsMessage,
-        placeholder: &str,
-    ) -> Element<'_, SettingsMessage>
+        placeholder: &'a str,
+    ) -> Element<'a, SettingsMessage>
     where
         F: Fn(String) -> SettingsMessage + 'static,
     {
-        let input_style = if self.is_field_invalid(label) {
-            text_input_styles::invalid()
-        } else {
-            text_input_styles::standard()
-        };
-
         row![
             container(text(label).size(crate::ui::theme::utils::typography::normal_text_size()))
                 .width(Length::Fixed(200.0)),
             row![
-                button(container(text("-")).center_x().center_y())
-                    .on_press(on_decrement)
-                    .style(button_styles::secondary())
-                    .padding([4, 8])
-                    .width(Length::Fixed(30.0))
-                    .height(Length::Fixed(32.0)),
+                button(
+                    container(text("-"))
+                        .center_x(Length::Fill)
+                        .center_y(Length::Fill)
+                )
+                .on_press(on_decrement)
+                .padding([4, 8])
+                .width(Length::Fixed(30.0))
+                .height(Length::Fixed(32.0))
+                .style(theme::button_styles::secondary()),
                 text_input(placeholder, value)
                     .on_input(on_change)
-                    .style(input_style)
                     .padding(utils::text_input_padding())
                     .size(crate::ui::theme::utils::typography::text_input_size())
+                    .style(theme::text_input_styles::standard())
                     .width(Length::Fixed(120.0)),
-                button(container(text("+")).center_x().center_y())
-                    .on_press(on_increment)
-                    .style(button_styles::secondary())
-                    .padding([4, 8])
-                    .width(Length::Fixed(30.0))
-                    .height(Length::Fixed(32.0)),
+                button(
+                    container(text("+"))
+                        .center_x(Length::Fill)
+                        .center_y(Length::Fill)
+                )
+                .on_press(on_increment)
+                .padding([4, 8])
+                .width(Length::Fixed(30.0))
+                .height(Length::Fixed(32.0))
+                .style(theme::button_styles::secondary()),
             ]
-            .align_items(Alignment::Center)
+            .align_y(Alignment::Center)
             .spacing(2)
         ]
-        .align_items(Alignment::Center)
+        .align_y(Alignment::Center)
         .spacing(10)
         .into()
     }
 
-    fn create_directory_input_row<F>(
-        &self,
-        label: &str,
-        value: &str,
+    fn create_directory_input_row<'a, F>(
+        &'a self,
+        label: &'a str,
+        value: &'a str,
         on_change: F,
-    ) -> Element<'_, SettingsMessage>
+    ) -> Element<'a, SettingsMessage>
     where
         F: Fn(String) -> SettingsMessage + 'static,
     {
-        let input_style = if self.is_field_invalid(label) {
-            text_input_styles::invalid()
-        } else {
-            text_input_styles::standard()
-        };
-
         row![
             container(text(label).size(crate::ui::theme::utils::typography::normal_text_size()))
                 .width(Length::Fixed(200.0)),
             text_input("Choose directory...", value)
                 .on_input(on_change)
-                .style(input_style)
                 .padding(utils::text_input_padding())
                 .size(crate::ui::theme::utils::typography::text_input_size())
+                .style(theme::text_input_styles::standard())
                 .width(Length::Fixed(300.0)),
-            button("Browse")
-                .on_press(SettingsMessage::BrowseDefaultDirectory)
-                .style(button_styles::secondary())
-                .padding(utils::small_button_padding()),
+            btn::presets::browse_button(Some(SettingsMessage::BrowseDefaultDirectory)),
         ]
-        .align_items(Alignment::Center)
+        .align_y(Alignment::Center)
         .spacing(10)
         .into()
     }

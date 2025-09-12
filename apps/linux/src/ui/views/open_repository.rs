@@ -5,14 +5,17 @@
 //! with the wizard interface.
 
 use iced::widget::{button, column, container, row, scrollable, text, text_input, Space};
-use iced::{Alignment, Command, Element, Length};
+use iced::{Alignment, Element, Length, Task};
 use std::path::PathBuf;
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
 use crate::config::ConfigManager;
 use crate::services::get_repository_service;
-use crate::ui::theme::{self, button_styles, container_styles, utils, MEDIUM_GRAY};
+use crate::ui::{
+    components::button as btn,
+    theme::{self, utils},
+};
 
 /// Messages for the open repository view
 #[derive(Debug, Clone)]
@@ -105,11 +108,11 @@ impl OpenRepositoryView {
     }
 
     /// Update the view with a message
-    pub fn update(&mut self, message: OpenRepositoryMessage) -> Command<OpenRepositoryMessage> {
+    pub fn update(&mut self, message: OpenRepositoryMessage) -> Task<OpenRepositoryMessage> {
         match message {
             OpenRepositoryMessage::SelectFile => {
                 debug!("Opening file selection dialog");
-                Command::perform(
+                Task::perform(
                     Self::select_file_async(),
                     OpenRepositoryMessage::FileSelected,
                 )
@@ -119,7 +122,7 @@ impl OpenRepositoryView {
                 debug!("Directly selecting repository file: {:?}", path);
                 self.selected_file = Some(path);
                 self.state = OpenState::Input;
-                Command::none()
+                Task::none()
             }
 
             OpenRepositoryMessage::FileSelected(file_path) => {
@@ -130,18 +133,18 @@ impl OpenRepositoryView {
                     debug!("File selection cancelled");
                 }
                 self.update_can_open();
-                Command::none()
+                Task::none()
             }
 
             OpenRepositoryMessage::PassphraseChanged(passphrase) => {
                 self.passphrase = passphrase;
                 self.update_can_open();
-                Command::none()
+                Task::none()
             }
 
             OpenRepositoryMessage::TogglePassphraseVisibility => {
                 self.show_passphrase = !self.show_passphrase;
-                Command::none()
+                Task::none()
             }
 
             OpenRepositoryMessage::OpenRepository => {
@@ -152,19 +155,19 @@ impl OpenRepositoryView {
                     let file_path = self.selected_file.clone().unwrap();
                     let passphrase = self.passphrase.clone();
 
-                    Command::perform(
+                    Task::perform(
                         Self::open_repository_async(file_path, passphrase),
                         OpenRepositoryMessage::OpenComplete,
                     )
                 } else {
-                    Command::none()
+                    Task::none()
                 }
             }
 
             OpenRepositoryMessage::Cancel => {
                 debug!("Open repository cancelled");
                 self.state = OpenState::Cancelled;
-                Command::none()
+                Task::none()
             }
 
             OpenRepositoryMessage::TryAgain => {
@@ -173,7 +176,7 @@ impl OpenRepositoryView {
                 self.passphrase.clear();
                 self.show_passphrase = false;
                 self.update_can_open();
-                Command::none()
+                Task::none()
             }
 
             OpenRepositoryMessage::OpenComplete(result) => {
@@ -209,7 +212,7 @@ impl OpenRepositoryView {
                         self.state = OpenState::Error(error);
                     }
                 }
-                Command::none()
+                Task::none()
             }
         }
     }
@@ -245,11 +248,11 @@ impl OpenRepositoryView {
                     Space::with_height(Length::Fixed(40.0)),
                     navigation,
                 ]
-                .align_items(Alignment::Center)
+                .align_x(Alignment::Center)
                 .max_width(500),
             )
             .width(Length::Fill)
-            .center_x(),
+            .center_x(Length::Fill),
             Space::with_height(Length::Fixed(40.0)), // Bottom padding for centering effect
         ])
         .width(Length::Fill)
@@ -272,13 +275,13 @@ impl OpenRepositoryView {
             Space::with_height(Length::Fixed(20.0)),
             text("Open Repository")
                 .size(crate::ui::theme::utils::typography::extra_large_text_size())
-                .horizontal_alignment(iced::alignment::Horizontal::Center),
+                .align_x(iced::alignment::Horizontal::Center),
             Space::with_height(Length::Fixed(10.0)),
             text(subtitle_text)
                 .size(crate::ui::theme::utils::typography::normal_text_size())
-                .horizontal_alignment(iced::alignment::Horizontal::Center),
+                .align_x(iced::alignment::Horizontal::Center),
         ]
-        .align_items(Alignment::Center)
+        .align_x(Alignment::Center)
         .into()
     }
 
@@ -301,13 +304,9 @@ impl OpenRepositoryView {
                 )
             };
 
-            text(display_text)
-                .size(crate::ui::theme::utils::typography::normal_text_size())
-                .style(iced::theme::Text::Color(theme::SUCCESS_GREEN))
+            text(display_text).size(crate::ui::theme::utils::typography::normal_text_size())
         } else {
-            text("No file selected")
-                .size(crate::ui::theme::utils::typography::normal_text_size())
-                .style(iced::theme::Text::Color(MEDIUM_GRAY))
+            text("No file selected").size(crate::ui::theme::utils::typography::normal_text_size())
         };
 
         let header_text = if self.auto_selected {
@@ -319,12 +318,9 @@ impl OpenRepositoryView {
         column![
             text(header_text)
                 .size(crate::ui::theme::utils::typography::medium_text_size())
-                .horizontal_alignment(iced::alignment::Horizontal::Left),
+                .align_x(iced::alignment::Horizontal::Center),
             Space::with_height(Length::Fixed(8.0)),
-            button("Browse...")
-                .on_press(OpenRepositoryMessage::SelectFile)
-                .style(button_styles::secondary())
-                .padding(utils::button_padding()),
+            btn::presets::browse_button(Some(OpenRepositoryMessage::SelectFile)),
             Space::with_height(Length::Fixed(8.0)),
             file_display,
         ]
@@ -338,12 +334,12 @@ impl OpenRepositoryView {
             .on_input(OpenRepositoryMessage::PassphraseChanged)
             .on_submit(OpenRepositoryMessage::OpenRepository)
             .secure(!self.show_passphrase)
-            .style(self.get_passphrase_style())
             .padding(utils::text_input_padding())
             .size(crate::ui::theme::utils::typography::text_input_size())
+            .style(theme::text_input_styles::standard())
             .width(Length::Fill);
 
-        let toggle_button = utils::password_visibility_toggle(
+        let toggle_button = theme::utils::password_visibility_toggle(
             self.show_passphrase,
             OpenRepositoryMessage::TogglePassphraseVisibility,
         );
@@ -351,14 +347,14 @@ impl OpenRepositoryView {
         column![
             text("Master Passphrase")
                 .size(crate::ui::theme::utils::typography::medium_text_size())
-                .horizontal_alignment(iced::alignment::Horizontal::Left),
+                .align_x(iced::alignment::Horizontal::Center),
             Space::with_height(Length::Fixed(8.0)),
             row![
                 passphrase_input,
                 Space::with_width(Length::Fixed(10.0)),
                 toggle_button
             ]
-            .align_items(Alignment::Center),
+            .align_y(Alignment::Center),
         ]
         .width(Length::Fill)
         .into()
@@ -367,27 +363,19 @@ impl OpenRepositoryView {
     /// Render navigation buttons
     fn view_navigation(&self) -> Element<'_, OpenRepositoryMessage> {
         let open_button = if self.can_open {
-            button("Open Repository")
-                .on_press(OpenRepositoryMessage::OpenRepository)
-                .style(button_styles::primary())
-                .padding(utils::button_padding())
+            btn::presets::open_repository_button(Some(OpenRepositoryMessage::OpenRepository))
         } else {
-            button("Open Repository")
-                .style(button_styles::disabled())
-                .padding(utils::button_padding())
+            btn::presets::open_repository_button(None)
         };
 
-        let cancel_button = button("Cancel")
-            .on_press(OpenRepositoryMessage::Cancel)
-            .style(button_styles::secondary())
-            .padding(utils::button_padding());
+        let cancel_button = btn::presets::cancel_button(Some(OpenRepositoryMessage::Cancel));
 
         row![
             cancel_button,
             Space::with_width(Length::Fixed(20.0)),
             open_button,
         ]
-        .align_items(Alignment::Center)
+        .align_y(Alignment::Center)
         .into()
     }
 
@@ -401,19 +389,19 @@ impl OpenRepositoryView {
                 Space::with_height(Length::Fixed(20.0)),
                 text("Opening Repository...")
                     .size(crate::ui::theme::utils::typography::header_text_size())
-                    .horizontal_alignment(iced::alignment::Horizontal::Center),
+                    .align_x(iced::alignment::Horizontal::Center),
                 Space::with_height(Length::Fixed(10.0)),
                 text("Please wait while we unlock your repository.")
                     .size(crate::ui::theme::utils::typography::normal_text_size())
-                    .horizontal_alignment(iced::alignment::Horizontal::Center),
+                    .align_x(iced::alignment::Horizontal::Center),
             ]
-            .align_items(Alignment::Center)
+            .align_x(Alignment::Center)
             .max_width(500),
         )
         .width(Length::Fill)
         .height(Length::Fill)
-        .center_x()
-        .center_y()
+        .center_x(Length::Fill)
+        .center_y(Length::Fill)
         .into()
     }
 
@@ -423,75 +411,60 @@ impl OpenRepositoryView {
             column![
                 text("✅")
                     .size(48.0)
-                    .horizontal_alignment(iced::alignment::Horizontal::Center),
+                    .align_x(iced::alignment::Horizontal::Center),
                 Space::with_height(Length::Fixed(20.0)),
                 text("Repository Opened")
                     .size(crate::ui::theme::utils::typography::header_text_size())
-                    .horizontal_alignment(iced::alignment::Horizontal::Center),
+                    .align_x(iced::alignment::Horizontal::Center),
                 Space::with_height(Length::Fixed(10.0)),
                 text("Your repository has been successfully opened and unlocked.")
                     .size(crate::ui::theme::utils::typography::normal_text_size())
-                    .horizontal_alignment(iced::alignment::Horizontal::Center),
+                    .align_x(iced::alignment::Horizontal::Center),
             ]
-            .align_items(Alignment::Center)
+            .align_x(Alignment::Center)
             .max_width(500),
         )
         .width(Length::Fill)
         .height(Length::Fill)
-        .center_x()
-        .center_y()
+        .center_x(Length::Fill)
+        .center_y(Length::Fill)
         .into()
     }
 
     /// Render the error view
-    fn view_error(&self, error: &str) -> Element<'_, OpenRepositoryMessage> {
+    fn view_error<'a>(&'a self, error: &'a str) -> Element<'a, OpenRepositoryMessage> {
         container(
             column![
                 text("❌")
                     .size(48.0)
-                    .horizontal_alignment(iced::alignment::Horizontal::Center),
+                    .align_x(iced::alignment::Horizontal::Center),
                 Space::with_height(Length::Fixed(20.0)),
                 text("Failed to Open Repository")
                     .size(crate::ui::theme::utils::typography::header_text_size())
-                    .horizontal_alignment(iced::alignment::Horizontal::Center),
+                    .align_x(iced::alignment::Horizontal::Center),
                 Space::with_height(Length::Fixed(20.0)),
                 container(
                     text(error)
                         .size(crate::ui::theme::utils::typography::normal_text_size())
-                        .horizontal_alignment(iced::alignment::Horizontal::Center)
+                        .align_x(iced::alignment::Horizontal::Center),
                 )
-                .style(container_styles::error_alert())
                 .padding(utils::alert_padding()),
                 Space::with_height(Length::Fixed(30.0)),
-                button("Try Again")
-                    .on_press(OpenRepositoryMessage::TryAgain)
-                    .style(button_styles::primary())
-                    .padding(utils::button_padding()),
+                btn::presets::try_again_button(Some(OpenRepositoryMessage::TryAgain)),
             ]
-            .align_items(Alignment::Center)
+            .align_x(Alignment::Center)
             .max_width(500),
         )
         .width(Length::Fill)
         .height(Length::Fill)
-        .center_x()
-        .center_y()
+        .center_x(Length::Fill)
+        .center_y(Length::Fill)
         .into()
     }
 
     /// Update whether the repository can be opened
     fn update_can_open(&mut self) {
         self.can_open = self.selected_file.is_some() && !self.passphrase.is_empty();
-    }
-
-    /// Get the style for the passphrase input field
-    fn get_passphrase_style(&self) -> iced::theme::TextInput {
-        if self.passphrase.is_empty() {
-            theme::text_input_styles::standard()
-        } else {
-            // For opening, we don't validate strength, just that it's not empty
-            // This giving visual feedback that something has been entered
-            theme::text_input_styles::neutral()
-        }
     }
 
     /// Get the session ID if repository was opened successfully

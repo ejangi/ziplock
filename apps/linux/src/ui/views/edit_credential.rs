@@ -6,12 +6,12 @@
 use crate::services::get_repository_service;
 use iced::{
     widget::{column, container, text, Space},
-    Command, Element, Length,
+    Element, Length, Task,
 };
 use std::collections::HashMap;
 
 use crate::ui::components::{CredentialForm, CredentialFormConfig, CredentialFormMessage};
-use crate::ui::theme::container_styles;
+
 use ziplock_shared::models::{CredentialField, CredentialRecord, CredentialTemplate, FieldType};
 
 /// Messages for the edit credential view
@@ -130,24 +130,24 @@ impl EditCredentialView {
     }
 
     /// Update the view based on a message
-    pub fn update(&mut self, message: EditCredentialMessage) -> Command<EditCredentialMessage> {
+    pub fn update(&mut self, message: EditCredentialMessage) -> Task<EditCredentialMessage> {
         match message {
             EditCredentialMessage::Cancel => {
                 // Parent view will handle transition back to main view
-                Command::none()
+                Task::none()
             }
 
             EditCredentialMessage::LoadCredential => {
                 self.state = EditCredentialState::Loading;
-                Command::batch([
-                    Command::perform(
+                Task::batch([
+                    Task::perform(
                         Self::load_credential_async(
                             self.session_id.clone(),
                             self.credential_id.clone(),
                         ),
                         EditCredentialMessage::CredentialLoaded,
                     ),
-                    Command::perform(
+                    Task::perform(
                         Self::load_credential_types_async(self.session_id.clone()),
                         EditCredentialMessage::TypesLoaded,
                     ),
@@ -168,8 +168,24 @@ impl EditCredentialView {
                                 Self::get_builtin_templates().into_iter().next().unwrap()
                             });
 
+                        tracing::info!("Setting up edit form for credential: {}", credential.title);
+                        tracing::info!("Template found: {}", template.name);
+                        tracing::info!("Credential has {} fields", credential.fields.len());
+
+                        // Log all credential fields
+                        for (field_name, field) in &credential.fields {
+                            tracing::info!(
+                                "Field '{}': type={:?}, has_value={}",
+                                field_name,
+                                field.field_type,
+                                !field.value.is_empty()
+                            );
+                        }
+
                         // Set up the form with the credential data
+                        tracing::info!("Setting template on form...");
                         self.form.set_template(template);
+                        tracing::info!("Setting title on form...");
                         self.form.set_title(credential.title.clone());
 
                         // Convert credential fields to form field values using field names
@@ -177,6 +193,7 @@ impl EditCredentialView {
                         for (field_name, field) in &credential.fields {
                             field_values.insert(field_name.clone(), field.value.clone());
                         }
+                        tracing::info!("Setting {} field values on form...", field_values.len());
                         self.form.set_field_values(field_values);
 
                         // Configure form to show delete button with title styling
@@ -191,20 +208,18 @@ impl EditCredentialView {
 
                         self.credential = Some(credential);
                         self.state = EditCredentialState::Editing;
+                        tracing::info!("Edit credential form setup completed successfully");
                     }
                     Err(e) => {
                         self.state =
                             EditCredentialState::Error("Failed to load credential".to_string());
-                        return Command::perform(
-                            async move { e },
-                            EditCredentialMessage::ShowError,
-                        );
+                        return Task::perform(async move { e }, EditCredentialMessage::ShowError);
                     }
                 }
-                Command::none()
+                Task::none()
             }
 
-            EditCredentialMessage::RefreshTypes => Command::perform(
+            EditCredentialMessage::RefreshTypes => Task::perform(
                 Self::load_credential_types_async(self.session_id.clone()),
                 EditCredentialMessage::TypesLoaded,
             ),
@@ -223,22 +238,22 @@ impl EditCredentialView {
                         );
                     }
                 }
-                Command::none()
+                Task::none()
             }
 
             EditCredentialMessage::FormMessage(form_msg) => {
                 match form_msg {
                     CredentialFormMessage::Save => {
                         tracing::debug!("Save button clicked in edit credential view");
-                        Command::perform(async {}, |_| EditCredentialMessage::UpdateCredential)
+                        Task::perform(async {}, |_| EditCredentialMessage::UpdateCredential)
                     }
                     CredentialFormMessage::Cancel => {
                         tracing::debug!("Cancel button clicked in edit credential view");
-                        Command::perform(async {}, |_| EditCredentialMessage::Cancel)
+                        Task::perform(async {}, |_| EditCredentialMessage::Cancel)
                     }
                     CredentialFormMessage::Delete => {
                         tracing::debug!("Delete button clicked in edit credential view");
-                        Command::perform(async {}, |_| EditCredentialMessage::DeleteCredential)
+                        Task::perform(async {}, |_| EditCredentialMessage::DeleteCredential)
                     }
                     CredentialFormMessage::CopyFieldToClipboard {
                         field_name: _,
@@ -251,7 +266,7 @@ impl EditCredentialView {
                             content.len()
                         );
                         // Forward clipboard operations to main app
-                        Command::perform(
+                        Task::perform(
                             async move { (content, content_type) },
                             |(content, content_type)| EditCredentialMessage::CopyToClipboard {
                                 content,
@@ -269,7 +284,7 @@ impl EditCredentialView {
                             content.len()
                         );
                         // Forward clipboard operations to main app
-                        Command::perform(
+                        Task::perform(
                             async move { (content, content_type) },
                             |(content, content_type)| EditCredentialMessage::CopyToClipboard {
                                 content,
@@ -289,7 +304,7 @@ impl EditCredentialView {
                 tracing::debug!("Processing UpdateCredential message");
                 if !self.form.is_valid() {
                     tracing::warn!("Form validation failed in edit credential");
-                    return Command::perform(
+                    return Task::perform(
                         async { "Please fill in all required fields".to_string() },
                         EditCredentialMessage::ShowValidationError,
                     );
@@ -305,7 +320,7 @@ impl EditCredentialView {
                 };
                 self.form.set_config(config);
 
-                Command::perform(
+                Task::perform(
                     Self::update_credential_async(
                         self.session_id.clone(),
                         self.credential_id.clone(),
@@ -325,7 +340,7 @@ impl EditCredentialView {
                     Ok(()) => {
                         tracing::info!("Credential updated successfully");
                         self.state = EditCredentialState::Complete;
-                        Command::perform(
+                        Task::perform(
                             async { "Credential updated successfully".to_string() },
                             EditCredentialMessage::ShowSuccess,
                         )
@@ -338,7 +353,7 @@ impl EditCredentialView {
                         let config = CredentialFormConfig::default();
                         self.form.set_config(config);
 
-                        Command::perform(async move { e }, EditCredentialMessage::ShowError)
+                        Task::perform(async move { e }, EditCredentialMessage::ShowError)
                     }
                 }
             }
@@ -353,7 +368,7 @@ impl EditCredentialView {
                 };
                 self.form.set_config(config);
 
-                Command::perform(
+                Task::perform(
                     Self::delete_credential_async(
                         self.session_id.clone(),
                         self.credential_id.clone(),
@@ -367,7 +382,7 @@ impl EditCredentialView {
                     Ok(()) => {
                         tracing::info!("Credential deleted successfully");
                         self.state = EditCredentialState::Complete;
-                        Command::perform(
+                        Task::perform(
                             async { "Credential deleted successfully".to_string() },
                             EditCredentialMessage::ShowSuccess,
                         )
@@ -383,28 +398,28 @@ impl EditCredentialView {
                         };
                         self.form.set_config(config);
 
-                        Command::perform(async move { e }, EditCredentialMessage::ShowError)
+                        Task::perform(async move { e }, EditCredentialMessage::ShowError)
                     }
                 }
             }
 
             EditCredentialMessage::ShowError(_) => {
                 // Error handling is now done at the application level via toast system
-                Command::none()
+                Task::none()
             }
 
             EditCredentialMessage::ShowSuccess(_) => {
                 // Success handling is now done at the application level via toast system
-                Command::none()
+                Task::none()
             }
 
             EditCredentialMessage::ShowValidationError(_) => {
                 // Validation error handling is now done at the application level via toast system
-                Command::none()
+                Task::none()
             }
             EditCredentialMessage::CopyToClipboard { .. } => {
                 // This should be handled by the parent component (main app)
-                Command::none()
+                Task::none()
             }
         }
     }
@@ -429,13 +444,9 @@ impl EditCredentialView {
                     .size(crate::ui::theme::utils::typography::medium_text_size()),
             ]
             .spacing(20)
-            .align_items(iced::Alignment::Center),
+            .align_x(iced::Alignment::Center),
         )
         .padding(40)
-        .height(Length::Fill)
-        .center_x()
-        .center_y()
-        .style(container_styles::sidebar())
         .into()
     }
 
@@ -449,8 +460,8 @@ impl EditCredentialView {
             .spacing(10),
         )
         .padding(40)
+        .width(Length::Fill)
         .height(Length::Fill)
-        .style(container_styles::sidebar())
         .into()
     }
 
@@ -466,8 +477,8 @@ impl EditCredentialView {
             .spacing(20),
         )
         .padding(40)
+        .width(Length::Fill)
         .height(Length::Fill)
-        .style(container_styles::sidebar())
         .into()
     }
 
@@ -477,45 +488,34 @@ impl EditCredentialView {
             column![
                 Space::with_height(Length::Fixed(40.0)),
                 text("✅ Credential updated successfully!")
-                    .size(crate::ui::theme::utils::typography::large_text_size())
-                    .style(iced::theme::Text::Color(iced::Color::from_rgb(
-                        0.02, 0.84, 0.63
-                    ))), // Success green
+                    .size(crate::ui::theme::utils::typography::large_text_size()),
                 Space::with_height(Length::Fixed(20.0)),
                 text("You will be returned to the main view shortly.")
                     .size(crate::ui::theme::utils::typography::normal_text_size()),
             ]
-            .spacing(10)
-            .align_items(iced::Alignment::Center),
+            .spacing(20)
+            .align_x(iced::Alignment::Center),
         )
         .padding(40)
-        .height(Length::Fill)
-        .center_x()
-        .center_y()
-        .style(container_styles::sidebar())
         .into()
     }
 
     /// Render the error state
-    fn view_error(&self, error_message: &str) -> Element<'_, EditCredentialMessage> {
+    fn view_error<'a>(&'a self, error_message: &'a str) -> Element<'a, EditCredentialMessage> {
         container(
             column![
                 Space::with_height(Length::Fixed(20.0)),
                 text("Error updating credential:")
                     .size(crate::ui::theme::utils::typography::medium_text_size()),
-                text(error_message)
-                    .size(crate::ui::theme::utils::typography::normal_text_size())
-                    .style(iced::theme::Text::Color(iced::Color::from_rgb(
-                        0.94, 0.28, 0.44
-                    ))), // Error red
+                text(error_message).size(crate::ui::theme::utils::typography::normal_text_size()),
                 Space::with_height(Length::Fixed(20.0)),
                 self.form.view().map(EditCredentialMessage::FormMessage),
             ]
             .spacing(10),
         )
         .padding(40)
+        .width(Length::Fill)
         .height(Length::Fill)
-        .style(container_styles::sidebar())
         .into()
     }
 

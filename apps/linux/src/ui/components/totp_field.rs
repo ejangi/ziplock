@@ -28,11 +28,9 @@ use iced::widget::{button, column, container, row, text, text_input, Space};
 use iced::{Alignment, Element, Length, Subscription};
 use std::time::{Duration, Instant};
 
-use crate::ui::theme::{button_styles, utils, LIGHT_GRAY_TEXT};
+use crate::ui::theme::utils;
 
 use ziplock_shared::utils::totp;
-
-use crate::ui::theme;
 
 /// Messages for the TOTP field component
 #[derive(Debug, Clone, PartialEq)]
@@ -197,21 +195,15 @@ impl TotpField {
         }
 
         // Check if we've crossed a TOTP time boundary since last refresh
-        let seconds_remaining = totp::get_seconds_until_refresh(self.time_step);
-        let last_refresh_seconds_remaining = if let Some(last_refresh) = self.last_refresh {
+        if let Some(last_refresh) = self.last_refresh {
             let elapsed = last_refresh.elapsed().as_secs();
-            if elapsed >= self.time_step {
-                // More than a full time step has elapsed, definitely need refresh
-                return true;
-            }
-            (self.time_step - elapsed) as u32
+            // Only refresh if we've elapsed at least one full time step
+            // This prevents the infinite loop by ensuring we don't refresh
+            // until we've actually crossed a 30-second boundary
+            elapsed >= self.time_step
         } else {
-            return true;
-        };
-
-        // If the actual system time boundary remaining is greater than what we
-        // calculated based on our last refresh, it means we've crossed a boundary
-        seconds_remaining > last_refresh_seconds_remaining as u64
+            true
+        }
     }
 
     /// Update the component
@@ -236,9 +228,12 @@ impl TotpField {
             }
             TotpFieldMessage::RefreshCode => {
                 // Check if we need to refresh based on system time boundaries
-                if self.needs_refresh() {
+                let should_refresh = self.needs_refresh();
+                if should_refresh {
+                    tracing::info!("TOTP field refresh triggered for time boundary crossing");
                     self.refresh_code();
                 }
+                // Remove excessive logging - only log when actually refreshing
             }
             TotpFieldMessage::CopyCode => {
                 if let Some(ref code) = self.current_code {
@@ -256,15 +251,31 @@ impl TotpField {
 
     /// Create the view for this component
     pub fn view(&self) -> Element<'_, TotpFieldMessage> {
+        tracing::info!(
+            "TOTP field view() called - is_editing: {}, display_mode: {:?}, has_code: {}",
+            self.is_editing,
+            self.display_mode,
+            self.current_code.is_some()
+        );
+
         if self.is_editing {
-            self.view_editing()
+            let element = self.view_editing();
+            tracing::info!("TOTP field returning editing view");
+            element
         } else {
-            self.view_display()
+            let element = self.view_display();
+            tracing::info!("TOTP field returning display view");
+            element
         }
     }
 
     /// View for editing mode (in forms)
     fn view_editing(&self) -> Element<'_, TotpFieldMessage> {
+        tracing::info!(
+            "TOTP view_editing() - secret_len: {}, display_mode: {:?}",
+            self.secret.len(),
+            self.display_mode
+        );
         let placeholder = match self.display_mode {
             TotpDisplayMode::Secret => {
                 if self.secret.trim().is_empty() {
@@ -294,57 +305,45 @@ impl TotpField {
         };
 
         let is_readonly = self.display_mode == TotpDisplayMode::Code;
-        let is_secret_mode = self.display_mode == TotpDisplayMode::Secret;
-
-        let display_value =
-            if self.display_mode == TotpDisplayMode::Code && self.current_code.is_some() {
-                // Format code with space for readability in display
-                let code = self.current_code.as_ref().unwrap();
-                format!("{} {}", &code[..3], &code[3..])
-            } else {
-                input_value.to_string()
-            };
 
         let input: Element<'_, TotpFieldMessage> = if is_readonly {
             // Create a button that looks like a text input for copyable TOTP codes
-            button(
-                text(&display_value).size(crate::ui::theme::utils::typography::normal_text_size()),
-            )
-            .on_press(TotpFieldMessage::CopyCode)
-            .style(button_styles::text_field_like())
-            .padding(utils::text_input_padding())
-            .width(Length::Fill)
-            .into()
+            let display_text =
+                if self.display_mode == TotpDisplayMode::Code && self.current_code.is_some() {
+                    // Format code with space for readability in display
+                    let code = self.current_code.as_ref().unwrap();
+                    format!("{} {}", &code[..3], &code[3..])
+                } else {
+                    input_value.to_string()
+                };
+
+            button(text(display_text).size(crate::ui::theme::utils::typography::normal_text_size()))
+                .on_press(TotpFieldMessage::CopyCode)
+                .padding(utils::text_input_padding())
+                .width(Length::Fill)
+                .style(crate::ui::theme::button_styles::text_field_like())
+                .into()
         } else {
             text_input(placeholder, input_value)
                 .on_input(TotpFieldMessage::SecretChanged)
                 .padding(utils::text_input_padding())
-                .style(crate::ui::theme::text_input_styles::standard())
                 .size(crate::ui::theme::utils::typography::text_input_size())
                 .width(Length::Fill)
                 .into()
         };
 
-        let eye_icon = if is_secret_mode {
-            if self.secret.trim().is_empty() {
-                "🔑"
-            } else {
-                "👁"
-            }
-        } else {
-            "🔑"
-        };
         let toggle_button =
             if self.secret.trim().is_empty() && self.display_mode == TotpDisplayMode::Secret {
-                // No toggle when empty - just show the input icon
-                button(eye_icon)
-                    .style(button_styles::secondary())
-                    .padding(utils::small_button_padding())
+                // No toggle when empty - show disabled toggle
+                crate::ui::theme::utils::password_visibility_toggle(
+                    false,
+                    TotpFieldMessage::ToggleVisibility,
+                )
             } else {
-                button(eye_icon)
-                    .on_press(TotpFieldMessage::ToggleVisibility)
-                    .style(button_styles::secondary())
-                    .padding(utils::small_button_padding())
+                crate::ui::theme::utils::password_visibility_toggle(
+                    self.display_mode == TotpDisplayMode::Secret,
+                    TotpFieldMessage::ToggleVisibility,
+                )
             };
 
         let mut row_elements = vec![input, toggle_button.into()];
@@ -358,39 +357,32 @@ impl TotpField {
                 "0s".to_string()
             };
 
-            let color = if remaining <= 5 {
-                theme::ERROR_RED
-            } else if remaining <= 10 {
-                theme::WARNING_YELLOW
-            } else {
-                theme::SUCCESS_GREEN
-            };
+            // Color coding for remaining time (currently unused but kept for future styling)
+            let _remaining_time_color = remaining;
 
             let refresh_indicator = container(
-                text(refresh_text)
-                    .size(crate::ui::theme::utils::typography::small_text_size())
-                    .style(iced::theme::Text::Color(color)),
+                text(refresh_text).size(crate::ui::theme::utils::typography::small_text_size()),
             )
             .padding(utils::small_element_padding())
-            .center_y();
+            .center_y(Length::Shrink);
 
             row_elements.push(refresh_indicator.into());
         }
 
         // Add validation indicator
         if !self.is_valid_secret() && !self.secret.trim().is_empty() {
-            let error_indicator = container(
-                text("❌")
-                    .size(crate::ui::theme::utils::typography::small_text_size())
-                    .style(iced::theme::Text::Color(theme::ERROR_RED)),
-            )
-            .padding(utils::small_element_padding())
-            .center_y();
+            let error_indicator =
+                container(text("❌").size(crate::ui::theme::utils::typography::small_text_size()))
+                    .padding(utils::small_element_padding())
+                    .center_y(Length::Shrink);
 
             row_elements.push(error_indicator.into());
         }
 
-        let main_row = row(row_elements).spacing(5).align_items(Alignment::Center);
+        let main_row = row(row_elements)
+            .spacing(5)
+            .align_y(Alignment::Center)
+            .height(Length::Shrink);
 
         // Add help text for TOTP
         let help_text = if self.display_mode == TotpDisplayMode::Secret {
@@ -407,18 +399,22 @@ impl TotpField {
             Some("Invalid TOTP secret - switch to edit mode to fix")
         };
 
-        if let Some(help) = help_text {
+        let result = if let Some(help) = help_text {
+            tracing::info!("TOTP field creating column with help text: {}", help);
             column![
                 main_row,
                 Space::with_height(Length::Fixed(5.0)),
-                text(help)
-                    .size(crate::ui::theme::utils::typography::small_text_size())
-                    .style(iced::theme::Text::Color(LIGHT_GRAY_TEXT))
+                text(help).size(crate::ui::theme::utils::typography::small_text_size())
             ]
+            .height(Length::Shrink)
             .into()
         } else {
+            tracing::info!("TOTP field creating main row without help text");
             main_row.into()
-        }
+        };
+
+        tracing::info!("TOTP view_editing() completed successfully");
+        result
     }
 
     /// View for display mode (in credential details)
@@ -434,40 +430,32 @@ impl TotpField {
                     let formatted_code = format!("{} {}", &code[..3], &code[3..]);
                     // Use a button that looks like a text input for copyable TOTP codes
                     let code_button = button(
-                        text(&formatted_code)
+                        text(formatted_code)
                             .size(crate::ui::theme::utils::typography::normal_text_size()),
                     )
                     .on_press(TotpFieldMessage::CopyCode)
-                    .style(button_styles::text_field_like())
-                    .padding(10)
-                    .width(Length::Fill);
+                    .padding(utils::text_input_padding())
+                    .width(Length::Fill)
+                    .style(crate::ui::theme::button_styles::text_field_like());
                     (code_button.into(), true)
                 } else {
                     let error_text = text("Invalid secret")
-                        .size(crate::ui::theme::utils::typography::normal_text_size())
-                        .style(iced::theme::Text::Color(theme::ERROR_RED));
+                        .size(crate::ui::theme::utils::typography::normal_text_size());
                     (error_text.into(), false)
                 }
             }
             TotpDisplayMode::Secret => {
                 let formatted_secret = totp::format_totp_secret(&self.secret);
-                let secret_text = text(&formatted_secret)
-                    .size(crate::ui::theme::utils::typography::normal_text_size())
-                    .style(iced::theme::Text::Color(theme::DARK_TEXT));
+                let secret_text = text(formatted_secret)
+                    .size(crate::ui::theme::utils::typography::normal_text_size());
                 (secret_text.into(), false)
             }
         };
 
-        let eye_icon = if self.display_mode == TotpDisplayMode::Secret {
-            "👁"
-        } else {
-            "🔑"
-        };
-
-        let toggle_button = button(eye_icon)
-            .on_press(TotpFieldMessage::ToggleVisibility)
-            .style(button_styles::secondary())
-            .padding(utils::small_button_padding());
+        let toggle_button = crate::ui::theme::utils::password_visibility_toggle(
+            self.display_mode == TotpDisplayMode::Secret,
+            TotpFieldMessage::ToggleVisibility,
+        );
 
         let mut row_elements = vec![
             display_element,
@@ -480,37 +468,31 @@ impl TotpField {
         // Add refresh indicator
         if is_code_display {
             let remaining = self.seconds_until_refresh();
-            let color = if remaining <= 5 {
-                theme::ERROR_RED
-            } else if remaining <= 10 {
-                theme::WARNING_YELLOW
-            } else {
-                theme::SUCCESS_GREEN
-            };
+            // Color coding for remaining time (currently unused but kept for future styling)
+            let _remaining_time_color = remaining;
 
             let refresh_indicator = container(
                 text(format!("{}s", remaining))
-                    .size(crate::ui::theme::utils::typography::small_text_size())
-                    .style(iced::theme::Text::Color(color)),
+                    .size(crate::ui::theme::utils::typography::small_text_size()),
             )
             .padding(utils::small_element_padding())
-            .center_y();
+            .center_y(Length::Fill);
 
             row_elements.push(refresh_indicator.into());
         }
 
         row(row_elements)
             .spacing(5)
-            .align_items(Alignment::Center)
+            .align_y(Alignment::Center)
             .into()
     }
 
     /// Get subscription for automatic refresh
     pub fn subscription(&self) -> Subscription<TotpFieldMessage> {
         if !self.secret.trim().is_empty() && self.current_code.is_some() {
-            // Use a more frequent timer to ensure we catch the exact moment
-            // when the TOTP boundary is crossed for precise synchronization
-            iced::time::every(Duration::from_millis(100)).map(|_| TotpFieldMessage::RefreshCode)
+            // Use a less frequent timer since we fixed the refresh logic
+            // This reduces unnecessary message passing and re-renders
+            iced::time::every(Duration::from_millis(1000)).map(|_| TotpFieldMessage::RefreshCode)
         } else {
             Subscription::none()
         }

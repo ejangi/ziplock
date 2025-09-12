@@ -1,7 +1,8 @@
-//! Shared theme and styling for ZipLock Linux App
+//! Comprehensive theme and styling for ZipLock Linux App
 //!
 //! This module contains the custom theme implementation using the ZipLock brand colors
-//! as specified in the design.md file. It provides consistent styling across all views.
+//! as specified in the design.md file. It provides consistent styling across all views
+//! with full Iced 0.13 compatibility.
 //!
 //! ## Icon Attribution
 //! Icons used in this application are from Iconoir (https://iconoir.com/),
@@ -9,7 +10,8 @@
 //! Licensed under MIT License.
 
 use iced::{
-    widget::button, widget::progress_bar, widget::svg, Background, Border, Color, Shadow, Theme,
+    widget::{button, svg, text_editor, text_input},
+    Background, Border, Color, Shadow, Theme,
 };
 
 /// Embedded ZipLock logo SVG for use across all views
@@ -72,106 +74,88 @@ pub const DATABASE_ICON_SVG: &[u8] = include_bytes!("../../resources/icons/datab
 /// Embedded license icon SVG for software license credentials
 pub const LICENSE_ICON_SVG: &[u8] = include_bytes!("../../resources/icons/license.svg");
 
-/// Helper function to create an SVG handle from the embedded ZipLock logo
+// Icon helper functions
 pub fn ziplock_logo() -> svg::Handle {
     svg::Handle::from_memory(ZIPLOCK_LOGO_SVG)
 }
 
-/// Helper function to create an SVG handle from the embedded eye icon
 pub fn eye_icon() -> svg::Handle {
     svg::Handle::from_memory(EYE_ICON_SVG)
 }
 
-/// Helper function to create an SVG handle from the embedded eye-off icon
 pub fn eye_off_icon() -> svg::Handle {
     svg::Handle::from_memory(EYE_OFF_ICON_SVG)
 }
 
-/// Helper function to create an SVG handle from the embedded alert icon
 pub fn alert_icon() -> svg::Handle {
     svg::Handle::from_memory(ALERT_ICON_SVG)
 }
 
-/// Helper function to create an SVG handle from the embedded check icon
 pub fn check_icon() -> svg::Handle {
     svg::Handle::from_memory(CHECK_ICON_SVG)
 }
 
-/// Helper function to create an SVG handle from the embedded error icon
 pub fn error_icon() -> svg::Handle {
     svg::Handle::from_memory(ERROR_ICON_SVG)
 }
 
-/// Helper function to create an SVG handle from the embedded warning icon
 pub fn warning_icon() -> svg::Handle {
     svg::Handle::from_memory(WARNING_ICON_SVG)
 }
 
-/// Helper function to create an SVG handle from the embedded refresh icon
 pub fn refresh_icon() -> svg::Handle {
     svg::Handle::from_memory(REFRESH_ICON_SVG)
 }
 
-/// Helper function to create an SVG handle from the embedded plus icon
 pub fn plus_icon() -> svg::Handle {
     svg::Handle::from_memory(PLUS_ICON_SVG)
 }
 
-/// Helper function to create an SVG handle from the embedded settings icon
 pub fn settings_icon() -> svg::Handle {
     svg::Handle::from_memory(SETTINGS_ICON_SVG)
 }
 
-/// Helper function to create an SVG handle from the embedded lock icon
 pub fn lock_icon() -> svg::Handle {
     svg::Handle::from_memory(LOCK_ICON_SVG)
 }
 
-/// Helper function to create an SVG handle from the embedded xmark icon
 pub fn xmark_icon() -> svg::Handle {
     svg::Handle::from_memory(XMARK_ICON_SVG)
 }
 
-/// Helper function to create an SVG handle from the embedded credit card icon
 pub fn credit_card_icon() -> svg::Handle {
     svg::Handle::from_memory(CREDIT_CARD_ICON_SVG)
 }
 
-/// Helper function to create an SVG handle from the embedded note icon
 pub fn note_icon() -> svg::Handle {
     svg::Handle::from_memory(NOTE_ICON_SVG)
 }
 
-/// Helper function to create an SVG handle from the embedded user icon
 pub fn user_icon() -> svg::Handle {
     svg::Handle::from_memory(USER_ICON_SVG)
 }
 
-/// Helper function to create an SVG handle from the embedded document icon
 pub fn document_icon() -> svg::Handle {
     svg::Handle::from_memory(DOCUMENT_ICON_SVG)
 }
 
-/// Helper function to create an SVG handle from the embedded bank icon
 pub fn bank_icon() -> svg::Handle {
     svg::Handle::from_memory(BANK_ICON_SVG)
 }
 
-/// Helper function to create an SVG handle from the embedded wallet icon
 pub fn wallet_icon() -> svg::Handle {
     svg::Handle::from_memory(WALLET_ICON_SVG)
 }
 
-/// Helper function to create an SVG handle from the embedded database icon
 pub fn database_icon() -> svg::Handle {
     svg::Handle::from_memory(DATABASE_ICON_SVG)
 }
 
-/// Helper function to create an SVG handle from the embedded license icon
 pub fn license_icon() -> svg::Handle {
     svg::Handle::from_memory(LICENSE_ICON_SVG)
 }
 
+// ZipLock Brand Colors - Restored Original Values
 /// Logo purple color from design.md (#8338ec)
 pub const LOGO_PURPLE: Color = Color::from_rgb(0.514, 0.220, 0.925);
 
@@ -262,1151 +246,989 @@ pub fn create_ziplock_theme() -> Theme {
 pub mod button_styles {
     use super::*;
 
-    /// Primary button style using logo purple
-    pub fn primary() -> iced::theme::Button {
-        iced::theme::Button::Custom(Box::new(PrimaryButtonStyle))
-    }
-
-    /// Secondary button style with logo purple border
-    pub fn secondary() -> iced::theme::Button {
-        iced::theme::Button::Custom(Box::new(SecondaryButtonStyle))
-    }
-
-    /// Destructive button style using error red
-    pub fn destructive() -> iced::theme::Button {
-        iced::theme::Button::Custom(Box::new(DestructiveButtonStyle))
-    }
-
-    /// Disabled button style
-    pub fn disabled() -> iced::theme::Button {
-        iced::theme::Button::Custom(Box::new(DisabledButtonStyle))
-    }
-
-    /// Password toggle button style for inactive state (password hidden)
-    pub fn password_toggle_inactive() -> iced::theme::Button {
-        iced::theme::Button::Custom(Box::new(PasswordToggleInactiveStyle))
-    }
-
-    /// Password toggle button style for active state (password shown)
-    pub fn password_toggle_active() -> iced::theme::Button {
-        iced::theme::Button::Custom(Box::new(PasswordToggleActiveStyle))
-    }
-
-    /// Text field style button for copyable TOTP codes
-    pub fn text_field_like() -> iced::theme::Button {
-        iced::theme::Button::Custom(Box::new(TextFieldLikeButtonStyle))
-    }
-
-    /// Toast close button style with white background and bold border
-    pub fn toast_close_button() -> iced::theme::Button {
-        iced::theme::Button::Custom(Box::new(ToastCloseButtonStyle))
-    }
-
-    // Style implementations
-    struct PrimaryButtonStyle;
-    struct SecondaryButtonStyle;
-    struct DestructiveButtonStyle;
-    struct DisabledButtonStyle;
-    struct PasswordToggleInactiveStyle;
-    struct PasswordToggleActiveStyle;
-    struct TextFieldLikeButtonStyle;
-    struct ToastCloseButtonStyle;
-
-    impl button::StyleSheet for PrimaryButtonStyle {
-        type Style = Theme;
-
-        fn active(&self, _style: &Self::Style) -> button::Appearance {
-            button::Appearance {
-                background: Some(LOGO_PURPLE.into()),
+    /// Primary button style using logo purple - Iced 0.13 style function
+    pub fn primary() -> impl Fn(&Theme, button::Status) -> button::Style {
+        |_theme, status| match status {
+            button::Status::Active => button::Style {
+                background: Some(Background::Color(LOGO_PURPLE)),
                 text_color: WHITE,
-                border: iced::Border {
+                border: Border {
                     color: LOGO_PURPLE,
                     width: 1.0,
                     radius: utils::border_radius().into(),
                 },
-                shadow: iced::Shadow {
+                shadow: Shadow {
                     color: SHADOW_COLOR,
                     offset: iced::Vector::new(0.0, 2.0),
                     blur_radius: 4.0,
                 },
-                shadow_offset: iced::Vector::new(0.0, 2.0),
-            }
-        }
-
-        fn hovered(&self, style: &Self::Style) -> button::Appearance {
-            let active = self.active(style);
-            button::Appearance {
-                background: Some(LOGO_PURPLE_HOVER.into()),
-                ..active
-            }
-        }
-
-        fn pressed(&self, style: &Self::Style) -> button::Appearance {
-            let active = self.active(style);
-            button::Appearance {
-                background: Some(LOGO_PURPLE_PRESSED.into()),
-                shadow: iced::Shadow::default(),
-                shadow_offset: iced::Vector::new(0.0, 1.0),
-                ..active
-            }
-        }
-
-        fn disabled(&self, _style: &Self::Style) -> button::Appearance {
-            button::Appearance {
-                background: Some(DISABLED_BACKGROUND.into()),
+            },
+            button::Status::Hovered => button::Style {
+                background: Some(Background::Color(LOGO_PURPLE_HOVER)),
+                text_color: WHITE,
+                border: Border {
+                    color: LOGO_PURPLE_HOVER,
+                    width: 1.0,
+                    radius: utils::border_radius().into(),
+                },
+                shadow: Shadow {
+                    color: SHADOW_COLOR,
+                    offset: iced::Vector::new(0.0, 2.0),
+                    blur_radius: 4.0,
+                },
+            },
+            button::Status::Pressed => button::Style {
+                background: Some(Background::Color(LOGO_PURPLE_PRESSED)),
+                text_color: WHITE,
+                border: Border {
+                    color: LOGO_PURPLE_PRESSED,
+                    width: 1.0,
+                    radius: utils::border_radius().into(),
+                },
+                shadow: Shadow {
+                    color: SHADOW_COLOR,
+                    offset: iced::Vector::new(0.0, 1.0),
+                    blur_radius: 2.0,
+                },
+            },
+            button::Status::Disabled => button::Style {
+                background: Some(Background::Color(DISABLED_BACKGROUND)),
                 text_color: DISABLED_TEXT,
-                border: iced::Border {
+                border: Border {
                     color: DISABLED_BORDER,
                     width: 1.0,
                     radius: utils::border_radius().into(),
                 },
-                shadow: iced::Shadow::default(),
-                shadow_offset: iced::Vector::new(0.0, 0.0),
-            }
+                shadow: Shadow::default(),
+            },
         }
     }
 
-    impl button::StyleSheet for SecondaryButtonStyle {
-        type Style = Theme;
-
-        fn active(&self, _style: &Self::Style) -> button::Appearance {
-            button::Appearance {
-                background: Some(TRANSPARENT.into()),
+    /// Secondary button style with logo purple border
+    pub fn secondary() -> impl Fn(&Theme, button::Status) -> button::Style {
+        |_theme, status| match status {
+            button::Status::Active => button::Style {
+                background: Some(Background::Color(TRANSPARENT)),
                 text_color: LOGO_PURPLE,
-                border: iced::Border {
+                border: Border {
                     color: LOGO_PURPLE,
                     width: 1.0,
                     radius: utils::border_radius().into(),
                 },
-                shadow: iced::Shadow::default(),
-                shadow_offset: iced::Vector::new(0.0, 0.0),
-            }
-        }
-
-        fn hovered(&self, style: &Self::Style) -> button::Appearance {
-            let active = self.active(style);
-            button::Appearance {
-                background: Some(LOGO_PURPLE_LIGHT.into()),
-                ..active
-            }
-        }
-
-        fn pressed(&self, style: &Self::Style) -> button::Appearance {
-            let active = self.active(style);
-            button::Appearance {
-                background: Some(LOGO_PURPLE_MEDIUM.into()),
-                ..active
-            }
-        }
-
-        fn disabled(&self, _style: &Self::Style) -> button::Appearance {
-            button::Appearance {
-                background: Some(TRANSPARENT.into()),
+                shadow: Shadow::default(),
+            },
+            button::Status::Hovered => button::Style {
+                background: Some(Background::Color(LOGO_PURPLE_LIGHT)),
+                text_color: LOGO_PURPLE,
+                border: Border {
+                    color: LOGO_PURPLE,
+                    width: 1.0,
+                    radius: utils::border_radius().into(),
+                },
+                shadow: Shadow::default(),
+            },
+            button::Status::Pressed => button::Style {
+                background: Some(Background::Color(LOGO_PURPLE_MEDIUM)),
+                text_color: LOGO_PURPLE,
+                border: Border {
+                    color: LOGO_PURPLE,
+                    width: 1.0,
+                    radius: utils::border_radius().into(),
+                },
+                shadow: Shadow::default(),
+            },
+            button::Status::Disabled => button::Style {
+                background: Some(Background::Color(TRANSPARENT)),
                 text_color: DISABLED_TEXT,
-                border: iced::Border {
+                border: Border {
                     color: DISABLED_BORDER,
                     width: 1.0,
                     radius: utils::border_radius().into(),
                 },
-                shadow: iced::Shadow::default(),
-                shadow_offset: iced::Vector::new(0.0, 0.0),
-            }
+                shadow: Shadow::default(),
+            },
         }
     }
 
-    impl button::StyleSheet for DestructiveButtonStyle {
-        type Style = Theme;
-
-        fn active(&self, _style: &Self::Style) -> button::Appearance {
-            button::Appearance {
-                background: Some(ERROR_RED.into()),
+    /// Destructive button style using error red
+    pub fn destructive() -> impl Fn(&Theme, button::Status) -> button::Style {
+        |_theme, status| match status {
+            button::Status::Active => button::Style {
+                background: Some(Background::Color(ERROR_RED)),
                 text_color: WHITE,
-                border: iced::Border {
+                border: Border {
                     color: ERROR_RED,
                     width: 1.0,
                     radius: utils::border_radius().into(),
                 },
-                shadow: iced::Shadow {
+                shadow: Shadow {
                     color: SHADOW_COLOR,
                     offset: iced::Vector::new(0.0, 2.0),
                     blur_radius: 4.0,
                 },
-                shadow_offset: iced::Vector::new(0.0, 2.0),
-            }
-        }
-
-        fn hovered(&self, style: &Self::Style) -> button::Appearance {
-            let active = self.active(style);
-            button::Appearance {
-                background: Some(ERROR_RED_HOVER.into()),
-                ..active
-            }
-        }
-
-        fn pressed(&self, style: &Self::Style) -> button::Appearance {
-            let active = self.active(style);
-            button::Appearance {
-                background: Some(ERROR_RED_PRESSED.into()),
-                shadow: iced::Shadow::default(),
-                shadow_offset: iced::Vector::new(0.0, 1.0),
-                ..active
-            }
-        }
-
-        fn disabled(&self, _style: &Self::Style) -> button::Appearance {
-            button::Appearance {
-                background: Some(DISABLED_BACKGROUND.into()),
-                text_color: DISABLED_TEXT,
-                border: iced::Border {
-                    color: DISABLED_BORDER,
-                    width: 1.0,
-                    radius: utils::border_radius().into(),
-                },
-                shadow: iced::Shadow::default(),
-                shadow_offset: iced::Vector::new(0.0, 0.0),
-            }
-        }
-    }
-
-    impl button::StyleSheet for PasswordToggleInactiveStyle {
-        type Style = Theme;
-
-        fn active(&self, _style: &Self::Style) -> button::Appearance {
-            button::Appearance {
-                background: Some(WHITE.into()),
-                text_color: LOGO_PURPLE,
-                border: iced::Border {
-                    color: LOGO_PURPLE,
-                    width: 1.0,
-                    radius: utils::border_radius().into(),
-                },
-                shadow: iced::Shadow::default(),
-                shadow_offset: iced::Vector::new(0.0, 0.0),
-            }
-        }
-
-        fn hovered(&self, style: &Self::Style) -> button::Appearance {
-            let active = self.active(style);
-            button::Appearance {
-                background: Some(LOGO_PURPLE_SUBTLE.into()),
-                ..active
-            }
-        }
-
-        fn pressed(&self, style: &Self::Style) -> button::Appearance {
-            let active = self.active(style);
-            button::Appearance {
-                background: Some(LOGO_PURPLE_LIGHT.into()),
-                ..active
-            }
-        }
-
-        fn disabled(&self, _style: &Self::Style) -> button::Appearance {
-            button::Appearance {
-                background: Some(WHITE.into()),
-                text_color: DISABLED_TEXT,
-                border: iced::Border {
-                    color: DISABLED_BORDER,
-                    width: 1.0,
-                    radius: utils::border_radius().into(),
-                },
-                shadow: iced::Shadow::default(),
-                shadow_offset: iced::Vector::new(0.0, 0.0),
-            }
-        }
-    }
-
-    impl button::StyleSheet for PasswordToggleActiveStyle {
-        type Style = Theme;
-
-        fn active(&self, _style: &Self::Style) -> button::Appearance {
-            button::Appearance {
-                background: Some(LOGO_PURPLE.into()),
+            },
+            button::Status::Hovered => button::Style {
+                background: Some(Background::Color(ERROR_RED_HOVER)),
                 text_color: WHITE,
-                border: iced::Border {
+                border: Border {
+                    color: ERROR_RED_HOVER,
+                    width: 1.0,
+                    radius: utils::border_radius().into(),
+                },
+                shadow: Shadow {
+                    color: SHADOW_COLOR,
+                    offset: iced::Vector::new(0.0, 2.0),
+                    blur_radius: 4.0,
+                },
+            },
+            button::Status::Pressed => button::Style {
+                background: Some(Background::Color(ERROR_RED_PRESSED)),
+                text_color: WHITE,
+                border: Border {
+                    color: ERROR_RED_PRESSED,
+                    width: 1.0,
+                    radius: utils::border_radius().into(),
+                },
+                shadow: Shadow {
+                    color: SHADOW_COLOR,
+                    offset: iced::Vector::new(0.0, 1.0),
+                    blur_radius: 2.0,
+                },
+            },
+            button::Status::Disabled => button::Style {
+                background: Some(Background::Color(DISABLED_BACKGROUND)),
+                text_color: DISABLED_TEXT,
+                border: Border {
+                    color: DISABLED_BORDER,
+                    width: 1.0,
+                    radius: utils::border_radius().into(),
+                },
+                shadow: Shadow::default(),
+            },
+        }
+    }
+
+    /// Password toggle button style for inactive state (password hidden)
+    pub fn password_toggle_inactive() -> impl Fn(&Theme, button::Status) -> button::Style {
+        |_theme, status| match status {
+            button::Status::Active => button::Style {
+                background: Some(Background::Color(VERY_LIGHT_GRAY)),
+                text_color: LOGO_PURPLE,
+                border: Border {
+                    color: LIGHT_GRAY_BORDER,
+                    width: 1.0,
+                    radius: utils::border_radius().into(),
+                },
+                shadow: Shadow::default(),
+            },
+            button::Status::Hovered => button::Style {
+                background: Some(Background::Color(LOGO_PURPLE_SUBTLE)),
+                text_color: LOGO_PURPLE,
+                border: Border {
                     color: LOGO_PURPLE,
                     width: 1.0,
                     radius: utils::border_radius().into(),
                 },
-                shadow: iced::Shadow::default(),
-                shadow_offset: iced::Vector::new(0.0, 0.0),
-            }
-        }
-
-        fn hovered(&self, style: &Self::Style) -> button::Appearance {
-            let active = self.active(style);
-            button::Appearance {
-                background: Some(LOGO_PURPLE_HOVER.into()),
-                ..active
-            }
-        }
-
-        fn pressed(&self, style: &Self::Style) -> button::Appearance {
-            let active = self.active(style);
-            button::Appearance {
-                background: Some(LOGO_PURPLE_PRESSED.into()),
-                ..active
-            }
-        }
-
-        fn disabled(&self, _style: &Self::Style) -> button::Appearance {
-            button::Appearance {
-                background: Some(WHITE.into()),
+                shadow: Shadow::default(),
+            },
+            button::Status::Pressed => button::Style {
+                background: Some(Background::Color(LOGO_PURPLE_LIGHT)),
+                text_color: LOGO_PURPLE,
+                border: Border {
+                    color: LOGO_PURPLE,
+                    width: 1.0,
+                    radius: utils::border_radius().into(),
+                },
+                shadow: Shadow::default(),
+            },
+            button::Status::Disabled => button::Style {
+                background: Some(Background::Color(DISABLED_BACKGROUND)),
                 text_color: DISABLED_TEXT,
-                border: iced::Border {
+                border: Border {
                     color: DISABLED_BORDER,
                     width: 1.0,
                     radius: utils::border_radius().into(),
                 },
-                shadow: iced::Shadow::default(),
-                shadow_offset: iced::Vector::new(0.0, 0.0),
-            }
+                shadow: Shadow::default(),
+            },
         }
     }
 
-    impl button::StyleSheet for DisabledButtonStyle {
-        type Style = Theme;
-
-        fn active(&self, _style: &Self::Style) -> button::Appearance {
-            button::Appearance {
-                background: Some(DISABLED_BACKGROUND.into()),
+    /// Password toggle button style for active state (password shown)
+    pub fn password_toggle_active() -> impl Fn(&Theme, button::Status) -> button::Style {
+        |_theme, status| match status {
+            button::Status::Active => button::Style {
+                background: Some(Background::Color(LOGO_PURPLE)),
+                text_color: WHITE,
+                border: Border {
+                    color: LOGO_PURPLE,
+                    width: 2.0,
+                    radius: utils::border_radius().into(),
+                },
+                shadow: Shadow::default(),
+            },
+            button::Status::Hovered => button::Style {
+                background: Some(Background::Color(LOGO_PURPLE_HOVER)),
+                text_color: WHITE,
+                border: Border {
+                    color: LOGO_PURPLE_HOVER,
+                    width: 2.0,
+                    radius: utils::border_radius().into(),
+                },
+                shadow: Shadow::default(),
+            },
+            button::Status::Pressed => button::Style {
+                background: Some(Background::Color(LOGO_PURPLE_PRESSED)),
+                text_color: WHITE,
+                border: Border {
+                    color: LOGO_PURPLE_PRESSED,
+                    width: 2.0,
+                    radius: utils::border_radius().into(),
+                },
+                shadow: Shadow::default(),
+            },
+            button::Status::Disabled => button::Style {
+                background: Some(Background::Color(DISABLED_BACKGROUND)),
                 text_color: DISABLED_TEXT,
-                border: iced::Border {
+                border: Border {
                     color: DISABLED_BORDER,
                     width: 1.0,
                     radius: utils::border_radius().into(),
                 },
-                shadow: iced::Shadow::default(),
-                shadow_offset: iced::Vector::new(0.0, 0.0),
-            }
-        }
-
-        fn hovered(&self, style: &Self::Style) -> button::Appearance {
-            self.active(style)
-        }
-
-        fn pressed(&self, style: &Self::Style) -> button::Appearance {
-            self.active(style)
-        }
-
-        fn disabled(&self, style: &Self::Style) -> button::Appearance {
-            self.active(style)
+                shadow: Shadow::default(),
+            },
         }
     }
 
-    impl button::StyleSheet for TextFieldLikeButtonStyle {
-        type Style = Theme;
-
-        fn active(&self, _style: &Self::Style) -> button::Appearance {
-            button::Appearance {
-                background: Some(WHITE.into()),
+    /// Text field style button for copyable TOTP codes
+    pub fn text_field_like() -> impl Fn(&Theme, button::Status) -> button::Style {
+        |_theme, status| match status {
+            button::Status::Active => button::Style {
+                background: Some(Background::Color(WHITE)),
                 text_color: DARK_TEXT,
-                border: iced::Border {
+                border: Border {
                     color: DISABLED_BACKGROUND,
                     width: 1.0,
                     radius: utils::border_radius().into(),
                 },
-                shadow: iced::Shadow::default(),
-                shadow_offset: iced::Vector::new(0.0, 0.0),
-            }
-        }
-
-        fn hovered(&self, style: &Self::Style) -> button::Appearance {
-            let active = self.active(style);
-            button::Appearance {
-                background: Some(Color::from_rgb(0.98, 0.98, 0.98).into()), // Slight gray tint on hover
-                border: iced::Border {
-                    color: LOGO_PURPLE, // Purple border on hover
-                    width: 2.0,
-                    radius: utils::border_radius().into(),
-                },
-                ..active
-            }
-        }
-
-        fn pressed(&self, style: &Self::Style) -> button::Appearance {
-            let active = self.active(style);
-            button::Appearance {
-                background: Some(VERY_LIGHT_GRAY.into()),
-                border: iced::Border {
+                shadow: Shadow::default(),
+            },
+            button::Status::Hovered => button::Style {
+                background: Some(Background::Color(Color::from_rgb(0.98, 0.98, 0.98))),
+                text_color: DARK_TEXT,
+                border: Border {
                     color: LOGO_PURPLE,
                     width: 2.0,
                     radius: utils::border_radius().into(),
                 },
-                ..active
-            }
-        }
-
-        fn disabled(&self, _style: &Self::Style) -> button::Appearance {
-            button::Appearance {
-                background: Some(VERY_LIGHT_GRAY.into()),
+                shadow: Shadow::default(),
+            },
+            button::Status::Pressed => button::Style {
+                background: Some(Background::Color(VERY_LIGHT_GRAY)),
+                text_color: DARK_TEXT,
+                border: Border {
+                    color: LOGO_PURPLE,
+                    width: 2.0,
+                    radius: utils::border_radius().into(),
+                },
+                shadow: Shadow::default(),
+            },
+            button::Status::Disabled => button::Style {
+                background: Some(Background::Color(VERY_LIGHT_GRAY)),
                 text_color: DISABLED_TEXT,
-                border: iced::Border {
+                border: Border {
                     color: EXTRA_LIGHT_GRAY,
                     width: 1.0,
                     radius: utils::border_radius().into(),
                 },
-                shadow: iced::Shadow::default(),
-                shadow_offset: iced::Vector::new(0.0, 0.0),
-            }
+                shadow: Shadow::default(),
+            },
         }
     }
 
-    impl button::StyleSheet for ToastCloseButtonStyle {
-        type Style = iced::Theme;
-
-        fn active(&self, _style: &Self::Style) -> button::Appearance {
-            button::Appearance {
-                background: Some(WHITE.into()),
+    /// Toast close button style with white background and bold border
+    pub fn toast_close_button() -> impl Fn(&Theme, button::Status) -> button::Style {
+        |_theme, status| match status {
+            button::Status::Active => button::Style {
+                background: Some(Background::Color(WHITE)),
                 text_color: DARK_TEXT,
-                border: iced::Border {
+                border: Border {
                     color: WHITE,
                     width: 2.0,
                     radius: utils::border_radius().into(),
                 },
-                shadow: iced::Shadow::default(),
-                shadow_offset: iced::Vector::new(0.0, 0.0),
-            }
-        }
-
-        fn hovered(&self, _style: &Self::Style) -> button::Appearance {
-            button::Appearance {
-                background: Some(iced::Color::from_rgba(1.0, 1.0, 1.0, 0.9).into()),
+                shadow: Shadow::default(),
+            },
+            button::Status::Hovered => button::Style {
+                background: Some(Background::Color(Color::from_rgba(1.0, 1.0, 1.0, 0.9))),
                 text_color: DARK_TEXT,
-                border: iced::Border {
+                border: Border {
                     color: WHITE,
                     width: 2.0,
                     radius: utils::border_radius().into(),
                 },
-                shadow: iced::Shadow::default(),
-                shadow_offset: iced::Vector::new(0.0, 0.0),
-            }
-        }
-
-        fn pressed(&self, _style: &Self::Style) -> button::Appearance {
-            button::Appearance {
-                background: Some(iced::Color::from_rgba(1.0, 1.0, 1.0, 0.8).into()),
+                shadow: Shadow::default(),
+            },
+            button::Status::Pressed => button::Style {
+                background: Some(Background::Color(Color::from_rgba(1.0, 1.0, 1.0, 0.8))),
                 text_color: DARK_TEXT,
-                border: iced::Border {
+                border: Border {
                     color: WHITE,
                     width: 2.0,
                     radius: utils::border_radius().into(),
                 },
-                shadow: iced::Shadow::default(),
-                shadow_offset: iced::Vector::new(0.0, 0.0),
-            }
-        }
-
-        fn disabled(&self, _style: &Self::Style) -> button::Appearance {
-            button::Appearance {
-                background: Some(iced::Color::from_rgba(1.0, 1.0, 1.0, 0.5).into()),
+                shadow: Shadow::default(),
+            },
+            button::Status::Disabled => button::Style {
+                background: Some(Background::Color(Color::from_rgba(1.0, 1.0, 1.0, 0.5))),
                 text_color: DISABLED_TEXT,
-                border: iced::Border {
+                border: Border {
                     color: DISABLED_BORDER,
                     width: 1.0,
                     radius: utils::border_radius().into(),
                 },
-                shadow: iced::Shadow::default(),
-                shadow_offset: iced::Vector::new(0.0, 0.0),
-            }
+                shadow: Shadow::default(),
+            },
+        }
+    }
+
+    /// Credential list item button style with white background and purple border
+    pub fn credential_list_item() -> impl Fn(&Theme, button::Status) -> button::Style {
+        |_theme, status| match status {
+            button::Status::Active => button::Style {
+                background: Some(Background::Color(WHITE)),
+                text_color: DARK_TEXT,
+                border: Border {
+                    color: LOGO_PURPLE,
+                    width: 1.0,
+                    radius: utils::border_radius().into(),
+                },
+                shadow: Shadow::default(),
+            },
+            button::Status::Hovered => button::Style {
+                background: Some(Background::Color(LOGO_PURPLE_LIGHT)),
+                text_color: DARK_TEXT,
+                border: Border {
+                    color: LOGO_PURPLE_HOVER,
+                    width: 1.0,
+                    radius: utils::border_radius().into(),
+                },
+                shadow: Shadow {
+                    color: SHADOW_COLOR,
+                    offset: iced::Vector::new(0.0, 1.0),
+                    blur_radius: 2.0,
+                },
+            },
+            button::Status::Pressed => button::Style {
+                background: Some(Background::Color(LOGO_PURPLE_MEDIUM)),
+                text_color: DARK_TEXT,
+                border: Border {
+                    color: LOGO_PURPLE_PRESSED,
+                    width: 1.0,
+                    radius: utils::border_radius().into(),
+                },
+                shadow: Shadow {
+                    color: SHADOW_COLOR,
+                    offset: iced::Vector::new(0.0, 1.0),
+                    blur_radius: 1.0,
+                },
+            },
+            button::Status::Disabled => button::Style {
+                background: Some(Background::Color(VERY_LIGHT_GRAY)),
+                text_color: DISABLED_TEXT,
+                border: Border {
+                    color: DISABLED_BORDER,
+                    width: 1.0,
+                    radius: utils::border_radius().into(),
+                },
+                shadow: Shadow::default(),
+            },
         }
     }
 }
 
-/// Custom text input styles
+/// Custom text input styles for validation states and different input types
 pub mod text_input_styles {
     use super::*;
 
     /// Standard text input style
-    pub fn standard() -> iced::theme::TextInput {
-        iced::theme::TextInput::Custom(Box::new(StandardTextInputStyle))
+    pub fn standard() -> impl Fn(&Theme, text_input::Status) -> text_input::Style {
+        |_theme, status| match status {
+            text_input::Status::Active => text_input::Style {
+                background: Background::Color(WHITE),
+                border: Border {
+                    color: LIGHT_GRAY_BORDER,
+                    width: 1.0,
+                    radius: utils::border_radius().into(),
+                },
+                icon: MEDIUM_GRAY,
+                placeholder: MEDIUM_GRAY,
+                value: DARK_TEXT,
+                selection: LOGO_PURPLE,
+            },
+            text_input::Status::Hovered => text_input::Style {
+                background: Background::Color(WHITE),
+                border: Border {
+                    color: LOGO_PURPLE,
+                    width: 1.0,
+                    radius: utils::border_radius().into(),
+                },
+                icon: MEDIUM_GRAY,
+                placeholder: MEDIUM_GRAY,
+                value: DARK_TEXT,
+                selection: LOGO_PURPLE,
+            },
+            text_input::Status::Focused => text_input::Style {
+                background: Background::Color(WHITE),
+                border: Border {
+                    color: LOGO_PURPLE,
+                    width: 2.0,
+                    radius: utils::border_radius().into(),
+                },
+                icon: MEDIUM_GRAY,
+                placeholder: MEDIUM_GRAY,
+                value: DARK_TEXT,
+                selection: LOGO_PURPLE,
+            },
+            text_input::Status::Disabled => text_input::Style {
+                background: Background::Color(VERY_LIGHT_GRAY),
+                border: Border {
+                    color: LIGHT_GRAY_BORDER,
+                    width: 1.0,
+                    radius: utils::border_radius().into(),
+                },
+                icon: MEDIUM_GRAY,
+                placeholder: MEDIUM_GRAY,
+                value: DISABLED_TEXT,
+                selection: DISABLED_TEXT,
+            },
+        }
     }
 
     /// Valid text input style (green border)
-    pub fn valid() -> iced::theme::TextInput {
-        iced::theme::TextInput::Custom(Box::new(ValidTextInputStyle))
+    pub fn valid() -> impl Fn(&Theme, text_input::Status) -> text_input::Style {
+        |_theme, status| match status {
+            text_input::Status::Active => text_input::Style {
+                background: Background::Color(WHITE),
+                border: Border {
+                    color: SUCCESS_GREEN,
+                    width: 2.0,
+                    radius: utils::border_radius().into(),
+                },
+                icon: MEDIUM_GRAY,
+                placeholder: MEDIUM_GRAY,
+                value: DARK_TEXT,
+                selection: SUCCESS_GREEN,
+            },
+            text_input::Status::Hovered => text_input::Style {
+                background: Background::Color(WHITE),
+                border: Border {
+                    color: SUCCESS_GREEN,
+                    width: 2.0,
+                    radius: utils::border_radius().into(),
+                },
+                icon: MEDIUM_GRAY,
+                placeholder: MEDIUM_GRAY,
+                value: DARK_TEXT,
+                selection: SUCCESS_GREEN,
+            },
+            text_input::Status::Focused => text_input::Style {
+                background: Background::Color(WHITE),
+                border: Border {
+                    color: SUCCESS_GREEN,
+                    width: 3.0,
+                    radius: utils::border_radius().into(),
+                },
+                icon: MEDIUM_GRAY,
+                placeholder: MEDIUM_GRAY,
+                value: DARK_TEXT,
+                selection: SUCCESS_GREEN,
+            },
+            text_input::Status::Disabled => text_input::Style {
+                background: Background::Color(VERY_LIGHT_GRAY),
+                border: Border {
+                    color: LIGHT_GRAY_BORDER,
+                    width: 1.0,
+                    radius: utils::border_radius().into(),
+                },
+                icon: MEDIUM_GRAY,
+                placeholder: MEDIUM_GRAY,
+                value: DISABLED_TEXT,
+                selection: DISABLED_TEXT,
+            },
+        }
     }
 
     /// Invalid text input style (red border)
-    pub fn invalid() -> iced::theme::TextInput {
-        iced::theme::TextInput::Custom(Box::new(InvalidTextInputStyle))
+    pub fn invalid() -> impl Fn(&Theme, text_input::Status) -> text_input::Style {
+        |_theme, status| match status {
+            text_input::Status::Active => text_input::Style {
+                background: Background::Color(WHITE),
+                border: Border {
+                    color: ERROR_RED,
+                    width: 2.0,
+                    radius: utils::border_radius().into(),
+                },
+                icon: MEDIUM_GRAY,
+                placeholder: MEDIUM_GRAY,
+                value: DARK_TEXT,
+                selection: ERROR_RED,
+            },
+            text_input::Status::Hovered => text_input::Style {
+                background: Background::Color(WHITE),
+                border: Border {
+                    color: ERROR_RED,
+                    width: 2.0,
+                    radius: utils::border_radius().into(),
+                },
+                icon: MEDIUM_GRAY,
+                placeholder: MEDIUM_GRAY,
+                value: DARK_TEXT,
+                selection: ERROR_RED,
+            },
+            text_input::Status::Focused => text_input::Style {
+                background: Background::Color(WHITE),
+                border: Border {
+                    color: ERROR_RED,
+                    width: 3.0,
+                    radius: utils::border_radius().into(),
+                },
+                icon: MEDIUM_GRAY,
+                placeholder: MEDIUM_GRAY,
+                value: DARK_TEXT,
+                selection: ERROR_RED,
+            },
+            text_input::Status::Disabled => text_input::Style {
+                background: Background::Color(VERY_LIGHT_GRAY),
+                border: Border {
+                    color: LIGHT_GRAY_BORDER,
+                    width: 1.0,
+                    radius: utils::border_radius().into(),
+                },
+                icon: MEDIUM_GRAY,
+                placeholder: MEDIUM_GRAY,
+                value: DISABLED_TEXT,
+                selection: DISABLED_TEXT,
+            },
+        }
     }
 
     /// Neutral text input style (purple border for focused state)
-    pub fn neutral() -> iced::theme::TextInput {
-        iced::theme::TextInput::Custom(Box::new(NeutralTextInputStyle))
+    pub fn neutral() -> impl Fn(&Theme, text_input::Status) -> text_input::Style {
+        |_theme, status| match status {
+            text_input::Status::Active => text_input::Style {
+                background: Background::Color(WHITE),
+                border: Border {
+                    color: LOGO_PURPLE,
+                    width: 2.0,
+                    radius: utils::border_radius().into(),
+                },
+                icon: MEDIUM_GRAY,
+                placeholder: MEDIUM_GRAY,
+                value: DARK_TEXT,
+                selection: LOGO_PURPLE,
+            },
+            text_input::Status::Hovered => text_input::Style {
+                background: Background::Color(WHITE),
+                border: Border {
+                    color: LOGO_PURPLE,
+                    width: 2.0,
+                    radius: utils::border_radius().into(),
+                },
+                icon: MEDIUM_GRAY,
+                placeholder: MEDIUM_GRAY,
+                value: DARK_TEXT,
+                selection: LOGO_PURPLE,
+            },
+            text_input::Status::Focused => text_input::Style {
+                background: Background::Color(WHITE),
+                border: Border {
+                    color: LOGO_PURPLE,
+                    width: 3.0,
+                    radius: utils::border_radius().into(),
+                },
+                icon: MEDIUM_GRAY,
+                placeholder: MEDIUM_GRAY,
+                value: DARK_TEXT,
+                selection: LOGO_PURPLE,
+            },
+            text_input::Status::Disabled => text_input::Style {
+                background: Background::Color(VERY_LIGHT_GRAY),
+                border: Border {
+                    color: LIGHT_GRAY_BORDER,
+                    width: 1.0,
+                    radius: utils::border_radius().into(),
+                },
+                icon: MEDIUM_GRAY,
+                placeholder: MEDIUM_GRAY,
+                value: DISABLED_TEXT,
+                selection: DISABLED_TEXT,
+            },
+        }
     }
 
     /// Title text input style (larger font and padding)
-    pub fn title() -> iced::theme::TextInput {
-        iced::theme::TextInput::Custom(Box::new(TitleTextInputStyle))
-    }
-
-    // Style implementations
-    struct StandardTextInputStyle;
-    struct ValidTextInputStyle;
-    struct InvalidTextInputStyle;
-    struct NeutralTextInputStyle;
-    struct TitleTextInputStyle;
-
-    impl iced::widget::text_input::StyleSheet for StandardTextInputStyle {
-        type Style = iced::Theme;
-
-        fn active(&self, _style: &Self::Style) -> iced::widget::text_input::Appearance {
-            iced::widget::text_input::Appearance {
-                background: Color::WHITE.into(),
-                border: iced::Border {
+    pub fn title() -> impl Fn(&Theme, text_input::Status) -> text_input::Style {
+        |_theme, status| match status {
+            text_input::Status::Active => text_input::Style {
+                background: Background::Color(WHITE),
+                border: Border {
                     color: LIGHT_GRAY_BORDER,
                     width: 1.0,
                     radius: utils::border_radius().into(),
                 },
-                icon_color: MEDIUM_GRAY,
-            }
-        }
-
-        fn focused(&self, _style: &Self::Style) -> iced::widget::text_input::Appearance {
-            iced::widget::text_input::Appearance {
-                background: WHITE.into(),
-                border: iced::Border {
-                    color: LOGO_PURPLE,
-                    width: 2.0,
-                    radius: utils::border_radius().into(),
-                },
-                icon_color: MEDIUM_GRAY,
-            }
-        }
-
-        fn placeholder_color(&self, _style: &Self::Style) -> Color {
-            MEDIUM_GRAY
-        }
-
-        fn value_color(&self, _style: &Self::Style) -> Color {
-            DARK_TEXT
-        }
-
-        fn disabled_color(&self, _style: &Self::Style) -> Color {
-            MEDIUM_GRAY
-        }
-
-        fn selection_color(&self, _style: &Self::Style) -> Color {
-            LOGO_PURPLE
-        }
-
-        fn disabled(&self, _style: &Self::Style) -> iced::widget::text_input::Appearance {
-            iced::widget::text_input::Appearance {
-                background: VERY_LIGHT_GRAY.into(),
-                border: iced::Border {
-                    color: LIGHT_GRAY_BORDER,
-                    width: 1.0,
-                    radius: utils::border_radius().into(),
-                },
-                icon_color: MEDIUM_GRAY,
-            }
-        }
-    }
-
-    impl iced::widget::text_input::StyleSheet for ValidTextInputStyle {
-        type Style = iced::Theme;
-
-        fn active(&self, _style: &Self::Style) -> iced::widget::text_input::Appearance {
-            iced::widget::text_input::Appearance {
-                background: WHITE.into(),
-                border: iced::Border {
-                    color: SUCCESS_GREEN,
-                    width: 2.0,
-                    radius: utils::border_radius().into(),
-                },
-                icon_color: MEDIUM_GRAY,
-            }
-        }
-
-        fn focused(&self, _style: &Self::Style) -> iced::widget::text_input::Appearance {
-            iced::widget::text_input::Appearance {
-                background: WHITE.into(),
-                border: iced::Border {
-                    color: SUCCESS_GREEN,
-                    width: 3.0,
-                    radius: utils::border_radius().into(),
-                },
-                icon_color: MEDIUM_GRAY,
-            }
-        }
-
-        fn placeholder_color(&self, _style: &Self::Style) -> Color {
-            MEDIUM_GRAY
-        }
-
-        fn value_color(&self, _style: &Self::Style) -> Color {
-            DARK_TEXT
-        }
-
-        fn disabled_color(&self, _style: &Self::Style) -> Color {
-            MEDIUM_GRAY
-        }
-
-        fn selection_color(&self, _style: &Self::Style) -> Color {
-            SUCCESS_GREEN
-        }
-
-        fn disabled(&self, _style: &Self::Style) -> iced::widget::text_input::Appearance {
-            iced::widget::text_input::Appearance {
-                background: VERY_LIGHT_GRAY.into(),
-                border: iced::Border {
-                    color: LIGHT_GRAY_BORDER,
-                    width: 1.0,
-                    radius: utils::border_radius().into(),
-                },
-                icon_color: MEDIUM_GRAY,
-            }
-        }
-    }
-
-    impl iced::widget::text_input::StyleSheet for InvalidTextInputStyle {
-        type Style = iced::Theme;
-
-        fn active(&self, _style: &Self::Style) -> iced::widget::text_input::Appearance {
-            iced::widget::text_input::Appearance {
-                background: WHITE.into(),
-                border: iced::Border {
-                    color: ERROR_RED,
-                    width: 2.0,
-                    radius: utils::border_radius().into(),
-                },
-                icon_color: MEDIUM_GRAY,
-            }
-        }
-
-        fn focused(&self, _style: &Self::Style) -> iced::widget::text_input::Appearance {
-            iced::widget::text_input::Appearance {
-                background: WHITE.into(),
-                border: iced::Border {
-                    color: ERROR_RED,
-                    width: 3.0,
-                    radius: utils::border_radius().into(),
-                },
-                icon_color: MEDIUM_GRAY,
-            }
-        }
-
-        fn placeholder_color(&self, _style: &Self::Style) -> Color {
-            MEDIUM_GRAY
-        }
-
-        fn value_color(&self, _style: &Self::Style) -> Color {
-            DARK_TEXT
-        }
-
-        fn disabled_color(&self, _style: &Self::Style) -> Color {
-            MEDIUM_GRAY
-        }
-
-        fn selection_color(&self, _style: &Self::Style) -> Color {
-            ERROR_RED
-        }
-
-        fn disabled(&self, _style: &Self::Style) -> iced::widget::text_input::Appearance {
-            iced::widget::text_input::Appearance {
-                background: VERY_LIGHT_GRAY.into(),
-                border: iced::Border {
-                    color: LIGHT_GRAY_BORDER,
-                    width: 1.0,
-                    radius: utils::border_radius().into(),
-                },
-                icon_color: MEDIUM_GRAY,
-            }
-        }
-    }
-
-    impl iced::widget::text_input::StyleSheet for NeutralTextInputStyle {
-        type Style = iced::Theme;
-
-        fn active(&self, _style: &Self::Style) -> iced::widget::text_input::Appearance {
-            iced::widget::text_input::Appearance {
-                background: WHITE.into(),
-                border: iced::Border {
-                    color: LOGO_PURPLE,
-                    width: 2.0,
-                    radius: utils::border_radius().into(),
-                },
-                icon_color: MEDIUM_GRAY,
-            }
-        }
-
-        fn focused(&self, _style: &Self::Style) -> iced::widget::text_input::Appearance {
-            iced::widget::text_input::Appearance {
-                background: WHITE.into(),
-                border: iced::Border {
-                    color: LOGO_PURPLE,
-                    width: 3.0,
-                    radius: utils::border_radius().into(),
-                },
-                icon_color: MEDIUM_GRAY,
-            }
-        }
-
-        fn placeholder_color(&self, _style: &Self::Style) -> Color {
-            MEDIUM_GRAY
-        }
-
-        fn value_color(&self, _style: &Self::Style) -> Color {
-            DARK_TEXT
-        }
-
-        fn disabled_color(&self, _style: &Self::Style) -> Color {
-            MEDIUM_GRAY
-        }
-
-        fn selection_color(&self, _style: &Self::Style) -> Color {
-            LOGO_PURPLE
-        }
-
-        fn disabled(&self, _style: &Self::Style) -> iced::widget::text_input::Appearance {
-            iced::widget::text_input::Appearance {
-                background: VERY_LIGHT_GRAY.into(),
-                border: iced::Border {
-                    color: LIGHT_GRAY_BORDER,
-                    width: 1.0,
-                    radius: utils::border_radius().into(),
-                },
-                icon_color: MEDIUM_GRAY,
-            }
-        }
-    }
-
-    impl iced::widget::text_input::StyleSheet for TitleTextInputStyle {
-        type Style = iced::Theme;
-
-        fn active(&self, _style: &Self::Style) -> iced::widget::text_input::Appearance {
-            iced::widget::text_input::Appearance {
-                background: WHITE.into(),
-                border: iced::Border {
-                    color: LIGHT_GRAY_BORDER,
-                    width: 2.0,
-                    radius: utils::border_radius().into(),
-                },
-                icon_color: LIGHT_GRAY_TEXT,
-            }
-        }
-
-        fn focused(&self, _style: &Self::Style) -> iced::widget::text_input::Appearance {
-            iced::widget::text_input::Appearance {
-                background: WHITE.into(),
-                border: iced::Border {
-                    color: LOGO_PURPLE,
-                    width: 2.0,
-                    radius: utils::border_radius().into(),
-                },
-                icon_color: LOGO_PURPLE,
-            }
-        }
-
-        fn placeholder_color(&self, _style: &Self::Style) -> Color {
-            LIGHT_GRAY_TEXT
-        }
-
-        fn value_color(&self, _style: &Self::Style) -> Color {
-            DARK_TEXT
-        }
-
-        fn disabled_color(&self, _style: &Self::Style) -> Color {
-            MEDIUM_GRAY
-        }
-
-        fn selection_color(&self, _style: &Self::Style) -> Color {
-            LOGO_PURPLE
-        }
-
-        fn disabled(&self, _style: &Self::Style) -> iced::widget::text_input::Appearance {
-            iced::widget::text_input::Appearance {
-                background: VERY_LIGHT_GRAY.into(),
-                border: iced::Border {
-                    color: LIGHT_GRAY_BORDER,
-                    width: 2.0,
-                    radius: utils::border_radius().into(),
-                },
-                icon_color: MEDIUM_GRAY,
-            }
-        }
-    }
-}
-
-/// Custom progress bar styles
-pub mod progress_bar_styles {
-    use super::*;
-
-    /// Primary progress bar style using logo purple
-    pub fn primary() -> iced::theme::ProgressBar {
-        iced::theme::ProgressBar::Custom(Box::new(PrimaryProgressBarStyle))
-    }
-
-    struct PrimaryProgressBarStyle;
-
-    impl progress_bar::StyleSheet for PrimaryProgressBarStyle {
-        type Style = Theme;
-
-        fn appearance(&self, _style: &Self::Style) -> progress_bar::Appearance {
-            progress_bar::Appearance {
-                background: Color::from_rgb(0.9, 0.9, 0.9).into(),
-                bar: LOGO_PURPLE.into(),
-                border_radius: utils::border_radius().into(),
-            }
-        }
-    }
-}
-
-/// Custom container styles for error displays and alerts
-pub mod container_styles {
-    use super::*;
-    use iced::widget::container;
-
-    /// Error alert container style with red border and light red background
-    pub fn error_alert() -> iced::theme::Container {
-        iced::theme::Container::Custom(Box::new(ErrorAlertStyle))
-    }
-
-    /// Warning alert container style with yellow border and light yellow background
-    pub fn warning_alert() -> iced::theme::Container {
-        iced::theme::Container::Custom(Box::new(WarningAlertStyle))
-    }
-
-    /// Success alert container style with green border and light green background
-    pub fn success_alert() -> iced::theme::Container {
-        iced::theme::Container::Custom(Box::new(SuccessAlertStyle))
-    }
-
-    /// Info alert container style with purple border and light purple background
-    pub fn info_alert() -> iced::theme::Container {
-        iced::theme::Container::Custom(Box::new(InfoAlertStyle))
-    }
-
-    /// Error toast container style with red border and light red background (no border radius)
-    pub fn error_toast() -> iced::theme::Container {
-        iced::theme::Container::Custom(Box::new(ErrorToastStyle))
-    }
-
-    /// Warning toast container style with yellow border and light yellow background (no border radius)
-    pub fn warning_toast() -> iced::theme::Container {
-        iced::theme::Container::Custom(Box::new(WarningToastStyle))
-    }
-
-    /// Success toast container style with green border and light green background (no border radius)
-    pub fn success_toast() -> iced::theme::Container {
-        iced::theme::Container::Custom(Box::new(SuccessToastStyle))
-    }
-
-    /// Info toast container style with purple border and light purple background (no border radius)
-    pub fn info_toast() -> iced::theme::Container {
-        iced::theme::Container::Custom(Box::new(InfoToastStyle))
-    }
-
-    /// Sidebar container style with light gray background
-    pub fn sidebar() -> iced::theme::Container {
-        iced::theme::Container::Custom(Box::new(SidebarStyle))
-    }
-
-    /// Modal dialog container style with white background and shadow
-    pub fn modal() -> iced::theme::Container {
-        iced::theme::Container::Custom(Box::new(ModalStyle))
-    }
-
-    /// Card container style with light background and border
-    pub fn card() -> iced::theme::Container {
-        iced::theme::Container::Custom(Box::new(CardStyle))
-    }
-
-    // Style implementations
-    struct ErrorAlertStyle;
-    struct WarningAlertStyle;
-    struct SuccessAlertStyle;
-    struct InfoAlertStyle;
-    struct SidebarStyle;
-    struct ModalStyle;
-    struct CardStyle;
-
-    // Toast style implementations (no border radius)
-    struct ErrorToastStyle;
-    struct WarningToastStyle;
-    struct SuccessToastStyle;
-    struct InfoToastStyle;
-
-    impl container::StyleSheet for ErrorAlertStyle {
-        type Style = iced::Theme;
-
-        fn appearance(&self, _style: &Self::Style) -> container::Appearance {
-            container::Appearance {
-                background: Some(iced::Color::from_rgba(0.937, 0.278, 0.435, 0.1).into()),
-                border: iced::Border {
-                    color: ERROR_RED,
-                    width: 1.0,
-                    radius: utils::border_radius().into(),
-                },
-                text_color: Some(ERROR_RED),
-                shadow: iced::Shadow::default(),
-            }
-        }
-    }
-
-    impl container::StyleSheet for WarningAlertStyle {
-        type Style = iced::Theme;
-
-        fn appearance(&self, _style: &Self::Style) -> container::Appearance {
-            let warning_color = iced::Color::from_rgb(0.988, 0.749, 0.286); // Yellow
-            container::Appearance {
-                background: Some(iced::Color::from_rgba(0.988, 0.749, 0.286, 0.1).into()),
-                border: iced::Border {
-                    color: warning_color,
-                    width: 1.0,
-                    radius: utils::border_radius().into(),
-                },
-                text_color: Some(iced::Color::from_rgb(0.8, 0.6, 0.0)),
-                shadow: iced::Shadow::default(),
-            }
-        }
-    }
-
-    impl container::StyleSheet for SuccessAlertStyle {
-        type Style = iced::Theme;
-
-        fn appearance(&self, _style: &Self::Style) -> container::Appearance {
-            container::Appearance {
-                background: Some(iced::Color::from_rgba(0.024, 0.839, 0.627, 0.1).into()),
-                border: iced::Border {
-                    color: SUCCESS_GREEN,
-                    width: 1.0,
-                    radius: utils::border_radius().into(),
-                },
-                text_color: Some(SUCCESS_GREEN),
-                shadow: iced::Shadow::default(),
-            }
-        }
-    }
-
-    impl container::StyleSheet for InfoAlertStyle {
-        type Style = iced::Theme;
-
-        fn appearance(&self, _style: &Self::Style) -> container::Appearance {
-            container::Appearance {
-                background: Some(Background::Color(Color::from_rgb(0.96, 0.9, 1.0))),
+                icon: MEDIUM_GRAY,
+                placeholder: MEDIUM_GRAY,
+                value: DARK_TEXT,
+                selection: LOGO_PURPLE,
+            },
+            text_input::Status::Hovered => text_input::Style {
+                background: Background::Color(WHITE),
                 border: Border {
                     color: LOGO_PURPLE,
                     width: 1.0,
                     radius: utils::border_radius().into(),
                 },
-                shadow: Shadow::default(),
-                text_color: None,
-            }
-        }
-    }
-
-    impl container::StyleSheet for SidebarStyle {
-        type Style = iced::Theme;
-
-        fn appearance(&self, _style: &Self::Style) -> container::Appearance {
-            container::Appearance {
-                background: Some(Background::Color(Color::from_rgb(0.95, 0.95, 0.95))),
+                icon: MEDIUM_GRAY,
+                placeholder: MEDIUM_GRAY,
+                value: DARK_TEXT,
+                selection: LOGO_PURPLE,
+            },
+            text_input::Status::Focused => text_input::Style {
+                background: Background::Color(WHITE),
                 border: Border {
-                    color: Color::from_rgb(0.85, 0.85, 0.85),
-                    width: 0.0,
-                    radius: 0.0.into(),
-                },
-                shadow: Shadow::default(),
-                text_color: None,
-            }
-        }
-    }
-
-    impl container::StyleSheet for ErrorToastStyle {
-        type Style = iced::Theme;
-
-        fn appearance(&self, _style: &Self::Style) -> container::Appearance {
-            container::Appearance {
-                background: Some(ERROR_RED.into()),
-                border: iced::Border {
-                    color: ERROR_RED,
-                    width: 0.0,
-                    radius: 0.0.into(),
-                },
-                text_color: Some(WHITE),
-                shadow: iced::Shadow::default(),
-            }
-        }
-    }
-
-    impl container::StyleSheet for WarningToastStyle {
-        type Style = iced::Theme;
-
-        fn appearance(&self, _style: &Self::Style) -> container::Appearance {
-            container::Appearance {
-                background: Some(WARNING_YELLOW.into()),
-                border: iced::Border {
-                    color: WARNING_YELLOW,
-                    width: 0.0,
-                    radius: 0.0.into(),
-                },
-                text_color: Some(WHITE),
-                shadow: iced::Shadow::default(),
-            }
-        }
-    }
-
-    impl container::StyleSheet for SuccessToastStyle {
-        type Style = iced::Theme;
-
-        fn appearance(&self, _style: &Self::Style) -> container::Appearance {
-            container::Appearance {
-                background: Some(SUCCESS_GREEN.into()),
-                border: iced::Border {
-                    color: SUCCESS_GREEN,
-                    width: 0.0,
-                    radius: 0.0.into(),
-                },
-                text_color: Some(WHITE),
-                shadow: iced::Shadow::default(),
-            }
-        }
-    }
-
-    impl container::StyleSheet for InfoToastStyle {
-        type Style = iced::Theme;
-
-        fn appearance(&self, _style: &Self::Style) -> container::Appearance {
-            container::Appearance {
-                background: Some(LOGO_PURPLE.into()),
-                border: iced::Border {
                     color: LOGO_PURPLE,
-                    width: 0.0,
-                    radius: 0.0.into(),
+                    width: 2.0,
+                    radius: utils::border_radius().into(),
                 },
-                text_color: Some(WHITE),
-                shadow: iced::Shadow::default(),
-            }
-        }
-    }
-
-    impl container::StyleSheet for ModalStyle {
-        type Style = iced::Theme;
-
-        fn appearance(&self, _style: &Self::Style) -> container::Appearance {
-            container::Appearance {
-                background: Some(WHITE.into()),
-                border: iced::Border {
-                    color: iced::Color::from_rgb(0.9, 0.9, 0.9),
+                icon: MEDIUM_GRAY,
+                placeholder: MEDIUM_GRAY,
+                value: DARK_TEXT,
+                selection: LOGO_PURPLE,
+            },
+            text_input::Status::Disabled => text_input::Style {
+                background: Background::Color(VERY_LIGHT_GRAY),
+                border: Border {
+                    color: LIGHT_GRAY_BORDER,
                     width: 1.0,
                     radius: utils::border_radius().into(),
                 },
-                text_color: Some(DARK_TEXT),
-                shadow: iced::Shadow {
-                    color: iced::Color::from_rgba(0.0, 0.0, 0.0, 0.1),
-                    offset: iced::Vector::new(0.0, 4.0),
-                    blur_radius: 8.0,
-                },
-            }
-        }
-    }
-
-    impl container::StyleSheet for CardStyle {
-        type Style = iced::Theme;
-
-        fn appearance(&self, _style: &Self::Style) -> container::Appearance {
-            container::Appearance {
-                background: Some(iced::Color::from_rgb(0.98, 0.98, 0.98).into()),
-                border: iced::Border {
-                    color: iced::Color::from_rgb(0.95, 0.95, 0.95),
-                    width: 1.0,
-                    radius: utils::border_radius().into(),
-                },
-                text_color: Some(DARK_TEXT),
-                shadow: iced::Shadow::default(),
-            }
+                icon: MEDIUM_GRAY,
+                placeholder: MEDIUM_GRAY,
+                value: DISABLED_TEXT,
+                selection: DISABLED_TEXT,
+            },
         }
     }
 }
 
-/// Utility functions for common UI patterns
+pub mod text_editor_styles {
+    use super::*;
+
+    /// Standard text editor style with white background
+    pub fn standard() -> impl Fn(&Theme, text_editor::Status) -> text_editor::Style {
+        |_theme, status| match status {
+            text_editor::Status::Active => text_editor::Style {
+                background: Background::Color(WHITE),
+                border: Border {
+                    color: LIGHT_GRAY_BORDER,
+                    width: 1.0,
+                    radius: utils::border_radius().into(),
+                },
+                icon: MEDIUM_GRAY,
+                placeholder: MEDIUM_GRAY,
+                value: DARK_TEXT,
+                selection: LOGO_PURPLE,
+            },
+            text_editor::Status::Hovered => text_editor::Style {
+                background: Background::Color(WHITE),
+                border: Border {
+                    color: LOGO_PURPLE,
+                    width: 1.0,
+                    radius: utils::border_radius().into(),
+                },
+                icon: MEDIUM_GRAY,
+                placeholder: MEDIUM_GRAY,
+                value: DARK_TEXT,
+                selection: LOGO_PURPLE,
+            },
+            text_editor::Status::Focused => text_editor::Style {
+                background: Background::Color(WHITE),
+                border: Border {
+                    color: LOGO_PURPLE,
+                    width: 2.0,
+                    radius: utils::border_radius().into(),
+                },
+                icon: MEDIUM_GRAY,
+                placeholder: MEDIUM_GRAY,
+                value: DARK_TEXT,
+                selection: LOGO_PURPLE,
+            },
+            text_editor::Status::Disabled => text_editor::Style {
+                background: Background::Color(VERY_LIGHT_GRAY),
+                border: Border {
+                    color: LIGHT_GRAY_BORDER,
+                    width: 1.0,
+                    radius: utils::border_radius().into(),
+                },
+                icon: MEDIUM_GRAY,
+                placeholder: MEDIUM_GRAY,
+                value: DISABLED_TEXT,
+                selection: DISABLED_TEXT,
+            },
+        }
+    }
+
+    /// Valid text editor style with white background and green border
+    pub fn valid() -> impl Fn(&Theme, text_editor::Status) -> text_editor::Style {
+        |_theme, status| match status {
+            text_editor::Status::Active => text_editor::Style {
+                background: Background::Color(WHITE),
+                border: Border {
+                    color: SUCCESS_GREEN,
+                    width: 2.0,
+                    radius: utils::border_radius().into(),
+                },
+                icon: MEDIUM_GRAY,
+                placeholder: MEDIUM_GRAY,
+                value: DARK_TEXT,
+                selection: SUCCESS_GREEN,
+            },
+            text_editor::Status::Hovered => text_editor::Style {
+                background: Background::Color(WHITE),
+                border: Border {
+                    color: SUCCESS_GREEN,
+                    width: 2.0,
+                    radius: utils::border_radius().into(),
+                },
+                icon: MEDIUM_GRAY,
+                placeholder: MEDIUM_GRAY,
+                value: DARK_TEXT,
+                selection: SUCCESS_GREEN,
+            },
+            text_editor::Status::Focused => text_editor::Style {
+                background: Background::Color(WHITE),
+                border: Border {
+                    color: SUCCESS_GREEN,
+                    width: 3.0,
+                    radius: utils::border_radius().into(),
+                },
+                icon: MEDIUM_GRAY,
+                placeholder: MEDIUM_GRAY,
+                value: DARK_TEXT,
+                selection: SUCCESS_GREEN,
+            },
+            text_editor::Status::Disabled => text_editor::Style {
+                background: Background::Color(VERY_LIGHT_GRAY),
+                border: Border {
+                    color: LIGHT_GRAY_BORDER,
+                    width: 1.0,
+                    radius: utils::border_radius().into(),
+                },
+                icon: MEDIUM_GRAY,
+                placeholder: MEDIUM_GRAY,
+                value: DISABLED_TEXT,
+                selection: DISABLED_TEXT,
+            },
+        }
+    }
+
+    /// Invalid text editor style with white background and red border
+    pub fn invalid() -> impl Fn(&Theme, text_editor::Status) -> text_editor::Style {
+        |_theme, status| match status {
+            text_editor::Status::Active => text_editor::Style {
+                background: Background::Color(WHITE),
+                border: Border {
+                    color: ERROR_RED,
+                    width: 2.0,
+                    radius: utils::border_radius().into(),
+                },
+                icon: MEDIUM_GRAY,
+                placeholder: MEDIUM_GRAY,
+                value: DARK_TEXT,
+                selection: ERROR_RED,
+            },
+            text_editor::Status::Hovered => text_editor::Style {
+                background: Background::Color(WHITE),
+                border: Border {
+                    color: ERROR_RED,
+                    width: 2.0,
+                    radius: utils::border_radius().into(),
+                },
+                icon: MEDIUM_GRAY,
+                placeholder: MEDIUM_GRAY,
+                value: DARK_TEXT,
+                selection: ERROR_RED,
+            },
+            text_editor::Status::Focused => text_editor::Style {
+                background: Background::Color(WHITE),
+                border: Border {
+                    color: ERROR_RED,
+                    width: 3.0,
+                    radius: utils::border_radius().into(),
+                },
+                icon: MEDIUM_GRAY,
+                placeholder: MEDIUM_GRAY,
+                value: DARK_TEXT,
+                selection: ERROR_RED,
+            },
+            text_editor::Status::Disabled => text_editor::Style {
+                background: Background::Color(VERY_LIGHT_GRAY),
+                border: Border {
+                    color: LIGHT_GRAY_BORDER,
+                    width: 1.0,
+                    radius: utils::border_radius().into(),
+                },
+                icon: MEDIUM_GRAY,
+                placeholder: MEDIUM_GRAY,
+                value: DISABLED_TEXT,
+                selection: DISABLED_TEXT,
+            },
+        }
+    }
+
+    /// Neutral text editor style with white background and purple border
+    pub fn neutral() -> impl Fn(&Theme, text_editor::Status) -> text_editor::Style {
+        |_theme, status| match status {
+            text_editor::Status::Active => text_editor::Style {
+                background: Background::Color(WHITE),
+                border: Border {
+                    color: LOGO_PURPLE,
+                    width: 2.0,
+                    radius: utils::border_radius().into(),
+                },
+                icon: MEDIUM_GRAY,
+                placeholder: MEDIUM_GRAY,
+                value: DARK_TEXT,
+                selection: LOGO_PURPLE,
+            },
+            text_editor::Status::Hovered => text_editor::Style {
+                background: Background::Color(WHITE),
+                border: Border {
+                    color: LOGO_PURPLE,
+                    width: 2.0,
+                    radius: utils::border_radius().into(),
+                },
+                icon: MEDIUM_GRAY,
+                placeholder: MEDIUM_GRAY,
+                value: DARK_TEXT,
+                selection: LOGO_PURPLE,
+            },
+            text_editor::Status::Focused => text_editor::Style {
+                background: Background::Color(WHITE),
+                border: Border {
+                    color: LOGO_PURPLE,
+                    width: 3.0,
+                    radius: utils::border_radius().into(),
+                },
+                icon: MEDIUM_GRAY,
+                placeholder: MEDIUM_GRAY,
+                value: DARK_TEXT,
+                selection: LOGO_PURPLE,
+            },
+            text_editor::Status::Disabled => text_editor::Style {
+                background: Background::Color(VERY_LIGHT_GRAY),
+                border: Border {
+                    color: LIGHT_GRAY_BORDER,
+                    width: 1.0,
+                    radius: utils::border_radius().into(),
+                },
+                icon: MEDIUM_GRAY,
+                placeholder: MEDIUM_GRAY,
+                value: DISABLED_TEXT,
+                selection: DISABLED_TEXT,
+            },
+        }
+    }
+}
+
+/// Utility functions for consistent spacing, sizing, and styling
 pub mod utils {
+    use iced::Padding;
+
     /// Creates a consistent spacing value for UI elements
     pub fn standard_spacing() -> u16 {
         20
     }
 
     /// Creates a consistent padding value for buttons
-    pub fn button_padding() -> [u16; 2] {
-        [20, 20]
+    pub fn button_padding() -> Padding {
+        Padding::from([10, 20])
     }
 
     /// Creates a consistent padding value for small buttons
-    pub fn small_button_padding() -> [u16; 2] {
-        [4, 8]
+    pub fn small_button_padding() -> Padding {
+        Padding::from([4, 8])
     }
 
     /// Creates a consistent padding value for standard UI buttons
-    pub fn standard_button_padding() -> [u16; 2] {
-        [10, 20]
+    pub fn standard_button_padding() -> Padding {
+        Padding::from([12, 24])
     }
 
     /// Creates a consistent padding value for repository buttons
-    pub fn repository_button_padding() -> [u16; 2] {
-        [15, 20]
+    pub fn repository_button_padding() -> Padding {
+        Padding::from([15, 20])
     }
 
     /// Creates a consistent padding value for setup buttons
-    pub fn setup_button_padding() -> [u16; 2] {
-        [15, 30]
+    pub fn setup_button_padding() -> Padding {
+        Padding::from([12, 32])
     }
 
     /// Creates a consistent padding value for text inputs
-    pub fn text_input_padding() -> u16 {
-        10
+    pub fn text_input_padding() -> Padding {
+        Padding::from([10, 15])
     }
 
     /// Creates a consistent padding value for title text inputs (larger)
-    pub fn title_input_padding() -> u16 {
-        16
+    pub fn title_input_padding() -> Padding {
+        Padding::from([15, 20])
     }
 
     /// Creates a consistent padding value for toast dismiss buttons
-    pub fn toast_dismiss_padding() -> [u16; 2] {
-        [2, 6]
+    pub fn toast_dismiss_padding() -> Padding {
+        Padding::from([5, 8])
     }
 
     /// Creates a consistent padding value for small elements
-    pub fn small_element_padding() -> [u16; 2] {
-        [0, 5]
+    pub fn small_element_padding() -> Padding {
+        Padding::from([8, 12])
     }
 
     /// Creates a consistent padding value for logo containers
-    pub fn logo_container_padding() -> [u16; 4] {
-        [20, 0, 30, 0]
+    pub fn logo_container_padding() -> Padding {
+        Padding::from([20, 40])
     }
 
     /// Creates a consistent padding value for main content areas
-    pub fn main_content_padding() -> [u16; 4] {
-        [0, 30, 30, 30]
+    pub fn main_content_padding() -> Padding {
+        Padding::from([20, 30])
     }
 
     /// Creates a consistent padding value for search bars
-    pub fn search_bar_padding() -> [u16; 2] {
-        [8, 12]
+    pub fn search_bar_padding() -> Padding {
+        Padding::from([12, 16])
     }
 
     /// Creates a consistent padding value for add credential buttons
-    pub fn add_credential_button_padding() -> [u16; 2] {
-        [12, 24]
+    pub fn add_credential_button_padding() -> Padding {
+        Padding::from([10, 16])
     }
 
     /// Creates a consistent padding value for scrollable lists
-    pub fn list_padding() -> [u16; 2] {
-        [10, 0]
+    pub fn list_padding() -> Padding {
+        Padding::from([15, 20])
     }
 
     /// Creates a consistent padding value for error containers
-    pub fn error_container_padding() -> [u16; 2] {
-        [12, 16]
+    pub fn error_container_padding() -> Padding {
+        Padding::from([20, 25])
     }
 
     /// Creates a consistent padding value for completion buttons
-    pub fn completion_button_padding() -> [u16; 2] {
-        [12, 24]
+    pub fn completion_button_padding() -> Padding {
+        Padding::from([12, 20])
     }
 
     /// Creates a consistent border radius for UI elements
@@ -1415,34 +1237,26 @@ pub mod utils {
     }
 
     /// Creates a consistent padding for alert components
-    pub fn alert_padding() -> [u16; 2] {
-        [12, 16]
+    pub fn alert_padding() -> Padding {
+        Padding::from([15, 20])
     }
 
     /// Creates a consistent padding for password visibility toggle buttons
-    pub fn password_toggle_padding() -> [u16; 2] {
-        [8, 12]
+    pub fn password_toggle_padding() -> Padding {
+        Padding::from([8, 12])
     }
 
-    /// Creates a password visibility toggle button with eye icon
+    /// Creates a password visibility toggle button with eye icon and proper styling
     pub fn password_visibility_toggle<'a, Message: Clone + 'a>(
         show_password: bool,
         on_toggle: Message,
     ) -> iced::widget::Button<'a, Message> {
         use iced::widget::{button, svg};
 
-        let (icon, style) = if show_password {
-            // Password is shown, display eye icon to represent current visible state and use active (purple) style
-            (
-                super::eye_icon(),
-                super::button_styles::password_toggle_active(),
-            )
+        let icon = if show_password {
+            super::eye_icon()
         } else {
-            // Password is hidden, display eye-off icon to represent current obscured state and use inactive (white with purple outline) style
-            (
-                super::eye_off_icon(),
-                super::button_styles::password_toggle_inactive(),
-            )
+            super::eye_off_icon()
         };
 
         button(
@@ -1451,7 +1265,13 @@ pub mod utils {
                 .height(iced::Length::Fixed(16.0)),
         )
         .on_press(on_toggle)
-        .style(style)
+        .style(move |theme, status| {
+            if show_password {
+                super::button_styles::password_toggle_active()(theme, status)
+            } else {
+                super::button_styles::password_toggle_inactive()(theme, status)
+            }
+        })
         .padding(password_toggle_padding())
     }
 
@@ -1525,23 +1345,18 @@ pub mod utils {
             base_font_size() + 10.0
         }
 
-        /// Get title input text size (larger than standard input)
+        /// Get title input size (for larger title inputs)
         pub fn title_input_size() -> f32 {
-            base_font_size() + 4.0
+            base_font_size() + 2.0
         }
     }
 }
 
-/// Alert component utilities and types
+/// Alert system for user feedback
 pub mod alerts {
     use super::*;
-    use iced::{
-        widget::{button, column, container, row, svg, text, Space},
-        Alignment, Element, Length,
-    };
 
-    /// Alert severity levels
-    #[derive(Debug, Clone, PartialEq)]
+    #[derive(Debug, Clone, PartialEq, Eq)]
     pub enum AlertLevel {
         Error,
         Warning,
@@ -1549,7 +1364,6 @@ pub mod alerts {
         Info,
     }
 
-    /// Alert message structure
     #[derive(Debug, Clone)]
     pub struct AlertMessage {
         pub level: AlertLevel,
@@ -1559,18 +1373,19 @@ pub mod alerts {
     }
 
     impl AlertMessage {
-        /// Create a new error alert
-        pub fn error(message: impl Into<String>) -> Self {
+        pub fn error<S: Into<String>>(message: S) -> Self {
             Self {
                 level: AlertLevel::Error,
-                title: Some("Error".to_string()),
+                title: None,
                 message: message.into(),
                 dismissible: true,
             }
         }
 
-        /// Create a new error alert with custom title
-        pub fn error_with_title(title: impl Into<String>, message: impl Into<String>) -> Self {
+        pub fn error_with_title<S1: Into<String>, S2: Into<String>>(
+            title: S1,
+            message: S2,
+        ) -> Self {
             Self {
                 level: AlertLevel::Error,
                 title: Some(title.into()),
@@ -1579,109 +1394,89 @@ pub mod alerts {
             }
         }
 
-        /// Create a new warning alert
-        pub fn warning(message: impl Into<String>) -> Self {
+        pub fn warning<S: Into<String>>(message: S) -> Self {
             Self {
                 level: AlertLevel::Warning,
-                title: Some("Warning".to_string()),
+                title: None,
                 message: message.into(),
                 dismissible: true,
             }
         }
 
-        /// Create a new success alert
-        pub fn success(message: impl Into<String>) -> Self {
+        pub fn success<S: Into<String>>(message: S) -> Self {
             Self {
                 level: AlertLevel::Success,
-                title: Some("Success".to_string()),
+                title: None,
                 message: message.into(),
                 dismissible: true,
             }
         }
 
-        /// Create a new info alert
-        pub fn info(message: impl Into<String>) -> Self {
+        pub fn info<S: Into<String>>(message: S) -> Self {
             Self {
                 level: AlertLevel::Info,
-                title: Some("Information".to_string()),
+                title: None,
                 message: message.into(),
                 dismissible: true,
             }
         }
 
-        /// Create an IPC error alert with a specific message
-        pub fn ipc_error(message: impl Into<String>) -> Self {
+        pub fn ipc_error<S: Into<String>>(message: S) -> Self {
             Self {
                 level: AlertLevel::Error,
-                title: Some("Connection Error".to_string()),
+                title: Some("Backend Connection Error".to_string()),
                 message: message.into(),
                 dismissible: true,
             }
         }
     }
 
-    /// Renders an alert component
-    pub fn render_alert<Message: Clone + 'static>(
-        alert: &AlertMessage,
+    /// Render an alert using proper styling with custom themes
+    pub fn render_alert<'a, Message>(
+        alert: &'a AlertMessage,
         on_dismiss: Option<Message>,
-    ) -> Element<'_, Message> {
-        let container_style = match alert.level {
-            AlertLevel::Error => container_styles::error_alert(),
-            AlertLevel::Warning => container_styles::warning_alert(),
-            AlertLevel::Success => container_styles::success_alert(),
-            AlertLevel::Info => container_styles::info_alert(),
+    ) -> iced::Element<'a, Message>
+    where
+        Message: 'a + Clone,
+    {
+        use iced::widget::{button, column, container, row, svg, text};
+        use iced::{Alignment, Length};
+
+        let icon = match alert.level {
+            AlertLevel::Error => svg(error_icon()),
+            AlertLevel::Warning => svg(warning_icon()),
+            AlertLevel::Success => svg(check_icon()),
+            AlertLevel::Info => svg(alert_icon()),
         };
 
-        let icon_svg = match alert.level {
-            AlertLevel::Error => error_icon(),
-            AlertLevel::Warning => warning_icon(),
-            AlertLevel::Success => check_icon(),
-            AlertLevel::Info => alert_icon(),
-        };
+        let mut content_column = column![].spacing(8);
 
-        let mut content = row![svg(icon_svg).width(16).height(16)];
-
-        let mut text_column = column![];
-
-        if let Some(title) = &alert.title {
-            let title_color = match alert.level {
-                AlertLevel::Error => ERROR_RED,
-                AlertLevel::Warning => iced::Color::from_rgb(0.8, 0.6, 0.0),
-                AlertLevel::Success => SUCCESS_GREEN,
-                AlertLevel::Info => LOGO_PURPLE,
-            };
-            text_column = text_column.push(
-                text(title)
-                    .size(14)
-                    .style(iced::theme::Text::Color(title_color)),
-            );
+        if let Some(ref title) = alert.title {
+            content_column =
+                content_column.push(text(title).size(utils::typography::medium_text_size()));
         }
 
-        text_column = text_column.push(
-            text(&alert.message)
-                .size(12)
-                .style(iced::theme::Text::Color(DARK_TEXT)),
-        );
+        content_column =
+            content_column.push(text(&alert.message).size(utils::typography::normal_text_size()));
 
-        content = content
-            .push(Space::with_width(Length::Fixed(10.0)))
-            .push(text_column.width(Length::Fill).spacing(4));
+        let mut main_row = row![icon.width(20).height(20), content_column,]
+            .spacing(12)
+            .align_y(Alignment::Center);
 
-        if alert.dismissible {
-            if let Some(dismiss_msg) = on_dismiss {
-                content = content.push(Space::with_width(Length::Fixed(10.0))).push(
-                    button(svg(xmark_icon()).width(12).height(12))
-                        .on_press(dismiss_msg)
-                        .padding(utils::toast_dismiss_padding())
-                        .style(button_styles::secondary()),
-                );
+        if let Some(dismiss_message) = on_dismiss {
+            if alert.dismissible {
+                let dismiss_button = button(svg(xmark_icon()).width(16).height(16))
+                    .on_press(dismiss_message)
+                    .style(super::button_styles::toast_close_button())
+                    .padding(utils::toast_dismiss_padding());
+
+                main_row = main_row.push(dismiss_button);
             }
         }
 
-        container(content.align_items(Alignment::Center))
+        container(main_row)
             .padding(utils::alert_padding())
             .width(Length::Fill)
-            .style(container_style)
             .into()
     }
 }

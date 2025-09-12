@@ -5,14 +5,14 @@
 
 use iced::{
     widget::{button, column, container, row, svg, text, Space},
-    Alignment, Element, Length,
+    Element, Length,
 };
 use std::time::{Duration, Instant};
 
 use crate::ui::theme::{
     alert_icon,
     alerts::{AlertLevel, AlertMessage},
-    button_styles, check_icon, container_styles, error_icon, warning_icon, xmark_icon, WHITE,
+    button_styles, check_icon, error_icon, warning_icon, xmark_icon,
 };
 
 /// Duration for toast auto-dismiss (in seconds)
@@ -279,12 +279,7 @@ pub fn render_toast<Message: Clone + 'static>(
     toast: &Toast,
     on_dismiss: Option<Message>,
 ) -> Element<'_, Message> {
-    let container_style = match toast.message.level {
-        AlertLevel::Error => container_styles::error_toast(),
-        AlertLevel::Warning => container_styles::warning_toast(),
-        AlertLevel::Success => container_styles::success_toast(),
-        AlertLevel::Info => container_styles::info_toast(),
-    };
+    // Use simplified styling for Iced 0.13
 
     let icon_svg = match toast.message.level {
         AlertLevel::Error => error_icon(),
@@ -298,17 +293,12 @@ pub fn render_toast<Message: Clone + 'static>(
     let mut text_column = column![];
 
     if let Some(title) = &toast.message.title {
-        text_column = text_column.push(
-            text(title)
-                .size(crate::ui::theme::utils::typography::medium_text_size())
-                .style(iced::theme::Text::Color(WHITE)),
-        );
+        text_column = text_column
+            .push(text(title).size(crate::ui::theme::utils::typography::medium_text_size()));
     }
 
     text_column = text_column.push(
-        text(&toast.message.message)
-            .size(crate::ui::theme::utils::typography::normal_text_size())
-            .style(iced::theme::Text::Color(WHITE)),
+        text(&toast.message.message).size(crate::ui::theme::utils::typography::normal_text_size()),
     );
 
     content = content
@@ -327,10 +317,7 @@ pub fn render_toast<Message: Clone + 'static>(
         }
     }
 
-    let toast_container = container(content.align_items(Alignment::Center))
-        .padding([16, 20])
-        .width(Length::Fill)
-        .style(container_style);
+    let toast_container = container(content).padding([16, 20]).width(Length::Fill);
 
     // Apply opacity for fade effect
     let opacity = toast.opacity();
@@ -370,13 +357,13 @@ pub fn render_toasts<Message: Clone + 'static>(
 
     let positioned_toasts = match toast_manager.position() {
         ToastPosition::TopRight | ToastPosition::BottomRight => {
-            container(toast_column.align_items(Alignment::End))
+            container(toast_column.align_x(iced::alignment::Horizontal::Right))
         }
         ToastPosition::TopLeft | ToastPosition::BottomLeft => {
-            container(toast_column.align_items(Alignment::Start))
+            container(toast_column.align_x(iced::alignment::Horizontal::Left))
         }
         ToastPosition::TopCenter | ToastPosition::BottomCenter => {
-            container(toast_column.align_items(Alignment::Center))
+            container(toast_column.align_x(iced::alignment::Horizontal::Center))
         }
     };
 
@@ -437,13 +424,13 @@ pub fn render_toast_overlay<'a, Message: Clone + 'static>(
                 container(container(toasts).width(Length::Fill).height(Length::Shrink))
                     .width(Length::Fill)
                     .height(Length::Shrink)
-                    .center_x()
+                    .center_x(Length::Fill)
             }
             ToastPosition::BottomCenter => {
                 container(container(toasts).width(Length::Fill).height(Length::Shrink))
                     .width(Length::Fill)
                     .height(Length::Shrink)
-                    .center_x()
+                    .center_x(Length::Fill)
             }
             ToastPosition::BottomRight => unreachable!(), // Handled above
         };

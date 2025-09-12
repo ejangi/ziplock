@@ -6,12 +6,13 @@
 use iced::{
     alignment::Alignment,
     widget::{button, column, row, scrollable, svg, text, text_editor, text_input, Space},
-    Element, Length,
+    Element, Length, Task,
 };
 use std::collections::HashMap;
 
 use crate::ui::components::totp_field::TotpField;
-use crate::ui::theme::{button_styles, utils, ERROR_RED};
+use crate::ui::theme::{self, utils};
+#[allow(unused_imports)]
 use ziplock_shared::models::{CredentialTemplate, FieldTemplate, FieldType};
 
 /// Messages that can be sent from the credential form
@@ -151,9 +152,23 @@ impl CredentialForm {
                     .get(&field_template.name)
                     .unwrap_or(&String::new())
                     .clone();
+                tracing::info!(
+                    "Initializing TOTP field '{}' with secret length: {}, secret: '{}'",
+                    field_template.name,
+                    secret.len(),
+                    if secret.is_empty() {
+                        "EMPTY"
+                    } else {
+                        "HAS_VALUE"
+                    }
+                );
                 let totp_field = TotpField::new_editing(field_template.name.clone(), secret);
                 self.totp_fields
                     .insert(field_template.name.clone(), totp_field);
+                tracing::info!(
+                    "TOTP field '{}' created and inserted into totp_fields map",
+                    field_template.name
+                );
             }
         }
         self.template = Some(template);
@@ -180,7 +195,23 @@ impl CredentialForm {
 
         // Update TOTP field if it's a TotpSecret field
         if let Some(totp_field) = self.totp_fields.get_mut(&field_name) {
+            tracing::info!(
+                "Updating TOTP field '{}' with new secret length: {}, value: '{}'",
+                field_name,
+                value.len(),
+                if value.is_empty() {
+                    "EMPTY"
+                } else {
+                    "HAS_VALUE"
+                }
+            );
             totp_field.set_secret(value);
+            tracing::info!("TOTP field '{}' updated successfully", field_name);
+        } else {
+            tracing::info!(
+                "Field '{}' is not a TOTP field or doesn't exist in totp_fields map",
+                field_name
+            );
         }
     }
 
@@ -202,10 +233,7 @@ impl CredentialForm {
     }
 
     /// Update the form based on a message
-    pub fn update(
-        &mut self,
-        message: CredentialFormMessage,
-    ) -> iced::Command<CredentialFormMessage> {
+    pub fn update(&mut self, message: CredentialFormMessage) -> Task<CredentialFormMessage> {
         match message {
             CredentialFormMessage::TitleChanged(title) => {
                 tracing::debug!("Title changed to: '{}'", title);
@@ -255,7 +283,7 @@ impl CredentialForm {
                             );
                             // Don't call totp_field.update() for CopyCode to avoid direct clipboard access
                             // Instead, return a command that the parent can handle
-                            return iced::Command::perform(async move { code }, |code| {
+                            return Task::perform(async move { code }, |code| {
                                 tracing::debug!(
                                     "Returning CopyToClipboard command for TOTP code: '{}'",
                                     code
@@ -285,7 +313,7 @@ impl CredentialForm {
                 content_type,
             } => {
                 // Forward to parent as CopyToClipboard message
-                return iced::Command::perform(
+                return Task::perform(
                     async move { (content, content_type) },
                     |(content, content_type)| CredentialFormMessage::CopyToClipboard {
                         content,
@@ -301,7 +329,7 @@ impl CredentialForm {
                 tracing::debug!(
                     "Clipboard message received in credential form - should be handled by parent"
                 );
-                return iced::Command::perform(
+                return Task::perform(
                     async move { (content, content_type) },
                     |(content, content_type)| CredentialFormMessage::CopyToClipboard {
                         content,
@@ -322,7 +350,7 @@ impl CredentialForm {
                 // This is handled by the parent component
             }
         }
-        iced::Command::none()
+        Task::none()
     }
 
     /// Render the credential form
@@ -349,12 +377,12 @@ impl CredentialForm {
                         text_input("Enter credential title...", &self.title)
                             .on_input(CredentialFormMessage::TitleChanged)
                             .padding(utils::title_input_padding())
-                            .style(crate::ui::theme::text_input_styles::title())
                             .size(crate::ui::theme::utils::typography::title_input_size())
                             .width(Length::Fill)
+                            .style(theme::text_input_styles::title())
                     ]
                     .spacing(12)
-                    .align_items(Alignment::Center)
+                    .align_y(Alignment::Center)
                     .into(),
                 );
             } else {
@@ -362,8 +390,8 @@ impl CredentialForm {
                     text_input("Enter credential title...", &self.title)
                         .on_input(CredentialFormMessage::TitleChanged)
                         .padding(utils::title_input_padding())
-                        .style(crate::ui::theme::text_input_styles::title())
                         .size(crate::ui::theme::utils::typography::title_input_size())
+                        .style(theme::text_input_styles::title())
                         .into(),
                 );
             }
@@ -378,8 +406,8 @@ impl CredentialForm {
                 text_input("Enter credential title...", &self.title)
                     .on_input(CredentialFormMessage::TitleChanged)
                     .padding(utils::text_input_padding())
-                    .style(crate::ui::theme::text_input_styles::standard())
                     .size(crate::ui::theme::utils::typography::text_input_size())
+                    .style(theme::text_input_styles::standard())
                     .into(),
             );
         }
@@ -430,7 +458,6 @@ impl CredentialForm {
             form_fields.push(Space::with_height(Length::Fixed(10.0)).into());
             form_fields.push(
                 text(error)
-                    .style(iced::theme::Text::Color(ERROR_RED))
                     .size(crate::ui::theme::utils::typography::normal_text_size())
                     .into(),
             );
@@ -445,8 +472,8 @@ impl CredentialForm {
             button_row.push(
                 button("Cancel")
                     .on_press(CredentialFormMessage::Cancel)
-                    .style(button_styles::secondary())
                     .padding(utils::button_padding())
+                    .style(theme::button_styles::secondary())
                     .into(),
             );
             button_row.push(Space::with_width(Length::Fill).into());
@@ -461,8 +488,8 @@ impl CredentialForm {
             button_row.push(
                 button("Delete")
                     .on_press(CredentialFormMessage::Delete)
-                    .style(button_styles::destructive())
                     .padding(utils::button_padding())
+                    .style(theme::button_styles::destructive())
                     .into(),
             );
             button_row.push(Space::with_width(Length::Fixed(10.0)).into());
@@ -470,13 +497,13 @@ impl CredentialForm {
 
         let save_button = if self.config.is_loading {
             button(text(&self.config.save_button_text))
-                .style(button_styles::primary())
                 .padding(utils::button_padding())
+                .style(theme::button_styles::primary())
         } else {
             button(text(&self.config.save_button_text))
                 .on_press(CredentialFormMessage::Save)
-                .style(button_styles::primary())
                 .padding(utils::button_padding())
+                .style(theme::button_styles::primary())
         };
 
         button_row.push(save_button.into());
@@ -516,13 +543,18 @@ impl CredentialForm {
             FieldType::TotpSecret => {
                 // TOTP field with specialized component
                 if let Some(totp_field) = self.totp_fields.get(field_name) {
-                    totp_field.view().map({
+                    let totp_element = totp_field.view().map({
                         let field_name = field_name.to_string();
                         move |msg| CredentialFormMessage::TotpFieldMessage(field_name.clone(), msg)
-                    })
+                    });
+                    totp_element
                 } else {
+                    tracing::error!("CRITICAL: No TOTP field found for '{}', using fallback text input. Available TOTP fields: {:?}", field_name, self.totp_fields.keys().collect::<Vec<_>>());
+                    tracing::error!(
+                        "This should not happen in edit mode if field setup is correct"
+                    );
                     // Fallback to regular text input if no TOTP field available
-                    text_input(placeholder, value)
+                    row![text_input(placeholder, value)
                         .on_input({
                             let field_name = field_name.to_string();
                             move |input| {
@@ -530,15 +562,15 @@ impl CredentialForm {
                             }
                         })
                         .padding(utils::text_input_padding())
-                        .style(crate::ui::theme::text_input_styles::standard())
                         .size(crate::ui::theme::utils::typography::text_input_size())
-                        .into()
+                        .style(theme::text_input_styles::standard())]
+                    .into()
                 }
             }
             FieldType::TextArea => {
                 // Multi-line text editor
                 if let Some(content) = self.text_editor_content.get(field_name) {
-                    text_editor(content)
+                    row![text_editor(content)
                         .on_action({
                             let field_name = field_name.to_string();
                             move |action| {
@@ -546,10 +578,11 @@ impl CredentialForm {
                             }
                         })
                         .height(Length::Fixed(100.0))
-                        .into()
+                        .style(crate::ui::theme::text_editor_styles::standard())]
+                    .into()
                 } else {
                     // Fallback to regular text input if no content state available
-                    text_input(placeholder, value)
+                    row![text_input(placeholder, value)
                         .on_input({
                             let field_name = field_name.to_string();
                             move |input| {
@@ -557,13 +590,13 @@ impl CredentialForm {
                             }
                         })
                         .padding(utils::text_input_padding())
-                        .style(crate::ui::theme::text_input_styles::standard())
                         .size(crate::ui::theme::utils::typography::text_input_size())
-                        .into()
+                        .style(theme::text_input_styles::standard())]
+                    .into()
                 }
             }
-            FieldType::Password if is_sensitive => {
-                // Password input with toggle and copy button
+            FieldType::Password => {
+                // Password input with toggle and copy button (always show toggle regardless of sensitivity)
                 row![
                     text_input(placeholder, value)
                         .on_input({
@@ -574,29 +607,58 @@ impl CredentialForm {
                         })
                         .secure(is_sensitive)
                         .padding(utils::text_input_padding())
-                        .style(crate::ui::theme::text_input_styles::standard())
-                        .size(crate::ui::theme::utils::typography::text_input_size()),
+                        .size(crate::ui::theme::utils::typography::text_input_size())
+                        .style(theme::text_input_styles::standard()),
                     button("📋")
                         .on_press(CredentialFormMessage::CopyFieldToClipboard {
                             field_name: field_name.to_string(),
                             content: value.to_string(),
                             content_type: crate::services::ClipboardContentType::Password,
                         })
-                        .style(button_styles::secondary())
-                        .padding(utils::small_button_padding()),
-                    button(if is_sensitive { "👁" } else { "🙈" })
-                        .on_press(CredentialFormMessage::ToggleFieldSensitivity(
-                            field_name.to_string()
-                        ))
-                        .style(button_styles::secondary())
-                        .padding(utils::small_button_padding()),
+                        .padding(utils::small_button_padding())
+                        .style(theme::button_styles::secondary()),
+                    theme::utils::password_visibility_toggle(
+                        !is_sensitive,
+                        CredentialFormMessage::ToggleFieldSensitivity(field_name.to_string())
+                    ),
                 ]
                 .spacing(5)
-                .align_items(Alignment::Center)
+                .align_y(Alignment::Center)
+                .into()
+            }
+            FieldType::CreditCardNumber | FieldType::Cvv => {
+                // Credit card fields with toggle and copy button (always show toggle)
+                row![
+                    text_input(placeholder, value)
+                        .on_input({
+                            let field_name = field_name.to_string();
+                            move |input| {
+                                CredentialFormMessage::FieldChanged(field_name.clone(), input)
+                            }
+                        })
+                        .secure(is_sensitive)
+                        .padding(utils::text_input_padding())
+                        .size(crate::ui::theme::utils::typography::text_input_size())
+                        .style(theme::text_input_styles::standard()),
+                    button("📋")
+                        .on_press(CredentialFormMessage::CopyFieldToClipboard {
+                            field_name: field_name.to_string(),
+                            content: value.to_string(),
+                            content_type: crate::services::ClipboardContentType::Password,
+                        })
+                        .padding(utils::small_button_padding())
+                        .style(theme::button_styles::secondary()),
+                    theme::utils::password_visibility_toggle(
+                        !is_sensitive,
+                        CredentialFormMessage::ToggleFieldSensitivity(field_name.to_string())
+                    ),
+                ]
+                .spacing(5)
+                .align_y(Alignment::Center)
                 .into()
             }
             _ if is_sensitive => {
-                // Sensitive field input with toggle and copy button
+                // Other sensitive field input with toggle and copy button
                 row![
                     text_input(placeholder, value)
                         .on_input({
@@ -607,30 +669,28 @@ impl CredentialForm {
                         })
                         .secure(is_sensitive)
                         .padding(utils::text_input_padding())
-                        .style(crate::ui::theme::text_input_styles::standard())
-                        .size(crate::ui::theme::utils::typography::text_input_size()),
+                        .size(crate::ui::theme::utils::typography::text_input_size())
+                        .style(theme::text_input_styles::standard()),
                     button("📋")
                         .on_press(CredentialFormMessage::CopyFieldToClipboard {
                             field_name: field_name.to_string(),
                             content: value.to_string(),
                             content_type: crate::services::ClipboardContentType::Password,
                         })
-                        .style(button_styles::secondary())
-                        .padding(utils::small_button_padding()),
-                    button(if is_sensitive { "👁" } else { "🙈" })
-                        .on_press(CredentialFormMessage::ToggleFieldSensitivity(
-                            field_name.to_string()
-                        ))
-                        .style(button_styles::secondary())
-                        .padding(utils::small_button_padding()),
+                        .padding(utils::small_button_padding())
+                        .style(theme::button_styles::secondary()),
+                    theme::utils::password_visibility_toggle(
+                        !is_sensitive,
+                        CredentialFormMessage::ToggleFieldSensitivity(field_name.to_string())
+                    ),
                 ]
                 .spacing(5)
-                .align_items(Alignment::Center)
+                .align_y(Alignment::Center)
                 .into()
             }
             _ => {
                 // Regular text input
-                text_input(placeholder, value)
+                row![text_input(placeholder, value)
                     .on_input({
                         let field_name = field_name.to_string();
                         move |input| CredentialFormMessage::FieldChanged(field_name.clone(), input)
@@ -638,9 +698,9 @@ impl CredentialForm {
                     .secure(is_sensitive)
                     .padding(utils::text_input_padding())
                     .width(Length::Fill)
-                    .style(crate::ui::theme::text_input_styles::standard())
                     .size(crate::ui::theme::utils::typography::text_input_size())
-                    .into()
+                    .style(theme::text_input_styles::standard())]
+                .into()
             }
         }
     }
