@@ -1,0 +1,196 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- Basic app information -->
+    <key>CFBundleName</key>
+    <string>ZipLock</string>
+
+    <key>CFBundleDisplayName</key>
+    <string>ZipLock Password Manager</string>
+
+    <key>CFBundleIdentifier</key>
+    <string>com.ziplock.passwordmanager</string>
+
+    <key>CFBundleVersion</key>
+    <string>{{VERSION}}</string>
+
+    <key>CFBundleShortVersionString</key>
+    <string>{{VERSION}}</string>
+
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+
+    <key>CFBundleSignature</key>
+    <string>ZPLK</string>
+
+    <key>CFBundleExecutable</key>
+    <string>ziplock</string>
+
+    <!-- App icon -->
+    <key>CFBundleIconFile</key>
+    <string>ziplock.icns</string>
+
+    <!-- Supported architectures -->
+    <key>LSArchitecturePriority</key>
+    <array>
+        <string>x86_64</string>
+        <string>arm64</string>
+    </array>
+
+    <!-- Minimum system version -->
+    <key>LSMinimumSystemVersion</key>
+    <string>10.15</string>
+
+    <!-- Copyright and legal -->
+    <key>NSHumanReadableCopyright</key>
+    <string>Copyright © 2024 ZipLock Project. Licensed under Apache 2.0.</string>
+
+    <!-- App category -->
+    <key>LSApplicationCategoryType</key>
+    <string>public.app-category.productivity</string>
+
+    <!-- File associations -->
+    <key>CFBundleDocumentTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleTypeName</key>
+            <string>ZipLock Password Archive</string>
+
+            <key>CFBundleTypeDescription</key>
+            <string>ZipLock encrypted password archive</string>
+
+            <key>CFBundleTypeIconFile</key>
+            <string>ziplock-document.icns</string>
+
+            <key>CFBundleTypeRole</key>
+            <string>Editor</string>
+
+            <key>LSHandlerRank</key>
+            <string>Owner</string>
+
+            <key>LSItemContentTypes</key>
+            <array>
+                <string>org.7-zip.7-zip-archive</string>
+                <string>public.zip-archive</string>
+            </array>
+
+            <key>CFBundleTypeExtensions</key>
+            <array>
+                <string>7z</string>
+                <string>zip</string>
+            </array>
+
+            <key>CFBundleTypeMIMETypes</key>
+            <array>
+                <string>application/x-7z-compressed</string>
+                <string>application/zip</string>
+            </array>
+        </dict>
+    </array>
+
+    <!-- URL scheme handling -->
+    <key>CFBundleURLTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleURLName</key>
+            <string>ZipLock URL Handler</string>
+
+            <key>CFBundleURLSchemes</key>
+            <array>
+                <string>ziplock</string>
+            </array>
+
+            <key>CFBundleURLIconFile</key>
+            <string>ziplock.icns</string>
+        </dict>
+    </array>
+
+    <!-- Privacy permissions -->
+    <key>NSDesktopFolderUsageDescription</key>
+    <string>ZipLock needs access to save and open password archives on your desktop.</string>
+
+    <key>NSDocumentsFolderUsageDescription</key>
+    <string>ZipLock needs access to save and open password archives in your documents folder.</string>
+
+    <key>NSDownloadsFolderUsageDescription</key>
+    <string>ZipLock needs access to open password archives from your downloads folder.</string>
+
+    <!-- App transport security -->
+    <key>NSAppTransportSecurity</key>
+    <dict>
+        <key>NSAllowsArbitraryLoads</key>
+        <false/>
+        <key>NSExceptionDomains</key>
+        <dict>
+            <key>github.com</key>
+            <dict>
+                <key>NSExceptionRequiresForwardSecrecy</key>
+                <false/>
+                <key>NSExceptionAllowsInsecureHTTPLoads</key>
+                <false/>
+                <key>NSIncludesSubdomains</key>
+                <true/>
+            </dict>
+        </dict>
+    </dict>
+
+    <!-- Interface style -->
+    <key>NSRequiresAquaSystemAppearance</key>
+    <false/>
+
+    <!-- High DPI support -->
+    <key>NSHighResolutionCapable</key>
+    <true/>
+
+    <!-- Principal class (for GUI apps) -->
+    <key>NSPrincipalClass</key>
+    <string>NSApplication</string>
+
+    <!-- Disable App Nap -->
+    <key>NSAppSleepDisabled</key>
+    <true/>
+
+    <!-- Services provided by the app -->
+    <key>NSServices</key>
+    <array>
+        <dict>
+            <key>NSMenuItem</key>
+            <dict>
+                <key>default</key>
+                <string>Open with ZipLock</string>
+            </dict>
+            <key>NSMessage</key>
+            <string>openWithZipLock</string>
+            <key>NSPortName</key>
+            <string>ZipLock</string>
+            <key>NSSendTypes</key>
+            <array>
+                <string>NSFilenamesPboardType</string>
+            </array>
+        </dict>
+    </array>
+
+    <!-- Build information (populated by build script) -->
+    <key>BuildMachineOSBuild</key>
+    <string>{{BUILD_OS}}</string>
+
+    <key>BuildDate</key>
+    <string>{{BUILD_DATE}}</string>
+
+    <key>BuildCommit</key>
+    <string>{{GIT_COMMIT}}</string>
+
+    <!-- Spotlight metadata -->
+    <key>MDItemKeywords</key>
+    <array>
+        <string>password</string>
+        <string>manager</string>
+        <string>security</string>
+        <string>encryption</string>
+        <string>7zip</string>
+        <string>vault</string>
+        <string>credentials</string>
+    </array>
+</dict>
+</plist>

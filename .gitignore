@@ -75,6 +75,7 @@ desktop.ini
 .LSOverride
 *.dmg
 *.app
+!packaging/**/*.app
 
 # Mobile development
 
