@@ -734,7 +734,7 @@ jobs:
                 '      <!-- Main executable -->',
                 '      <Component Id="ZipLockExecutable">',
                 '        <File Id="ZipLockExe"',
-                '              Source="$$(var.SourceDir)\ziplock.exe"',
+                '              Source="$(var.SourceDir)\ziplock.exe"',
                 '              Checksum="yes" />',
                 '      </Component>',
                 '    </ComponentGroup>',
@@ -763,7 +763,7 @@ jobs:
                 '    </Component>',
                 '',
                 '    <!-- Icon definition -->',
-                '    <Icon Id="ZipLockIcon.exe" SourceFile="$$(var.SourceDir)\ziplock.exe" />',
+                '    <Icon Id="ZipLockIcon.exe" SourceFile="$(var.SourceDir)\ziplock.exe" />',
                 '',
                 '    <!-- Properties for Add/Remove Programs -->',
                 '    <Property Id="ARPPRODUCTICON" Value="ZipLockIcon.exe" />',
@@ -778,6 +778,24 @@ jobs:
 
               Set-Content "ziplock-fallback.wxs" ($fallbackContent -join "`n") -Encoding UTF8
               Write-Host "Created minimal fallback WXS file" -ForegroundColor Cyan
+
+              # Debug: Show generated WXS content
+              Write-Host "`nGenerated WXS content (first 20 lines):" -ForegroundColor Yellow
+              Get-Content "ziplock-fallback.wxs" | Select-Object -First 20 | ForEach-Object { Write-Host "  $_" -ForegroundColor Gray }
+
+              # Debug: Verify source file paths
+              Write-Host "`nVerifying source files:" -ForegroundColor Yellow
+              $sourceDir = "../../../target/windows-package"
+              Write-Host "Source directory: $sourceDir" -ForegroundColor Cyan
+              Write-Host "Resolved path: $((Resolve-Path $sourceDir -ErrorAction SilentlyContinue).Path)" -ForegroundColor Cyan
+              if (Test-Path "$sourceDir\ziplock.exe") {
+                  $exeInfo = Get-Item "$sourceDir\ziplock.exe"
+                  Write-Host "ziplock.exe: Found ($($exeInfo.Length) bytes)" -ForegroundColor Green
+              } else {
+                  Write-Host "ziplock.exe: NOT FOUND" -ForegroundColor Red
+                  Write-Host "Contents of source directory:" -ForegroundColor Yellow
+                  Get-ChildItem $sourceDir | ForEach-Object { Write-Host "  $($_.Name)" -ForegroundColor Gray }
+              }
 
               $fallbackCommand = "build ziplock-fallback.wxs -define SourceDir=../../../target/windows-package -define Version=$VERSION -out ../../../target/ZipLock-$VERSION-x64.msi"
               Write-Host "Fallback build command: wix $fallbackCommand" -ForegroundColor Cyan
