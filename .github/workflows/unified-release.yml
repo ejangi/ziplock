@@ -481,18 +481,113 @@ jobs:
 
       - name: Create MSI Installer
         run: |
+          Write-Host "=== WiX Installation and Debugging ===" -ForegroundColor Green
+
           # Install WiX toolset
+          Write-Host "Installing WiX toolset..." -ForegroundColor Cyan
           dotnet tool install --global wix --version 4.0.4
+          Write-Host "WiX installation exit code: $LASTEXITCODE" -ForegroundColor Yellow
+
+          # Debug environment
+          Write-Host "`n=== Environment Debugging ===" -ForegroundColor Green
+          Write-Host "Current PATH:" -ForegroundColor Cyan
+          Write-Host $env:PATH -ForegroundColor Gray
+          Write-Host "`nUSERPROFILE: $env:USERPROFILE" -ForegroundColor Cyan
+          Write-Host "Current working directory: $(Get-Location)" -ForegroundColor Cyan
+
+          # Check if wix.exe exists
+          $wixPath = "$env:USERPROFILE\.dotnet\tools\wix.exe"
+          Write-Host "`nChecking WiX executable at: $wixPath" -ForegroundColor Cyan
+          if (Test-Path $wixPath) {
+              Write-Host "WiX executable found!" -ForegroundColor Green
+              $wixInfo = Get-Item $wixPath
+              Write-Host "Size: $($wixInfo.Length) bytes" -ForegroundColor Gray
+              Write-Host "Last modified: $($wixInfo.LastWriteTime)" -ForegroundColor Gray
+          } else {
+              Write-Host "WiX executable NOT found!" -ForegroundColor Red
+              Write-Host "Listing contents of .dotnet/tools directory:" -ForegroundColor Yellow
+              if (Test-Path "$env:USERPROFILE\.dotnet\tools") {
+                  Get-ChildItem "$env:USERPROFILE\.dotnet\tools" | ForEach-Object { Write-Host "  $($_.Name)" -ForegroundColor Gray }
+              } else {
+                  Write-Host ".dotnet/tools directory does not exist!" -ForegroundColor Red
+              }
+          }
 
           # Add to PATH for current session
-          $env:PATH += ";$env:USERPROFILE\.dotnet\tools"
+          Write-Host "`n=== Updating PATH ===" -ForegroundColor Green
+          $toolsPath = "$env:USERPROFILE\.dotnet\tools"
+          $env:PATH += ";$toolsPath"
+          Write-Host "Added to PATH: $toolsPath" -ForegroundColor Cyan
 
-          # Install UI extension
-          & "$env:USERPROFILE\.dotnet\tools\wix.exe" extension add WixToolset.UI.wixext
+          # Test wix command availability
+          Write-Host "`n=== Testing WiX Command ===" -ForegroundColor Green
+          try {
+              Write-Host "Testing 'wix' command..." -ForegroundColor Cyan
+              $wixVersion = & wix --version 2>&1
+              Write-Host "WiX version output: $wixVersion" -ForegroundColor Green
+          } catch {
+              Write-Host "Error running 'wix' command: $_" -ForegroundColor Red
+              Write-Host "Trying full path..." -ForegroundColor Yellow
+              try {
+                  $wixVersionFull = & $wixPath --version 2>&1
+                  Write-Host "WiX version (full path): $wixVersionFull" -ForegroundColor Green
+              } catch {
+                  Write-Host "Error with full path too: $_" -ForegroundColor Red
+              }
+          }
+
+          # List available extensions before installation
+          Write-Host "`n=== Available Extensions (Before) ===" -ForegroundColor Green
+          try {
+              $extensionsBefore = & $wixPath extension list 2>&1
+              Write-Host "Extensions before installation:" -ForegroundColor Cyan
+              Write-Host "$extensionsBefore" -ForegroundColor Gray
+          } catch {
+              Write-Host "Error listing extensions: $_" -ForegroundColor Red
+          }
+
+          # Install UI extension with debugging
+          Write-Host "`n=== Installing UI Extension ===" -ForegroundColor Green
+          try {
+              Write-Host "Running: wix extension add WixToolset.UI.wixext" -ForegroundColor Cyan
+              $extensionResult = & $wixPath extension add WixToolset.UI.wixext 2>&1
+              Write-Host "Extension add result: $extensionResult" -ForegroundColor Gray
+              Write-Host "Extension add exit code: $LASTEXITCODE" -ForegroundColor Yellow
+          } catch {
+              Write-Host "Error adding extension: $_" -ForegroundColor Red
+          }
+
+          # List available extensions after installation
+          Write-Host "`n=== Available Extensions (After) ===" -ForegroundColor Green
+          try {
+              $extensionsAfter = & $wixPath extension list 2>&1
+              Write-Host "Extensions after installation:" -ForegroundColor Cyan
+              Write-Host "$extensionsAfter" -ForegroundColor Gray
+          } catch {
+              Write-Host "Error listing extensions after: $_" -ForegroundColor Red
+          }
+
+          # Check for extension files
+          Write-Host "`n=== Checking Extension Files ===" -ForegroundColor Green
+          $extensionPaths = @(
+              "$env:USERPROFILE\.wix\extensions",
+              "$env:LOCALAPPDATA\wix\extensions",
+              "$env:PROGRAMDATA\wix\extensions"
+          )
+          foreach ($extPath in $extensionPaths) {
+              Write-Host "Checking: $extPath" -ForegroundColor Cyan
+              if (Test-Path $extPath) {
+                  Write-Host "Directory exists, contents:" -ForegroundColor Green
+                  Get-ChildItem $extPath -Recurse | ForEach-Object { Write-Host "  $($_.FullName)" -ForegroundColor Gray }
+              } else {
+                  Write-Host "Directory does not exist" -ForegroundColor Yellow
+              }
+          }
 
           $VERSION = "${{ needs.test-and-build.outputs.version }}"
 
           # Create staging directory
+          Write-Host "`n=== Creating Package Structure ===" -ForegroundColor Green
           New-Item -ItemType Directory -Path "target/windows-package" -Force
 
           # Copy binary
@@ -503,9 +598,26 @@ jobs:
               Copy-Item "packaging/windows/resources/*" "target/windows-package/" -Recurse -Force
           }
 
+          # Verify staging directory
+          Write-Host "Staging directory contents:" -ForegroundColor Cyan
+          Get-ChildItem "target/windows-package" | ForEach-Object { Write-Host "  $($_.Name) ($($_.Length) bytes)" -ForegroundColor Gray }
+
           # Build MSI using WiX
+          Write-Host "`n=== Building MSI ===" -ForegroundColor Green
           cd packaging/windows/installer
-          & "$env:USERPROFILE\.dotnet\tools\wix.exe" build ziplock.wxs -ext WixToolset.UI.wixext -define SourceDir=../../../target/windows-package -define Version=$VERSION -out ../../../target/ZipLock-$VERSION-x64.msi
+          Write-Host "Current directory: $(Get-Location)" -ForegroundColor Cyan
+          Write-Host "WXS file exists: $(Test-Path 'ziplock.wxs')" -ForegroundColor Cyan
+
+          $buildCommand = "build ziplock.wxs -ext WixToolset.UI.wixext -define SourceDir=../../../target/windows-package -define Version=$VERSION -out ../../../target/ZipLock-$VERSION-x64.msi"
+          Write-Host "Build command: wix $buildCommand" -ForegroundColor Cyan
+
+          try {
+              & $wixPath $buildCommand.Split(' ')
+              Write-Host "Build exit code: $LASTEXITCODE" -ForegroundColor Yellow
+          } catch {
+              Write-Host "Build error: $_" -ForegroundColor Red
+              throw
+          }
 
       - name: Upload Windows package
         uses: actions/upload-artifact@v4
