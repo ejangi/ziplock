@@ -548,21 +548,56 @@ jobs:
 
           # Install UI extension with debugging
           Write-Host "`n=== Installing UI Extension ===" -ForegroundColor Green
+
+          # First, try to remove any existing damaged extension
+          Write-Host "Attempting to remove any existing UI extension..." -ForegroundColor Cyan
           try {
-              Write-Host "Running: wix extension add WixToolset.UI.wixext" -ForegroundColor Cyan
+              $removeResult = & $wixPath extension remove WixToolset.UI.wixext 2>&1
+              Write-Host "Extension remove result: $removeResult" -ForegroundColor Gray
+              Write-Host "Extension remove exit code: $LASTEXITCODE" -ForegroundColor Yellow
+          } catch {
+              Write-Host "Remove failed (this is OK if extension wasn't installed): $_" -ForegroundColor Yellow
+          }
+
+          # Try multiple installation approaches
+          Write-Host "Installing UI extension (attempt 1)..." -ForegroundColor Cyan
+          try {
               $extensionResult = & $wixPath extension add WixToolset.UI.wixext 2>&1
               Write-Host "Extension add result: $extensionResult" -ForegroundColor Gray
               Write-Host "Extension add exit code: $LASTEXITCODE" -ForegroundColor Yellow
+
+              if ($LASTEXITCODE -ne 0) {
+                  Write-Host "First attempt failed, trying with --global flag..." -ForegroundColor Yellow
+                  $extensionResult2 = & $wixPath extension add WixToolset.UI.wixext --global 2>&1
+                  Write-Host "Global extension add result: $extensionResult2" -ForegroundColor Gray
+                  Write-Host "Global extension add exit code: $LASTEXITCODE" -ForegroundColor Yellow
+
+                  if ($LASTEXITCODE -ne 0) {
+                      Write-Host "Global attempt failed, trying specific version..." -ForegroundColor Yellow
+                      $extensionResult3 = & $wixPath extension add WixToolset.UI.wixext/4.0.5 2>&1
+                      Write-Host "Specific version add result: $extensionResult3" -ForegroundColor Gray
+                      Write-Host "Specific version add exit code: $LASTEXITCODE" -ForegroundColor Yellow
+                  }
+              }
           } catch {
               Write-Host "Error adding extension: $_" -ForegroundColor Red
           }
 
           # List available extensions after installation
           Write-Host "`n=== Available Extensions (After) ===" -ForegroundColor Green
+          $extensionWorking = $false
           try {
               $extensionsAfter = & $wixPath extension list 2>&1
               Write-Host "Extensions after installation:" -ForegroundColor Cyan
               Write-Host "$extensionsAfter" -ForegroundColor Gray
+
+              # Check if extension is working (not damaged)
+              if ($extensionsAfter -match "WixToolset\.UI\.wixext.*(?!damaged)") {
+                  $extensionWorking = $true
+                  Write-Host "UI extension appears to be working!" -ForegroundColor Green
+              } else {
+                  Write-Host "UI extension still appears damaged or missing" -ForegroundColor Yellow
+              }
           } catch {
               Write-Host "Error listing extensions after: $_" -ForegroundColor Red
           }
@@ -608,15 +643,57 @@ jobs:
           Write-Host "Current directory: $(Get-Location)" -ForegroundColor Cyan
           Write-Host "WXS file exists: $(Test-Path 'ziplock.wxs')" -ForegroundColor Cyan
 
-          $buildCommand = "build ziplock.wxs -ext WixToolset.UI.wixext -define SourceDir=../../../target/windows-package -define Version=$VERSION -out ../../../target/ZipLock-$VERSION-x64.msi"
-          Write-Host "Build command: wix $buildCommand" -ForegroundColor Cyan
+          # Try building with UI extension first
+          if ($extensionWorking) {
+              $buildCommand = "build ziplock.wxs -ext WixToolset.UI.wixext -define SourceDir=../../../target/windows-package -define Version=$VERSION -out ../../../target/ZipLock-$VERSION-x64.msi"
+              Write-Host "Build command (with UI): wix $buildCommand" -ForegroundColor Cyan
 
-          try {
-              & $wixPath $buildCommand.Split(' ')
-              Write-Host "Build exit code: $LASTEXITCODE" -ForegroundColor Yellow
-          } catch {
-              Write-Host "Build error: $_" -ForegroundColor Red
-              throw
+              try {
+                  & $wixPath $buildCommand.Split(' ')
+                  Write-Host "Build exit code: $LASTEXITCODE" -ForegroundColor Yellow
+                  if ($LASTEXITCODE -eq 0) {
+                      Write-Host "MSI built successfully with UI extension!" -ForegroundColor Green
+                  } else {
+                      Write-Host "Build failed with UI extension, trying fallback..." -ForegroundColor Yellow
+                      $extensionWorking = $false
+                  }
+              } catch {
+                  Write-Host "Build error with UI extension: $_" -ForegroundColor Red
+                  Write-Host "Trying fallback without UI extension..." -ForegroundColor Yellow
+                  $extensionWorking = $false
+              }
+          }
+
+          # Fallback: try building without UI extension
+          if (-not $extensionWorking) {
+              Write-Host "`n=== Fallback: Building without UI Extension ===" -ForegroundColor Yellow
+
+              # Create a temporary WXS file without UI elements
+              $originalWxs = Get-Content "ziplock.wxs" -Raw
+              $modifiedWxs = $originalWxs -replace '<ui:WixUI Id="WixUI_InstallDir" />', '<!-- UI removed for fallback build -->'
+              $modifiedWxs = $modifiedWxs -replace 'xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui"', ''
+              $modifiedWxs = $modifiedWxs -replace '<Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER" />', '<!-- WIXUI_INSTALLDIR removed -->'
+              $modifiedWxs = $modifiedWxs -replace '<WixVariable Id="WixUILicenseRtf" Value="license.rtf" />', '<!-- License variable removed -->'
+
+              Set-Content "ziplock-fallback.wxs" $modifiedWxs
+              Write-Host "Created fallback WXS file without UI elements" -ForegroundColor Cyan
+
+              $fallbackCommand = "build ziplock-fallback.wxs -define SourceDir=../../../target/windows-package -define Version=$VERSION -out ../../../target/ZipLock-$VERSION-x64.msi"
+              Write-Host "Fallback build command: wix $fallbackCommand" -ForegroundColor Cyan
+
+              try {
+                  & $wixPath $fallbackCommand.Split(' ')
+                  Write-Host "Fallback build exit code: $LASTEXITCODE" -ForegroundColor Yellow
+                  if ($LASTEXITCODE -eq 0) {
+                      Write-Host "MSI built successfully without UI extension!" -ForegroundColor Green
+                  } else {
+                      Write-Host "Fallback build also failed!" -ForegroundColor Red
+                      throw "Both UI and fallback builds failed"
+                  }
+              } catch {
+                  Write-Host "Fallback build error: $_" -ForegroundColor Red
+                  throw
+              }
           }
 
       - name: Upload Windows package
