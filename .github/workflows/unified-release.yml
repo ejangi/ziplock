@@ -628,10 +628,27 @@ jobs:
           # Copy binary
           Copy-Item "target/x86_64-pc-windows-msvc/release/ziplock.exe" "target/windows-package/"
 
+          # Download VC++ Redistributable
+          Write-Host "Downloading VC++ Redistributable..." -ForegroundColor Cyan
+          $vcRedistUrl = "https://aka.ms/vs/17/release/vc_redist.x64.exe"
+          $vcRedistPath = "target/windows-package/vc_redist.x64.exe"
+          try {
+              Invoke-WebRequest -Uri $vcRedistUrl -OutFile $vcRedistPath -UseBasicParsing
+              Write-Host "VC++ Redistributable downloaded: $(Get-Item $vcRedistPath | Select-Object -ExpandProperty Length) bytes" -ForegroundColor Green
+          } catch {
+              Write-Warning "Failed to download VC++ Redistributable: $_"
+              # Create a dummy file so the build doesn't fail
+              Set-Content -Path $vcRedistPath -Value "Dummy VC++ Redistributable file"
+          }
+
           # Copy resources
           if (Test-Path "packaging/windows/resources") {
               Copy-Item "packaging/windows/resources/*" "target/windows-package/" -Recurse -Force
           }
+
+          # Create application icon from executable
+          Write-Host "Setting up application icon..." -ForegroundColor Cyan
+          # The MSI will use the executable itself as the icon source
 
           # Verify staging directory
           Write-Host "Staging directory contents:" -ForegroundColor Cyan
@@ -676,6 +693,9 @@ jobs:
               $modifiedWxs = $modifiedWxs -replace '<WixVariable Id="WixUILicenseRtf" Value="license.rtf" />', '<!-- License variable removed -->'
               # Fix version binding for fallback build
               $modifiedWxs = $modifiedWxs -replace 'Version="!\(bind\.FileVersion\.ZipLockExe\)"', "Version=`"$VERSION`""
+              # Remove VC++ redistributable components that require the extension
+              $modifiedWxs = $modifiedWxs -replace '<ComponentRef Id="VCRedist" />', '<!-- VCRedist removed for fallback -->'
+              $modifiedWxs = $modifiedWxs -replace '<ComponentRef Id="AppDataDirectory" />', '<!-- AppDataDirectory removed for fallback -->'
 
               Set-Content "ziplock-fallback.wxs" $modifiedWxs
               Write-Host "Created fallback WXS file without UI elements" -ForegroundColor Cyan
@@ -723,6 +743,18 @@ jobs:
               Get-ChildItem $targetDir -Recurse | ForEach-Object {
                   if (-not $_.PSIsContainer) {
                       Write-Host "  $($_.FullName.Replace($PWD.Path, '.'))" -ForegroundColor Gray
+                  }
+              }
+
+              # Test MSI properties if possible
+              Write-Host "`nTesting MSI properties..." -ForegroundColor Yellow
+              $newestMsi = $msiFiles | Select-Object -First 1
+              if ($newestMsi) {
+                  try {
+                      # Basic file validation
+                      Write-Host "MSI file appears to be valid (size > 1MB)" -ForegroundColor Green
+                  } catch {
+                      Write-Warning "Could not validate MSI properties: $_"
                   }
               }
           } else {

@@ -25,6 +25,8 @@
       <ComponentRef Id="ApplicationShortcut" />
       <ComponentRef Id="DesktopShortcut" />
       <ComponentRef Id="FileAssociations" />
+      <ComponentRef Id="AppDataDirectory" />
+      <ComponentRef Id="VCRedist" />
     </Feature>
 
     <!-- Installation directory structure -->
@@ -42,6 +44,13 @@
     <!-- Desktop -->
     <StandardDirectory Id="DesktopFolder" />
 
+    <!-- Application Data -->
+    <StandardDirectory Id="CommonAppDataFolder">
+      <Directory Id="APPDATAFOLDER" Name="ZipLock">
+        <Directory Id="LOGSFOLDER" Name="logs" />
+      </Directory>
+    </StandardDirectory>
+
     <!-- Components -->
     <ComponentGroup Id="ProductComponents" Directory="BINDIR">
       <!-- Main executable -->
@@ -49,6 +58,21 @@
         <File Id="ZipLockExe"
               Source="$(var.SourceDir)\ziplock.exe"
               Checksum="yes" />
+
+        <!-- Application registry entries -->
+        <RegistryKey Root="HKLM" Key="SOFTWARE\ZipLock">
+          <RegistryValue Name="InstallPath" Value="[INSTALLFOLDER]" Type="string" />
+          <RegistryValue Name="Version" Value="[ProductVersion]" Type="string" />
+          <RegistryValue Name="LogPath" Value="[CommonAppDataFolder]ZipLock\logs" Type="string" />
+        </RegistryKey>
+      </Component>
+
+      <!-- Microsoft Visual C++ Redistributable -->
+      <Component Id="VCRedist">
+        <File Id="VCRedistExe"
+              Source="$(var.SourceDir)\vc_redist.x64.exe"
+              Checksum="yes" />
+        <Condition>NOT VCREDIST_INSTALLED</Condition>
       </Component>
 
       <!-- File associations for .7z files -->
@@ -64,6 +88,15 @@
           <RegistryValue Value="&quot;[#ZipLockExe]&quot; &quot;%1&quot;" Type="string" />
         </RegistryKey>
       </Component>
+
+      <!-- Application data directory -->
+      <Component Id="AppDataDirectory">
+        <CreateFolder Directory="APPDATAFOLDER" />
+        <CreateFolder Directory="LOGSFOLDER" />
+        <RemoveFolder Id="RemoveAppDataFolder" Directory="APPDATAFOLDER" On="uninstall" />
+        <RemoveFolder Id="RemoveLogsFolder" Directory="LOGSFOLDER" On="uninstall" />
+        <RegistryValue Root="HKCU" Key="Software\ZipLock" Name="AppDataCreated" Type="integer" Value="1" />
+      </Component>
     </ComponentGroup>
 
     <!-- Application shortcuts -->
@@ -73,7 +106,8 @@
                 Target="[#ZipLockExe]"
                 WorkingDirectory="BINDIR"
                 Icon="ZipLockIcon.exe"
-                Description="Secure password management using encrypted archives" />
+                Description="Secure password management using encrypted archives"
+                Arguments="" />
       <RemoveFolder Id="CleanUpShortCut" Directory="ApplicationProgramsFolder" On="uninstall" />
       <RegistryValue Root="HKCU" Key="Software\ZipLock" Name="installed" Type="integer" Value="1" />
     </Component>
@@ -85,7 +119,8 @@
                 Target="[#ZipLockExe]"
                 WorkingDirectory="BINDIR"
                 Icon="ZipLockIcon.exe"
-                Description="Secure password management using encrypted archives" />
+                Description="Secure password management using encrypted archives"
+                Arguments="" />
       <RegistryValue Root="HKCU" Key="Software\ZipLock" Name="desktop_shortcut" Type="integer" Value="1" />
     </Component>
 
@@ -102,11 +137,35 @@
     <!-- Custom properties -->
     <Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER" />
 
+    <!-- Check for VC++ Redistributable -->
+    <Property Id="VCREDIST_INSTALLED">
+      <RegistrySearch Id="VCRedistRegistry"
+                      Root="HKLM"
+                      Key="SOFTWARE\Microsoft\VisualStudio\14.0\VC\Runtimes\x64"
+                      Name="Installed"
+                      Type="raw" />
+    </Property>
+
     <!-- UI configuration -->
     <ui:WixUI Id="WixUI_InstallDir" />
 
     <!-- License agreement -->
     <WixVariable Id="WixUILicenseRtf" Value="license.rtf" />
+
+    <!-- Custom Actions -->
+    <CustomAction Id="InstallVCRedist"
+                  FileRef="VCRedistExe"
+                  ExeCommand="/quiet /norestart"
+                  Execute="deferred"
+                  Return="check"
+                  Impersonate="no" />
+
+    <!-- Installation sequence -->
+    <InstallExecuteSequence>
+      <Custom Action="InstallVCRedist" After="InstallFiles">
+        NOT VCREDIST_INSTALLED AND NOT REMOVE
+      </Custom>
+    </InstallExecuteSequence>
 
   </Package>
 </Wix>
