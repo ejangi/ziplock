@@ -686,100 +686,97 @@ jobs:
               Write-Host "`n=== Fallback: Building without UI Extension ===" -ForegroundColor Yellow
 
               # Create a minimal WXS file without problematic elements
-              $fallbackWxs = @'
-<?xml version="1.0" encoding="UTF-8"?>
-<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
-  <Package Name="ZipLock Password Manager"
-           Language="1033"
-           Version="{VERSION_PLACEHOLDER}"
-           Manufacturer="ZipLock Project"
-           UpgradeCode="12345678-1234-1234-1234-123456789012"
-           InstallerVersion="500"
-           Compressed="yes"
-           Scope="perMachine">
+              $fallbackContent = @(
+                '<?xml version="1.0" encoding="UTF-8"?>',
+                '<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">',
+                '  <Package Name="ZipLock Password Manager"',
+                '           Language="1033"',
+                "           Version=`"$VERSION`"",
+                '           Manufacturer="ZipLock Project"',
+                '           UpgradeCode="12345678-1234-1234-1234-123456789012"',
+                '           InstallerVersion="500"',
+                '           Compressed="yes"',
+                '           Scope="perMachine">',
+                '',
+                '    <!-- Package description -->',
+                '    <SummaryInformation Description="ZipLock Password Manager - Secure password management using encrypted 7z archives" />',
+                '',
+                '    <!-- Allow upgrades and prevent downgrades -->',
+                '    <MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed." />',
+                '',
+                '    <!-- Embed the CAB file in the MSI -->',
+                '    <Media Id="1" Cabinet="media1.cab" EmbedCab="yes" />',
+                '',
+                '    <!-- Feature definitions -->',
+                '    <Feature Id="ProductFeature" Title="ZipLock Password Manager" Level="1">',
+                '      <ComponentGroupRef Id="ProductComponents" />',
+                '      <ComponentRef Id="ApplicationShortcut" />',
+                '      <ComponentRef Id="DesktopShortcut" />',
+                '    </Feature>',
+                '',
+                '    <!-- Installation directory structure -->',
+                '    <StandardDirectory Id="ProgramFiles64Folder">',
+                '      <Directory Id="INSTALLFOLDER" Name="ZipLock">',
+                '        <Directory Id="BINDIR" Name="bin" />',
+                '      </Directory>',
+                '    </StandardDirectory>',
+                '',
+                '    <!-- Start Menu -->',
+                '    <StandardDirectory Id="ProgramMenuFolder">',
+                '      <Directory Id="ApplicationProgramsFolder" Name="ZipLock" />',
+                '    </StandardDirectory>',
+                '',
+                '    <!-- Desktop -->',
+                '    <StandardDirectory Id="DesktopFolder" />',
+                '',
+                '    <!-- Components -->',
+                '    <ComponentGroup Id="ProductComponents" Directory="BINDIR">',
+                '      <!-- Main executable -->',
+                '      <Component Id="ZipLockExecutable">',
+                '        <File Id="ZipLockExe"',
+                '              Source="$$(var.SourceDir)\ziplock.exe"',
+                '              Checksum="yes" />',
+                '      </Component>',
+                '    </ComponentGroup>',
+                '',
+                '    <!-- Application shortcuts -->',
+                '    <Component Id="ApplicationShortcut" Directory="ApplicationProgramsFolder">',
+                '      <Shortcut Id="ApplicationStartMenuShortcut"',
+                '                Name="ZipLock Password Manager"',
+                '                Target="[#ZipLockExe]"',
+                '                WorkingDirectory="BINDIR"',
+                '                Icon="ZipLockIcon.exe"',
+                '                Description="Secure password management using encrypted archives" />',
+                '      <RemoveFolder Id="CleanUpShortCut" Directory="ApplicationProgramsFolder" On="uninstall" />',
+                '      <RegistryValue Root="HKCU" Key="Software\ZipLock" Name="installed" Type="integer" Value="1" />',
+                '    </Component>',
+                '',
+                '    <!-- Desktop shortcut (optional) -->',
+                '    <Component Id="DesktopShortcut" Directory="DesktopFolder">',
+                '      <Shortcut Id="DesktopApplicationShortcut"',
+                '                Name="ZipLock Password Manager"',
+                '                Target="[#ZipLockExe]"',
+                '                WorkingDirectory="BINDIR"',
+                '                Icon="ZipLockIcon.exe"',
+                '                Description="Secure password management using encrypted archives" />',
+                '      <RegistryValue Root="HKCU" Key="Software\ZipLock" Name="desktop_shortcut" Type="integer" Value="1" />',
+                '    </Component>',
+                '',
+                '    <!-- Icon definition -->',
+                '    <Icon Id="ZipLockIcon.exe" SourceFile="$$(var.SourceDir)\ziplock.exe" />',
+                '',
+                '    <!-- Properties for Add/Remove Programs -->',
+                '    <Property Id="ARPPRODUCTICON" Value="ZipLockIcon.exe" />',
+                '    <Property Id="ARPHELPLINK" Value="https://github.com/ejangi/ziplock" />',
+                '    <Property Id="ARPURLINFOABOUT" Value="https://github.com/ejangi/ziplock" />',
+                '    <Property Id="ARPNOREPAIR" Value="1" />',
+                '    <Property Id="ARPNOMODIFY" Value="1" />',
+                '',
+                '  </Package>',
+                '</Wix>'
+              )
 
-    <!-- Package description -->
-    <SummaryInformation Description="ZipLock Password Manager - Secure password management using encrypted 7z archives" />
-
-    <!-- Allow upgrades and prevent downgrades -->
-    <MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed." />
-
-    <!-- Embed the CAB file in the MSI -->
-    <Media Id="1" Cabinet="media1.cab" EmbedCab="yes" />
-
-    <!-- Feature definitions -->
-    <Feature Id="ProductFeature" Title="ZipLock Password Manager" Level="1">
-      <ComponentGroupRef Id="ProductComponents" />
-      <ComponentRef Id="ApplicationShortcut" />
-      <ComponentRef Id="DesktopShortcut" />
-    </Feature>
-
-    <!-- Installation directory structure -->
-    <StandardDirectory Id="ProgramFiles64Folder">
-      <Directory Id="INSTALLFOLDER" Name="ZipLock">
-        <Directory Id="BINDIR" Name="bin" />
-      </Directory>
-    </StandardDirectory>
-
-    <!-- Start Menu -->
-    <StandardDirectory Id="ProgramMenuFolder">
-      <Directory Id="ApplicationProgramsFolder" Name="ZipLock" />
-    </StandardDirectory>
-
-    <!-- Desktop -->
-    <StandardDirectory Id="DesktopFolder" />
-
-    <!-- Components -->
-    <ComponentGroup Id="ProductComponents" Directory="BINDIR">
-      <!-- Main executable -->
-      <Component Id="ZipLockExecutable">
-        <File Id="ZipLockExe"
-              Source="$(var.SourceDir)\ziplock.exe"
-              Checksum="yes" />
-      </Component>
-    </ComponentGroup>
-
-    <!-- Application shortcuts -->
-    <Component Id="ApplicationShortcut" Directory="ApplicationProgramsFolder">
-      <Shortcut Id="ApplicationStartMenuShortcut"
-                Name="ZipLock Password Manager"
-                Target="[#ZipLockExe]"
-                WorkingDirectory="BINDIR"
-                Icon="ZipLockIcon.exe"
-                Description="Secure password management using encrypted archives" />
-      <RemoveFolder Id="CleanUpShortCut" Directory="ApplicationProgramsFolder" On="uninstall" />
-      <RegistryValue Root="HKCU" Key="Software\ZipLock" Name="installed" Type="integer" Value="1" />
-    </Component>
-
-    <!-- Desktop shortcut (optional) -->
-    <Component Id="DesktopShortcut" Directory="DesktopFolder">
-      <Shortcut Id="DesktopApplicationShortcut"
-                Name="ZipLock Password Manager"
-                Target="[#ZipLockExe]"
-                WorkingDirectory="BINDIR"
-                Icon="ZipLockIcon.exe"
-                Description="Secure password management using encrypted archives" />
-      <RegistryValue Root="HKCU" Key="Software\ZipLock" Name="desktop_shortcut" Type="integer" Value="1" />
-    </Component>
-
-    <!-- Icon definition -->
-    <Icon Id="ZipLockIcon.exe" SourceFile="$(var.SourceDir)\ziplock.exe" />
-
-    <!-- Properties for Add/Remove Programs -->
-    <Property Id="ARPPRODUCTICON" Value="ZipLockIcon.exe" />
-    <Property Id="ARPHELPLINK" Value="https://github.com/ejangi/ziplock" />
-    <Property Id="ARPURLINFOABOUT" Value="https://github.com/ejangi/ziplock" />
-    <Property Id="ARPNOREPAIR" Value="1" />
-    <Property Id="ARPNOMODIFY" Value="1" />
-
-  </Package>
-</Wix>
-'@
-
-              # Replace version placeholder
-              $fallbackWxs = $fallbackWxs -replace '{VERSION_PLACEHOLDER}', $VERSION
-
-              Set-Content "ziplock-fallback.wxs" $fallbackWxs -Encoding UTF8
+              Set-Content "ziplock-fallback.wxs" ($fallbackContent -join "`n") -Encoding UTF8
               Write-Host "Created minimal fallback WXS file" -ForegroundColor Cyan
 
               $fallbackCommand = "build ziplock-fallback.wxs -define SourceDir=../../../target/windows-package -define Version=$VERSION -out ../../../target/ZipLock-$VERSION-x64.msi"
