@@ -879,6 +879,8 @@ jobs:
         with:
           targets: x86_64-apple-darwin
 
+
+
       - name: Build macOS application
         run: |
           cd apps/desktop

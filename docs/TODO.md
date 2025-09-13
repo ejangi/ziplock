@@ -19,3 +19,7 @@ Run one of the following prompts in Zed's agent panel and when you're ready to b
 
 ## Windows
 - Taking into consideration `docs/technical.md`, `docs/technical/cross-platform-adaptation-plan.md` and remembering to only output summaries here, rather than creating new *.md files, can you please check the `github/workflows/unified-release.yml` and determine if the `apps/windows` directory is being used at all? If it's not, can we remove it please?
+
+
+
+## Mac
