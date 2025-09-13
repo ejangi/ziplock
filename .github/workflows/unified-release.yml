@@ -592,7 +592,7 @@ jobs:
               Write-Host "$extensionsAfter" -ForegroundColor Gray
 
               # Check if extension is working (not damaged)
-              if ($extensionsAfter -match "WixToolset\.UI\.wixext.*(?!damaged)") {
+              if ($extensionsAfter -notmatch "damaged" -and $extensionsAfter -match "WixToolset\.UI\.wixext") {
                   $extensionWorking = $true
                   Write-Host "UI extension appears to be working!" -ForegroundColor Green
               } else {
@@ -674,6 +674,8 @@ jobs:
               $modifiedWxs = $modifiedWxs -replace 'xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui"', ''
               $modifiedWxs = $modifiedWxs -replace '<Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER" />', '<!-- WIXUI_INSTALLDIR removed -->'
               $modifiedWxs = $modifiedWxs -replace '<WixVariable Id="WixUILicenseRtf" Value="license.rtf" />', '<!-- License variable removed -->'
+              # Fix version binding for fallback build
+              $modifiedWxs = $modifiedWxs -replace 'Version="!\(bind\.FileVersion\.ZipLockExe\)"', "Version=`"$VERSION`""
 
               Set-Content "ziplock-fallback.wxs" $modifiedWxs
               Write-Host "Created fallback WXS file without UI elements" -ForegroundColor Cyan
@@ -694,6 +696,37 @@ jobs:
                   Write-Host "Fallback build error: $_" -ForegroundColor Red
                   throw
               }
+          }
+
+          # Verify and log created artifacts
+          Write-Host "`n=== Build Artifacts ===" -ForegroundColor Green
+          $targetDir = "../../../target"
+          Write-Host "Checking target directory: $targetDir" -ForegroundColor Cyan
+
+          if (Test-Path $targetDir) {
+              $msiFiles = Get-ChildItem $targetDir -Filter "*.msi" | Sort-Object LastWriteTime -Descending
+              if ($msiFiles.Count -gt 0) {
+                  Write-Host "Found $($msiFiles.Count) MSI file(s):" -ForegroundColor Green
+                  foreach ($msi in $msiFiles) {
+                      Write-Host "  - $($msi.Name)" -ForegroundColor Cyan
+                      Write-Host "    Size: $([math]::Round($msi.Length / 1MB, 2)) MB" -ForegroundColor Gray
+                      Write-Host "    Created: $($msi.CreationTime)" -ForegroundColor Gray
+                      Write-Host "    Modified: $($msi.LastWriteTime)" -ForegroundColor Gray
+                      Write-Host "    Full path: $($msi.FullName)" -ForegroundColor Gray
+                  }
+              } else {
+                  Write-Host "No MSI files found in target directory!" -ForegroundColor Red
+              }
+
+              # List all files in target directory for debugging
+              Write-Host "`nAll files in target directory:" -ForegroundColor Yellow
+              Get-ChildItem $targetDir -Recurse | ForEach-Object {
+                  if (-not $_.PSIsContainer) {
+                      Write-Host "  $($_.FullName.Replace($PWD.Path, '.'))" -ForegroundColor Gray
+                  }
+              }
+          } else {
+              Write-Host "Target directory not found: $targetDir" -ForegroundColor Red
           }
 
       - name: Upload Windows package
