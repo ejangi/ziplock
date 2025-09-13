@@ -696,6 +696,11 @@ jobs:
               # Remove VC++ redistributable components that require the extension
               $modifiedWxs = $modifiedWxs -replace '<ComponentRef Id="VCRedist" />', '<!-- VCRedist removed for fallback -->'
               $modifiedWxs = $modifiedWxs -replace '<ComponentRef Id="AppDataDirectory" />', '<!-- AppDataDirectory removed for fallback -->'
+              # Remove custom actions and install sequence
+              $modifiedWxs = $modifiedWxs -replace '<CustomAction[^>]*InstallVCRedist[^>]*/>.*?', '<!-- CustomAction removed -->'
+              $modifiedWxs = $modifiedWxs -replace '<InstallExecuteSequence>.*?</InstallExecuteSequence>', '<!-- InstallExecuteSequence removed -->' -replace '(?s)<!-- InstallExecuteSequence removed -->', '<!-- InstallExecuteSequence removed -->'
+              # Remove VCREDIST_INSTALLED property check
+              $modifiedWxs = $modifiedWxs -replace '<Property Id="VCREDIST_INSTALLED">.*?</Property>', '<!-- VCREDIST_INSTALLED removed -->' -replace '(?s)<!-- VCREDIST_INSTALLED removed -->', '<!-- VCREDIST_INSTALLED removed -->'
 
               Set-Content "ziplock-fallback.wxs" $modifiedWxs
               Write-Host "Created fallback WXS file without UI elements" -ForegroundColor Cyan

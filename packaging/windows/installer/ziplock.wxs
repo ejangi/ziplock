@@ -68,11 +68,10 @@
       </Component>
 
       <!-- Microsoft Visual C++ Redistributable -->
-      <Component Id="VCRedist">
+      <Component Id="VCRedist" Condition="NOT VCREDIST_INSTALLED">
         <File Id="VCRedistExe"
               Source="$(var.SourceDir)\vc_redist.x64.exe"
               Checksum="yes" />
-        <Condition>NOT VCREDIST_INSTALLED</Condition>
       </Component>
 
       <!-- File associations for .7z files -->
@@ -106,8 +105,7 @@
                 Target="[#ZipLockExe]"
                 WorkingDirectory="BINDIR"
                 Icon="ZipLockIcon.exe"
-                Description="Secure password management using encrypted archives"
-                Arguments="" />
+                Description="Secure password management using encrypted archives" />
       <RemoveFolder Id="CleanUpShortCut" Directory="ApplicationProgramsFolder" On="uninstall" />
       <RegistryValue Root="HKCU" Key="Software\ZipLock" Name="installed" Type="integer" Value="1" />
     </Component>
@@ -119,8 +117,7 @@
                 Target="[#ZipLockExe]"
                 WorkingDirectory="BINDIR"
                 Icon="ZipLockIcon.exe"
-                Description="Secure password management using encrypted archives"
-                Arguments="" />
+                Description="Secure password management using encrypted archives" />
       <RegistryValue Root="HKCU" Key="Software\ZipLock" Name="desktop_shortcut" Type="integer" Value="1" />
     </Component>
 
@@ -162,9 +159,7 @@
 
     <!-- Installation sequence -->
     <InstallExecuteSequence>
-      <Custom Action="InstallVCRedist" After="InstallFiles">
-        NOT VCREDIST_INSTALLED AND NOT REMOVE
-      </Custom>
+      <Custom Action="InstallVCRedist" After="InstallFiles" Condition="NOT VCREDIST_INSTALLED AND NOT REMOVE" />
     </InstallExecuteSequence>
 
   </Package>
