@@ -1,0 +1,183 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Package Name="ZipLock Password Manager"
+           Language="1033"
+           Version="$(var.Version)"
+           Manufacturer="ZipLock Project"
+           UpgradeCode="12345678-1234-1234-1234-123456789012"
+           InstallerVersion="500"
+           Compressed="yes"
+           Scope="perMachine">
+
+    <!-- Package description -->
+    <SummaryInformation Description="ZipLock Password Manager - Secure password management using encrypted 7z archives" />
+
+    <!-- Allow upgrades and prevent downgrades -->
+    <MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed." />
+
+    <!-- Embed the CAB file in the MSI -->
+    <Media Id="1" Cabinet="media1.cab" EmbedCab="yes" />
+
+    <!-- Feature definitions -->
+    <Feature Id="ProductFeature" Title="ZipLock Password Manager" Level="1">
+      <ComponentGroupRef Id="ProductComponents" />
+      <ComponentRef Id="ApplicationShortcut" />
+      <ComponentRef Id="DesktopShortcut" />
+    </Feature>
+
+    <!-- Installation directory structure -->
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLFOLDER" Name="ZipLock">
+        <Directory Id="BINDIR" Name="bin" />
+      </Directory>
+    </StandardDirectory>
+
+    <!-- Start Menu -->
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Directory Id="ApplicationProgramsFolder" Name="ZipLock" />
+    </StandardDirectory>
+
+    <!-- Desktop -->
+    <StandardDirectory Id="DesktopFolder" />
+
+    <!-- Components -->
+    <ComponentGroup Id="ProductComponents" Directory="BINDIR">
+      <!-- Main executable -->
+      <Component Id="ZipLockExecutable">
+        <File Id="ZipLockExe"
+              Source="$(var.SourceDir)\ziplock.exe"
+              Checksum="yes" />
+
+        <!-- Simple registry entry for uninstall info -->
+        <RegistryKey Root="HKLM" Key="SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\ZipLock">
+          <RegistryValue Name="DisplayName" Value="ZipLock Password Manager" Type="string" />
+          <RegistryValue Name="DisplayVersion" Value="$(var.Version)" Type="string" />
+          <RegistryValue Name="Publisher" Value="ZipLock Project" Type="string" />
+          <RegistryValue Name="InstallLocation" Value="[INSTALLFOLDER]" Type="string" />
+          <RegistryValue Name="UninstallString" Value="msiexec /x [ProductCode]" Type="string" />
+          <RegistryValue Name="NoModify" Value="1" Type="integer" />
+          <RegistryValue Name="NoRepair" Value="1" Type="integer" />
+        </RegistryKey>
+      </Component>
+    </ComponentGroup>
+
+    <!-- Application shortcuts -->
+    <Component Id="ApplicationShortcut" Directory="ApplicationProgramsFolder">
+      <Shortcut Id="ApplicationStartMenuShortcut"
+                Name="ZipLock Password Manager"
+                Target="[#ZipLockExe]"
+                WorkingDirectory="BINDIR"
+                Icon="ZipLockIcon.exe"
+                Description="Secure password management using encrypted archives" />
+      <RemoveFolder Id="CleanUpShortCut" Directory="ApplicationProgramsFolder" On="uninstall" />
+      <RegistryValue Root="HKCU" Key="Software\ZipLock" Name="installed" Type="integer" Value="1" />
+    </Component>
+
+    <!-- Desktop shortcut (optional) -->
+    <Component Id="DesktopShortcut" Directory="DesktopFolder">
+      <Condition>INSTALLDESKTOPSHORTCUT</Condition>
+      <Shortcut Id="DesktopApplicationShortcut"
+                Name="ZipLock Password Manager"
+                Target="[#ZipLockExe]"
+                WorkingDirectory="BINDIR"
+                Icon="ZipLockIcon.exe"
+                Description="Secure password management using encrypted archives" />
+      <RegistryValue Root="HKCU" Key="Software\ZipLock" Name="desktop_shortcut" Type="integer" Value="1" />
+    </Component>
+
+    <!-- Icon definition -->
+    <Icon Id="ZipLockIcon.exe" SourceFile="$(var.SourceDir)\ziplock.exe" />
+
+    <!-- Properties for Add/Remove Programs -->
+    <Property Id="ARPPRODUCTICON" Value="ZipLockIcon.exe" />
+    <Property Id="ARPHELPLINK" Value="https://github.com/ejangi/ziplock" />
+    <Property Id="ARPURLINFOABOUT" Value="https://github.com/ejangi/ziplock" />
+    <Property Id="ARPNOREPAIR" Value="1" />
+    <Property Id="ARPNOMODIFY" Value="1" />
+
+    <!-- Custom properties for user choices -->
+    <Property Id="INSTALLDESKTOPSHORTCUT" Value="1" />
+
+    <!-- Basic UI for MSI without UI extension dependency -->
+    <Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER" />
+
+    <!-- Basic installation dialog sequence -->
+    <InstallUISequence>
+      <Show Dialog="WelcomeDlg" Before="ProgressDlg" Condition="NOT Installed" />
+      <Show Dialog="ExitDialog" After="InstallFinalize" Condition="NOT Installed" />
+    </InstallUISequence>
+
+    <!-- Simple dialogs without UI extension -->
+    <UI Id="SimpleUI">
+      <TextStyle Id="WixUI_Font_Normal" FaceName="Tahoma" Size="8" />
+      <TextStyle Id="WixUI_Font_Bigger" FaceName="Tahoma" Size="12" />
+      <TextStyle Id="WixUI_Font_Title" FaceName="Tahoma" Size="9" Bold="yes" />
+
+      <Property Id="DefaultUIFont" Value="WixUI_Font_Normal" />
+
+      <!-- Welcome Dialog -->
+      <Dialog Id="WelcomeDlg" Width="370" Height="270" Title="ZipLock Password Manager Setup">
+        <Control Id="Next" Type="PushButton" X="236" Y="243" Width="56" Height="17" Default="yes" Text="Next">
+          <Publish Event="NewDialog" Value="ProgressDlg">1</Publish>
+        </Control>
+        <Control Id="Cancel" Type="PushButton" X="304" Y="243" Width="56" Height="17" Cancel="yes" Text="Cancel">
+          <Publish Event="SpawnDialog" Value="CancelDlg">1</Publish>
+        </Control>
+        <Control Id="Title" Type="Text" X="15" Y="6" Width="200" Height="15" Transparent="yes" NoPrefix="yes">
+          <Text>Welcome to ZipLock Password Manager Setup</Text>
+        </Control>
+        <Control Id="Description" Type="Text" X="25" Y="23" Width="280" Height="15" Transparent="yes" NoPrefix="yes">
+          <Text>This will install ZipLock Password Manager on your computer.</Text>
+        </Control>
+        <Control Id="BottomLine" Type="Line" X="0" Y="234" Width="370" Height="0" />
+      </Dialog>
+
+      <!-- Exit Dialog -->
+      <Dialog Id="ExitDialog" Width="370" Height="270" Title="ZipLock Password Manager Setup">
+        <Control Id="Finish" Type="PushButton" X="236" Y="243" Width="56" Height="17" Default="yes" Text="Finish" Cancel="yes">
+          <Publish Event="EndDialog" Value="Return">1</Publish>
+        </Control>
+        <Control Id="Title" Type="Text" X="15" Y="6" Width="200" Height="15" Transparent="yes" NoPrefix="yes">
+          <Text>ZipLock Password Manager has been installed</Text>
+        </Control>
+        <Control Id="Description" Type="Text" X="25" Y="23" Width="280" Height="40" Transparent="yes" NoPrefix="yes">
+          <Text>Thank you for installing ZipLock Password Manager. You can now access it from the Start Menu.</Text>
+        </Control>
+        <Control Id="BottomLine" Type="Line" X="0" Y="234" Width="370" Height="0" />
+      </Dialog>
+
+      <!-- Cancel Dialog -->
+      <Dialog Id="CancelDlg" Width="260" Height="85" Title="ZipLock Password Manager Setup" NoMinimize="yes">
+        <Control Id="No" Type="PushButton" X="132" Y="57" Width="56" Height="17" Default="yes" Cancel="yes" Text="No">
+          <Publish Event="EndDialog" Value="Return">1</Publish>
+        </Control>
+        <Control Id="Yes" Type="PushButton" X="72" Y="57" Width="56" Height="17" Text="Yes">
+          <Publish Event="EndDialog" Value="Exit">1</Publish>
+        </Control>
+        <Control Id="Text" Type="Text" X="48" Y="15" Width="194" Height="30">
+          <Text>Are you sure you want to cancel the installation?</Text>
+        </Control>
+      </Dialog>
+
+      <!-- Progress Dialog -->
+      <Dialog Id="ProgressDlg" Width="370" Height="270" Title="ZipLock Password Manager Setup" Modeless="yes">
+        <Control Id="Cancel" Type="PushButton" X="304" Y="243" Width="56" Height="17" Default="yes" Cancel="yes" Text="Cancel">
+          <Publish Event="SpawnDialog" Value="CancelDlg">1</Publish>
+        </Control>
+        <Control Id="ActionText" Type="Text" X="70" Y="100" Width="265" Height="10" NoPrefix="yes" />
+        <Control Id="ProgressBar" Type="ProgressBar" X="35" Y="115" Width="300" Height="10" />
+        <Control Id="StatusLabel" Type="Text" X="35" Y="100" Width="35" Height="10" NoPrefix="yes" Text="Status:" />
+        <Control Id="Title" Type="Text" X="15" Y="6" Width="200" Height="15" Transparent="yes" NoPrefix="yes">
+          <Text>Installing ZipLock Password Manager</Text>
+        </Control>
+        <Control Id="BottomLine" Type="Line" X="0" Y="234" Width="370" Height="0" />
+      </Dialog>
+    </UI>
+
+    <!-- Install sequence -->
+    <InstallExecuteSequence>
+      <!-- Standard Windows Installer actions -->
+    </InstallExecuteSequence>
+
+  </Package>
+</Wix>

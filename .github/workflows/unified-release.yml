@@ -481,381 +481,48 @@ jobs:
 
       - name: Create MSI Installer
         run: |
-          Write-Host "=== WiX Installation and Debugging ===" -ForegroundColor Green
+          Write-Host "=== Simplified Windows MSI Build ===" -ForegroundColor Green
+
+          $VERSION = "${{ needs.test-and-build.outputs.version }}"
 
           # Install WiX toolset
           Write-Host "Installing WiX toolset..." -ForegroundColor Cyan
           dotnet tool install --global wix --version 4.0.4
-          Write-Host "WiX installation exit code: $LASTEXITCODE" -ForegroundColor Yellow
 
-          # Debug environment
-          Write-Host "`n=== Environment Debugging ===" -ForegroundColor Green
-          Write-Host "Current PATH:" -ForegroundColor Cyan
-          Write-Host $env:PATH -ForegroundColor Gray
-          Write-Host "`nUSERPROFILE: $env:USERPROFILE" -ForegroundColor Cyan
-          Write-Host "Current working directory: $(Get-Location)" -ForegroundColor Cyan
-
-          # Check if wix.exe exists
-          $wixPath = "$env:USERPROFILE\.dotnet\tools\wix.exe"
-          Write-Host "`nChecking WiX executable at: $wixPath" -ForegroundColor Cyan
-          if (Test-Path $wixPath) {
-              Write-Host "WiX executable found!" -ForegroundColor Green
-              $wixInfo = Get-Item $wixPath
-              Write-Host "Size: $($wixInfo.Length) bytes" -ForegroundColor Gray
-              Write-Host "Last modified: $($wixInfo.LastWriteTime)" -ForegroundColor Gray
-          } else {
-              Write-Host "WiX executable NOT found!" -ForegroundColor Red
-              Write-Host "Listing contents of .dotnet/tools directory:" -ForegroundColor Yellow
-              if (Test-Path "$env:USERPROFILE\.dotnet\tools") {
-                  Get-ChildItem "$env:USERPROFILE\.dotnet\tools" | ForEach-Object { Write-Host "  $($_.Name)" -ForegroundColor Gray }
-              } else {
-                  Write-Host ".dotnet/tools directory does not exist!" -ForegroundColor Red
-              }
-          }
-
-          # Add to PATH for current session
-          Write-Host "`n=== Updating PATH ===" -ForegroundColor Green
+          # Update PATH for current session
           $toolsPath = "$env:USERPROFILE\.dotnet\tools"
-          $env:PATH += ";$toolsPath"
-          Write-Host "Added to PATH: $toolsPath" -ForegroundColor Cyan
+          $env:PATH = $env:PATH + ";$toolsPath"
 
-          # Test wix command availability
-          Write-Host "`n=== Testing WiX Command ===" -ForegroundColor Green
-          try {
-              Write-Host "Testing 'wix' command..." -ForegroundColor Cyan
-              $wixVersion = & wix --version 2>&1
-              Write-Host "WiX version output: $wixVersion" -ForegroundColor Green
-          } catch {
-              Write-Host "Error running 'wix' command: $_" -ForegroundColor Red
-              Write-Host "Trying full path..." -ForegroundColor Yellow
-              try {
-                  $wixVersionFull = & $wixPath --version 2>&1
-                  Write-Host "WiX version (full path): $wixVersionFull" -ForegroundColor Green
-              } catch {
-                  Write-Host "Error with full path too: $_" -ForegroundColor Red
-              }
-          }
-
-          # List available extensions before installation
-          Write-Host "`n=== Available Extensions (Before) ===" -ForegroundColor Green
-          try {
-              $extensionsBefore = & $wixPath extension list 2>&1
-              Write-Host "Extensions before installation:" -ForegroundColor Cyan
-              Write-Host "$extensionsBefore" -ForegroundColor Gray
-          } catch {
-              Write-Host "Error listing extensions: $_" -ForegroundColor Red
-          }
-
-          # Install UI extension with debugging
-          Write-Host "`n=== Installing UI Extension ===" -ForegroundColor Green
-
-          # First, try to remove any existing damaged extension
-          Write-Host "Attempting to remove any existing UI extension..." -ForegroundColor Cyan
-          try {
-              $removeResult = & $wixPath extension remove WixToolset.UI.wixext 2>&1
-              Write-Host "Extension remove result: $removeResult" -ForegroundColor Gray
-              Write-Host "Extension remove exit code: $LASTEXITCODE" -ForegroundColor Yellow
-          } catch {
-              Write-Host "Remove failed (this is OK if extension wasn't installed): $_" -ForegroundColor Yellow
-          }
-
-          # Try multiple installation approaches
-          Write-Host "Installing UI extension (attempt 1)..." -ForegroundColor Cyan
-          try {
-              $extensionResult = & $wixPath extension add WixToolset.UI.wixext 2>&1
-              Write-Host "Extension add result: $extensionResult" -ForegroundColor Gray
-              Write-Host "Extension add exit code: $LASTEXITCODE" -ForegroundColor Yellow
-
-              if ($LASTEXITCODE -ne 0) {
-                  Write-Host "First attempt failed, trying with --global flag..." -ForegroundColor Yellow
-                  $extensionResult2 = & $wixPath extension add WixToolset.UI.wixext --global 2>&1
-                  Write-Host "Global extension add result: $extensionResult2" -ForegroundColor Gray
-                  Write-Host "Global extension add exit code: $LASTEXITCODE" -ForegroundColor Yellow
-
-                  if ($LASTEXITCODE -ne 0) {
-                      Write-Host "Global attempt failed, trying specific version..." -ForegroundColor Yellow
-                      $extensionResult3 = & $wixPath extension add WixToolset.UI.wixext/4.0.5 2>&1
-                      Write-Host "Specific version add result: $extensionResult3" -ForegroundColor Gray
-                      Write-Host "Specific version add exit code: $LASTEXITCODE" -ForegroundColor Yellow
-                  }
-              }
-          } catch {
-              Write-Host "Error adding extension: $_" -ForegroundColor Red
-          }
-
-          # List available extensions after installation
-          Write-Host "`n=== Available Extensions (After) ===" -ForegroundColor Green
-          $extensionWorking = $false
-          try {
-              $extensionsAfter = & $wixPath extension list 2>&1
-              Write-Host "Extensions after installation:" -ForegroundColor Cyan
-              Write-Host "$extensionsAfter" -ForegroundColor Gray
-
-              # Check if extension is working (not damaged)
-              if ($extensionsAfter -notmatch "damaged" -and $extensionsAfter -match "WixToolset\.UI\.wixext") {
-                  $extensionWorking = $true
-                  Write-Host "UI extension appears to be working!" -ForegroundColor Green
-              } else {
-                  Write-Host "UI extension still appears damaged or missing" -ForegroundColor Yellow
-              }
-          } catch {
-              Write-Host "Error listing extensions after: $_" -ForegroundColor Red
-          }
-
-          # Check for extension files
-          Write-Host "`n=== Checking Extension Files ===" -ForegroundColor Green
-          $extensionPaths = @(
-              "$env:USERPROFILE\.wix\extensions",
-              "$env:LOCALAPPDATA\wix\extensions",
-              "$env:PROGRAMDATA\wix\extensions"
-          )
-          foreach ($extPath in $extensionPaths) {
-              Write-Host "Checking: $extPath" -ForegroundColor Cyan
-              if (Test-Path $extPath) {
-                  Write-Host "Directory exists, contents:" -ForegroundColor Green
-                  Get-ChildItem $extPath -Recurse | ForEach-Object { Write-Host "  $($_.FullName)" -ForegroundColor Gray }
-              } else {
-                  Write-Host "Directory does not exist" -ForegroundColor Yellow
-              }
-          }
-
-          $VERSION = "${{ needs.test-and-build.outputs.version }}"
-
-          # Create staging directory
-          Write-Host "`n=== Creating Package Structure ===" -ForegroundColor Green
-          New-Item -ItemType Directory -Path "target/windows-package" -Force
-
-          # Copy binary
+          # Create staging directory and copy binary
+          Write-Host "Creating package structure..." -ForegroundColor Cyan
+          New-Item -ItemType Directory -Path "target/windows-package" -Force | Out-Null
           Copy-Item "target/x86_64-pc-windows-msvc/release/ziplock.exe" "target/windows-package/"
 
-          # Download VC++ Redistributable
-          Write-Host "Downloading VC++ Redistributable..." -ForegroundColor Cyan
-          $vcRedistUrl = "https://aka.ms/vs/17/release/vc_redist.x64.exe"
-          $vcRedistPath = "target/windows-package/vc_redist.x64.exe"
-          try {
-              Invoke-WebRequest -Uri $vcRedistUrl -OutFile $vcRedistPath -UseBasicParsing
-              Write-Host "VC++ Redistributable downloaded: $(Get-Item $vcRedistPath | Select-Object -ExpandProperty Length) bytes" -ForegroundColor Green
-          } catch {
-              Write-Warning "Failed to download VC++ Redistributable: $_"
-              # Create a dummy file so the build doesn't fail
-              Set-Content -Path $vcRedistPath -Value "Dummy VC++ Redistributable file"
-          }
+          # Verify staging
+          $stagingFiles = Get-ChildItem "target/windows-package"
+          Write-Host "Package contents: $($stagingFiles.Name -join ', ')" -ForegroundColor Gray
 
-          # Copy resources
-          if (Test-Path "packaging/windows/resources") {
-              Copy-Item "packaging/windows/resources/*" "target/windows-package/" -Recurse -Force
-          }
+          # Build MSI using minimal configuration
+          Write-Host "Building MSI with minimal configuration..." -ForegroundColor Cyan
+          Set-Location "packaging/windows/installer"
 
-          # Create application icon from executable
-          Write-Host "Setting up application icon..." -ForegroundColor Cyan
-          # The MSI will use the executable itself as the icon source
+          $buildResult = & wix build "ziplock-minimal.wxs" -define "SourceDir=../../../target/windows-package" -define "Version=$VERSION" -out "../../../target/ZipLock-$VERSION-x64.msi" 2>&1
 
-          # Verify staging directory
-          Write-Host "Staging directory contents:" -ForegroundColor Cyan
-          Get-ChildItem "target/windows-package" | ForEach-Object { Write-Host "  $($_.Name) ($($_.Length) bytes)" -ForegroundColor Gray }
-
-          # Build MSI using WiX
-          Write-Host "`n=== Building MSI ===" -ForegroundColor Green
-          cd packaging/windows/installer
-          Write-Host "Current directory: $(Get-Location)" -ForegroundColor Cyan
-          Write-Host "WXS file exists: $(Test-Path 'ziplock.wxs')" -ForegroundColor Cyan
-
-          # Try building with UI extension first
-          if ($extensionWorking) {
-              $buildCommand = "build ziplock.wxs -ext WixToolset.UI.wixext -define SourceDir=../../../target/windows-package -define Version=$VERSION -out ../../../target/ZipLock-$VERSION-x64.msi"
-              Write-Host "Build command (with UI): wix $buildCommand" -ForegroundColor Cyan
-
-              try {
-                  & $wixPath $buildCommand.Split(' ')
-                  Write-Host "Build exit code: $LASTEXITCODE" -ForegroundColor Yellow
-                  if ($LASTEXITCODE -eq 0) {
-                      Write-Host "MSI built successfully with UI extension!" -ForegroundColor Green
-                  } else {
-                      Write-Host "Build failed with UI extension, trying fallback..." -ForegroundColor Yellow
-                      $extensionWorking = $false
-                  }
-              } catch {
-                  Write-Host "Build error with UI extension: $_" -ForegroundColor Red
-                  Write-Host "Trying fallback without UI extension..." -ForegroundColor Yellow
-                  $extensionWorking = $false
-              }
-          }
-
-          # Fallback: try building without UI extension
-          if (-not $extensionWorking) {
-              Write-Host "`n=== Fallback: Building without UI Extension ===" -ForegroundColor Yellow
-
-              # Create a minimal WXS file without problematic elements
-              $fallbackContent = @(
-                '<?xml version="1.0" encoding="UTF-8"?>',
-                '<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">',
-                '  <Package Name="ZipLock Password Manager"',
-                '           Language="1033"',
-                "           Version=`"$VERSION`"",
-                '           Manufacturer="ZipLock Project"',
-                '           UpgradeCode="12345678-1234-1234-1234-123456789012"',
-                '           InstallerVersion="500"',
-                '           Compressed="yes"',
-                '           Scope="perMachine">',
-                '',
-                '    <!-- Package description -->',
-                '    <SummaryInformation Description="ZipLock Password Manager - Secure password management using encrypted 7z archives" />',
-                '',
-                '    <!-- Allow upgrades and prevent downgrades -->',
-                '    <MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed." />',
-                '',
-                '    <!-- Embed the CAB file in the MSI -->',
-                '    <Media Id="1" Cabinet="media1.cab" EmbedCab="yes" />',
-                '',
-                '    <!-- Feature definitions -->',
-                '    <Feature Id="ProductFeature" Title="ZipLock Password Manager" Level="1">',
-                '      <ComponentGroupRef Id="ProductComponents" />',
-                '      <ComponentRef Id="ApplicationShortcut" />',
-                '      <ComponentRef Id="DesktopShortcut" />',
-                '    </Feature>',
-                '',
-                '    <!-- Installation directory structure -->',
-                '    <StandardDirectory Id="ProgramFiles64Folder">',
-                '      <Directory Id="INSTALLFOLDER" Name="ZipLock">',
-                '        <Directory Id="BINDIR" Name="bin" />',
-                '      </Directory>',
-                '    </StandardDirectory>',
-                '',
-                '    <!-- Start Menu -->',
-                '    <StandardDirectory Id="ProgramMenuFolder">',
-                '      <Directory Id="ApplicationProgramsFolder" Name="ZipLock" />',
-                '    </StandardDirectory>',
-                '',
-                '    <!-- Desktop -->',
-                '    <StandardDirectory Id="DesktopFolder" />',
-                '',
-                '    <!-- Components -->',
-                '    <ComponentGroup Id="ProductComponents" Directory="BINDIR">',
-                '      <!-- Main executable -->',
-                '      <Component Id="ZipLockExecutable">',
-                '        <File Id="ZipLockExe"',
-                '              Source="$(var.SourceDir)\ziplock.exe"',
-                '              Checksum="yes" />',
-                '      </Component>',
-                '    </ComponentGroup>',
-                '',
-                '    <!-- Application shortcuts -->',
-                '    <Component Id="ApplicationShortcut" Directory="ApplicationProgramsFolder">',
-                '      <Shortcut Id="ApplicationStartMenuShortcut"',
-                '                Name="ZipLock Password Manager"',
-                '                Target="[#ZipLockExe]"',
-                '                WorkingDirectory="BINDIR"',
-                '                Icon="ZipLockIcon.exe"',
-                '                Description="Secure password management using encrypted archives" />',
-                '      <RemoveFolder Id="CleanUpShortCut" Directory="ApplicationProgramsFolder" On="uninstall" />',
-                '      <RegistryValue Root="HKCU" Key="Software\ZipLock" Name="installed" Type="integer" Value="1" />',
-                '    </Component>',
-                '',
-                '    <!-- Desktop shortcut (optional) -->',
-                '    <Component Id="DesktopShortcut" Directory="DesktopFolder">',
-                '      <Shortcut Id="DesktopApplicationShortcut"',
-                '                Name="ZipLock Password Manager"',
-                '                Target="[#ZipLockExe]"',
-                '                WorkingDirectory="BINDIR"',
-                '                Icon="ZipLockIcon.exe"',
-                '                Description="Secure password management using encrypted archives" />',
-                '      <RegistryValue Root="HKCU" Key="Software\ZipLock" Name="desktop_shortcut" Type="integer" Value="1" />',
-                '    </Component>',
-                '',
-                '    <!-- Icon definition -->',
-                '    <Icon Id="ZipLockIcon.exe" SourceFile="$(var.SourceDir)\ziplock.exe" />',
-                '',
-                '    <!-- Properties for Add/Remove Programs -->',
-                '    <Property Id="ARPPRODUCTICON" Value="ZipLockIcon.exe" />',
-                '    <Property Id="ARPHELPLINK" Value="https://github.com/ejangi/ziplock" />',
-                '    <Property Id="ARPURLINFOABOUT" Value="https://github.com/ejangi/ziplock" />',
-                '    <Property Id="ARPNOREPAIR" Value="1" />',
-                '    <Property Id="ARPNOMODIFY" Value="1" />',
-                '',
-                '  </Package>',
-                '</Wix>'
-              )
-
-              Set-Content "ziplock-fallback.wxs" ($fallbackContent -join "`n") -Encoding UTF8
-              Write-Host "Created minimal fallback WXS file" -ForegroundColor Cyan
-
-              # Debug: Show generated WXS content
-              Write-Host "`nGenerated WXS content (first 20 lines):" -ForegroundColor Yellow
-              Get-Content "ziplock-fallback.wxs" | Select-Object -First 20 | ForEach-Object { Write-Host "  $_" -ForegroundColor Gray }
-
-              # Debug: Verify source file paths
-              Write-Host "`nVerifying source files:" -ForegroundColor Yellow
-              $sourceDir = "../../../target/windows-package"
-              Write-Host "Source directory: $sourceDir" -ForegroundColor Cyan
-              Write-Host "Resolved path: $((Resolve-Path $sourceDir -ErrorAction SilentlyContinue).Path)" -ForegroundColor Cyan
-              if (Test-Path "$sourceDir\ziplock.exe") {
-                  $exeInfo = Get-Item "$sourceDir\ziplock.exe"
-                  Write-Host "ziplock.exe: Found ($($exeInfo.Length) bytes)" -ForegroundColor Green
+          if ($LASTEXITCODE -eq 0) {
+              $msiFile = "../../../target/ZipLock-$VERSION-x64.msi"
+              if (Test-Path $msiFile) {
+                  $msiInfo = Get-Item $msiFile
+                  Write-Host "✅ MSI created successfully!" -ForegroundColor Green
+                  Write-Host "   Size: $([math]::Round($msiInfo.Length / 1MB, 2)) MB" -ForegroundColor Cyan
+                  Write-Host "   Path: $($msiInfo.FullName)" -ForegroundColor Gray
               } else {
-                  Write-Host "ziplock.exe: NOT FOUND" -ForegroundColor Red
-                  Write-Host "Contents of source directory:" -ForegroundColor Yellow
-                  Get-ChildItem $sourceDir | ForEach-Object { Write-Host "  $($_.Name)" -ForegroundColor Gray }
-              }
-
-              $fallbackCommand = "build ziplock-fallback.wxs -define SourceDir=../../../target/windows-package -define Version=$VERSION -out ../../../target/ZipLock-$VERSION-x64.msi"
-              Write-Host "Fallback build command: wix $fallbackCommand" -ForegroundColor Cyan
-
-              try {
-                  & $wixPath $fallbackCommand.Split(' ')
-                  Write-Host "Fallback build exit code: $LASTEXITCODE" -ForegroundColor Yellow
-                  if ($LASTEXITCODE -eq 0) {
-                      Write-Host "MSI built successfully without UI extension!" -ForegroundColor Green
-                  } else {
-                      Write-Host "Fallback build also failed!" -ForegroundColor Red
-                      throw "Both UI and fallback builds failed"
-                  }
-              } catch {
-                  Write-Host "Fallback build error: $_" -ForegroundColor Red
-                  throw
-              }
-          }
-
-          # Verify and log created artifacts
-          Write-Host "`n=== Build Artifacts ===" -ForegroundColor Green
-          $targetDir = "../../../target"
-          Write-Host "Checking target directory: $targetDir" -ForegroundColor Cyan
-
-          if (Test-Path $targetDir) {
-              $msiFiles = Get-ChildItem $targetDir -Filter "*.msi" | Sort-Object LastWriteTime -Descending
-              if ($msiFiles.Count -gt 0) {
-                  Write-Host "Found $($msiFiles.Count) MSI file(s):" -ForegroundColor Green
-                  foreach ($msi in $msiFiles) {
-                      Write-Host "  - $($msi.Name)" -ForegroundColor Cyan
-                      Write-Host "    Size: $([math]::Round($msi.Length / 1MB, 2)) MB" -ForegroundColor Gray
-                      Write-Host "    Created: $($msi.CreationTime)" -ForegroundColor Gray
-                      Write-Host "    Modified: $($msi.LastWriteTime)" -ForegroundColor Gray
-                      Write-Host "    Full path: $($msi.FullName)" -ForegroundColor Gray
-                  }
-              } else {
-                  Write-Host "No MSI files found in target directory!" -ForegroundColor Red
-              }
-
-              # List all files in target directory for debugging
-              Write-Host "`nAll files in target directory:" -ForegroundColor Yellow
-              Get-ChildItem $targetDir -Recurse | ForEach-Object {
-                  if (-not $_.PSIsContainer) {
-                      Write-Host "  $($_.FullName.Replace($PWD.Path, '.'))" -ForegroundColor Gray
-                  }
-              }
-
-              # Test MSI properties if possible
-              Write-Host "`nTesting MSI properties..." -ForegroundColor Yellow
-              $newestMsi = $msiFiles | Select-Object -First 1
-              if ($newestMsi) {
-                  try {
-                      # Basic file validation
-                      Write-Host "MSI file appears to be valid (size > 1MB)" -ForegroundColor Green
-                  } catch {
-                      Write-Warning "Could not validate MSI properties: $_"
-                  }
+                  Write-Host "❌ MSI file not found after build" -ForegroundColor Red
+                  exit 1
               }
           } else {
-              Write-Host "Target directory not found: $targetDir" -ForegroundColor Red
+              Write-Host "❌ MSI build failed with exit code $LASTEXITCODE" -ForegroundColor Red
+              Write-Host "Build output: $buildResult" -ForegroundColor Gray
+              exit 1
           }
 
       - name: Upload Windows package
@@ -878,8 +545,6 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: x86_64-apple-darwin
-
-
 
       - name: Build macOS application
         run: |
