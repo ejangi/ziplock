@@ -478,6 +478,8 @@ jobs:
         run: |
           cd apps/desktop
           cargo build --release --target x86_64-pc-windows-msvc
+        env:
+          RUSTFLAGS: -C target-feature=+crt-static
 
       - name: Create MSI Installer
         run: |
@@ -1134,7 +1136,7 @@ jobs:
             - **Build Date**: $(date -u)
             - **Commit**: ${{ github.sha }}
             - **Platforms**: Linux (x86_64), Windows (x64), macOS (x86_64), Android (ARM64/ARMv7)
-            - **Dependencies**: GTK4, libadwaita (Linux), Visual C++ Redistributable (Windows), macOS 10.15+ (macOS), API 21+ (Android)
+            - **Dependencies**: GTK4, libadwaita (Linux), Self-contained (Windows), macOS 10.15+ (macOS), API 21+ (Android)
           draft: false
           prerelease: ${{ contains(needs.test-and-build.outputs.version, '-') }}
           files: |

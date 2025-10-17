@@ -4,6 +4,8 @@ ar = "C:\\msys64\\mingw64\\bin\\ar.exe"
 
 [target.x86_64-pc-windows-msvc]
 # Keep default MSVC configuration for when Visual Studio Build Tools are available
+# Enable static CRT linking to eliminate VCRUNTIME140.dll dependency
+rustflags = ["-C", "target-feature=+crt-static"]
 
 [build]
 # Default to GNU target when Visual Studio Build Tools are not available

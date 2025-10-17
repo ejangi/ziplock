@@ -121,6 +121,10 @@ function Build-Application {
             cargo clean
         }
 
+        # Set RUSTFLAGS for static CRT linking to eliminate VCRUNTIME140.dll dependency
+        $env:RUSTFLAGS = "-C target-feature=+crt-static"
+        Write-Host "Using static CRT linking (RUSTFLAGS=$env:RUSTFLAGS)" -ForegroundColor Yellow
+
         # Build desktop application
         Write-Host "Building ZipLock desktop application..." -ForegroundColor Cyan
         cargo build --bin ziplock --target x86_64-pc-windows-msvc --profile $Configuration

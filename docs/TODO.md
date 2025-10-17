@@ -19,7 +19,7 @@ Run one of the following prompts in Zed's agent panel and when you're ready to b
 
 
 ## Windows
-- Taking into consideration `docs/technical.md`, `docs/technical/build.md`, `docs/technical/cross-platform-adaptation-plan.md` and `.github/workflows/unified-release.yml` and remembering to only output summaries here, rather than creating new *.md files, can you please...
+- Taking into consideration `docs/technical.md`, `docs/technical/build.md`, `docs/technical/cross-platform-adaptation-plan.md` and `.github/workflows/unified-release.yml` and remembering to only output summaries here, rather than creating new *.md files, can you please fix the error I get when I try to run the windows app? Here is the error message in the Event Viewer: `Application pop-up: ziplock.exe - System Error : The code execution cannot proceed because VCRUNTIME140.dll was not found. Reinstalling the program may fix this problem`
 
 
 

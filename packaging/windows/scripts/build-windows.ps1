@@ -66,6 +66,10 @@ if (-not $SkipBuild) {
 
     Set-Location $ProjectRoot
 
+    # Set RUSTFLAGS for static CRT linking to eliminate VCRUNTIME140.dll dependency
+    $env:RUSTFLAGS = "-C target-feature=+crt-static"
+    Write-Host "Using static CRT linking (RUSTFLAGS=$env:RUSTFLAGS)" -ForegroundColor Yellow
+
     # Build shared library first
     Write-Host "Building shared library..." -ForegroundColor Cyan
     cargo build --package ziplock-shared --target $Target --profile $Configuration

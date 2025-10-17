@@ -794,6 +794,37 @@ sudo apt-get install -y libgtk-4-dev libadwaita-1-dev
 
 ### Common Runtime Issues
 
+#### Windows VCRUNTIME140.dll Error (FIXED)
+
+**Problem:**
+```
+Application pop-up: ziplock.exe - System Error : The code execution cannot proceed because VCRUNTIME140.dll was not found. Reinstalling the program may fix this problem
+```
+
+**Root Cause:**
+Previous Windows builds were dynamically linked to the Visual C++ Redistributable runtime, requiring `VCRUNTIME140.dll` to be present on the target system.
+
+**Solution (Implemented):**
+The Windows build now uses static CRT linking to embed the Visual C++ runtime directly into the executable, eliminating the external dependency.
+
+**Technical Details:**
+- **Build Configuration**: Added `RUSTFLAGS="-C target-feature=+crt-static"` to all Windows builds
+- **Modified Files**: 
+  - `.cargo/config.toml`: Static linking for `x86_64-pc-windows-msvc` target
+  - `.github/workflows/unified-release.yml`: CI/CD environment variable
+  - Windows build scripts: PowerShell scripts updated with RUSTFLAGS
+- **Result**: Self-contained Windows executable with no external runtime dependencies
+
+**For Developers:**
+If building locally on Windows, the static CRT linking is automatically applied via `.cargo/config.toml`. For manual builds:
+```powershell
+$env:RUSTFLAGS = "-C target-feature=+crt-static"
+cargo build --release --target x86_64-pc-windows-msvc
+```
+
+**Verification:**
+The Windows executable now runs on clean Windows systems without requiring Visual Studio or Visual C++ Redistributable installation.
+
 #### Package Installation Fails
 
 **Symptoms:**

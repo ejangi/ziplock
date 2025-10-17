@@ -228,13 +228,28 @@ build_platform() {
 
     log_step "Building for $platform ($target)..."
 
+    # Set Windows-specific build flags
+    local rustflags=""
+    if [[ "$platform" == "windows" ]]; then
+        rustflags="RUSTFLAGS=-C target-feature=+crt-static"
+        log_info "  Using static CRT linking for Windows build"
+    fi
+
     # Build shared library first
     log_info "  Building shared library..."
-    cargo build --package ziplock-shared --target "$target" --profile "$PROFILE"
+    if [[ -n "$rustflags" ]]; then
+        eval "$rustflags cargo build --package ziplock-shared --target \"$target\" --profile \"$PROFILE\""
+    else
+        cargo build --package ziplock-shared --target "$target" --profile "$PROFILE"
+    fi
 
     # Build desktop application
     log_info "  Building desktop application..."
-    cargo build --package ziplock-desktop --bin ziplock --target "$target" --profile "$PROFILE" --features "$features"
+    if [[ -n "$rustflags" ]]; then
+        eval "$rustflags cargo build --package ziplock-desktop --bin ziplock --target \"$target\" --profile \"$PROFILE\" --features \"$features\""
+    else
+        cargo build --package ziplock-desktop --bin ziplock --target "$target" --profile "$PROFILE" --features "$features"
+    fi
 
     # Create platform-specific output directory
     local output_dir="target/desktop-builds/$platform"
