@@ -7424,6 +7424,7 @@ dependencies = [
  "nix 0.27.1",
  "objc",
  "open",
+ "regex",
  "resvg 0.37.0",
  "rfd",
  "serde",

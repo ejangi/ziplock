@@ -24,6 +24,10 @@ Write-Host "Output Directory: $OutputDir" -ForegroundColor Cyan
 Write-Host "Version: $Version" -ForegroundColor Cyan
 Write-Host "WXS File: $WxsFile" -ForegroundColor Cyan
 
+# Event Log source registration paths
+$EventLogScript = Join-Path $ProjectRoot "packaging\windows\scripts\register-event-source.ps1"
+Write-Host "Event Log Script: $EventLogScript" -ForegroundColor Cyan
+
 # Function to check if command exists
 function Test-Command {
     param([string]$Command)
@@ -47,6 +51,55 @@ if (!(Test-Command "wix")) {
     catch {
         Write-Error "Failed to install WiX toolset: $_"
         exit 1
+    }
+}
+
+# Function to create Event Log custom action
+function Create-EventLogCustomAction {
+    param([string]$WxsPath)
+
+    Write-Host "Adding Event Log registration to WXS..." -ForegroundColor Yellow
+
+    # Check if custom action already exists
+    $wxsContent = Get-Content $WxsPath -Raw
+    if ($wxsContent -like "*RegisterEventLogSource*") {
+        Write-Host "Event Log custom action already exists in WXS" -ForegroundColor Yellow
+        return
+    }
+
+    # Custom action XML to add before </Product> tag
+    $customActionXml = @"
+
+    <!-- Custom Actions for Event Log Source Registration -->
+    <CustomAction Id="RegisterEventLogSource"
+                  Directory="INSTALLFOLDER"
+                  ExeCommand='powershell.exe -ExecutionPolicy Bypass -File "[INSTALLFOLDER]register-event-source.ps1" -Action install'
+                  Execute="deferred"
+                  Impersonate="no"
+                  Return="ignore" />
+
+    <CustomAction Id="UnregisterEventLogSource"
+                  Directory="INSTALLFOLDER"
+                  ExeCommand='powershell.exe -ExecutionPolicy Bypass -File "[INSTALLFOLDER]register-event-source.ps1" -Action uninstall'
+                  Execute="deferred"
+                  Impersonate="no"
+                  Return="ignore" />
+
+    <!-- Install Sequences -->
+    <InstallExecuteSequence>
+      <Custom Action="RegisterEventLogSource" After="InstallFiles">NOT Installed</Custom>
+      <Custom Action="UnregisterEventLogSource" After="InstallInitialize">Installed AND NOT REINSTALL</Custom>
+    </InstallExecuteSequence>
+"@
+
+    try {
+        # Insert custom actions before closing Product tag
+        $wxsContent = $wxsContent -replace '(\s*</Product>)', "$customActionXml`$1"
+        Set-Content -Path $WxsPath -Value $wxsContent -Encoding UTF8
+        Write-Host "Event Log custom actions added to WXS" -ForegroundColor Green
+    }
+    catch {
+        Write-Warning "Failed to add Event Log custom actions to WXS: $_"
     }
 }
 

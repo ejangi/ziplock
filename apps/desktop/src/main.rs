@@ -39,6 +39,35 @@ use ui::views::{
     WizardMessage,
 };
 
+/// Utility function to detect if running in production mode
+fn is_production_mode() -> bool {
+    // Check environment variable first
+    if std::env::var("ZIPLOCK_PRODUCTION").is_ok() {
+        return true;
+    }
+
+    // Check if production feature is enabled
+    if cfg!(feature = "production") {
+        return true;
+    }
+
+    // In release builds without debug assertions, assume production
+    if !cfg!(debug_assertions) {
+        return true;
+    }
+
+    false
+}
+
+/// Get appropriate logging level for current mode
+fn get_logging_mode() -> &'static str {
+    if is_production_mode() {
+        "production"
+    } else {
+        "development"
+    }
+}
+
 /// Main application messages
 #[derive(Debug, Clone)]
 pub enum Message {
@@ -1498,22 +1527,49 @@ impl ZipLockApp {
 }
 
 fn main() -> iced::Result {
-    // Initialize logging first
-    let logging_config = logging::LoggingConfig::default();
+    // Determine if running in production mode
+    let is_production = is_production_mode();
+
+    // Configure logging based on mode
+    let logging_config = if is_production {
+        logging::LoggingConfig::production()
+    } else {
+        logging::LoggingConfig::development()
+    };
+
     if let Err(e) = logging::initialize_logging(logging_config) {
         eprintln!("Failed to initialize logging: {}", e);
+        // In production mode, also try to write to Event Log if available
+        #[cfg(windows)]
+        if is_production {
+            if let Ok(event_writer) =
+                logging::windows_event_log::WindowsEventLogWriter::new("ZipLock")
+            {
+                let _ = event_writer
+                    .log_event("ERROR", &format!("Failed to initialize logging: {}", e));
+            }
+        }
     }
 
-    info!("Starting ZipLock Linux app");
+    // Log startup information
+    info!("Starting ZipLock Password Manager");
+    info!("Mode: {}", get_logging_mode());
     info!("Application version: {}", env!("CARGO_PKG_VERSION"));
     info!(
-        "Build mode: {}",
+        "Build type: {}",
         if cfg!(debug_assertions) {
             "debug"
         } else {
             "release"
         }
     );
+
+    // Log Windows-specific production settings
+    #[cfg(windows)]
+    if is_production {
+        info!("Windows production mode: console logging disabled, Event Log enabled");
+        info!("Terminal window suppressed via windows_subsystem attribute");
+    }
 
     // Use new Iced 0.13 application architecture
     iced::application(

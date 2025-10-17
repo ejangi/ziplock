@@ -1,8 +1,9 @@
-//! Comprehensive logging configuration for ZipLock Linux application
+//! Comprehensive logging configuration for ZipLock desktop application
 //!
 //! This module provides structured logging with file rotation, proper formatting,
-//! and deployment-ready configuration. It supports both development and production
-//! environments with appropriate log levels and output destinations.
+//! Windows Event Log integration, and deployment-ready configuration. It supports
+//! both development and production environments with appropriate log levels and
+//! output destinations.
 
 use anyhow::{Context, Result};
 use is_terminal::IsTerminal;
@@ -13,6 +14,9 @@ use std::io;
 use std::path::{Path, PathBuf};
 use tracing::{info, warn};
 use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Layer};
+
+#[cfg(windows)]
+pub mod windows_event_log;
 
 /// YAML configuration structures
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -94,6 +98,8 @@ pub struct LoggingConfig {
     pub enable_console: bool,
     /// Whether to enable file logging
     pub enable_file: bool,
+    /// Whether to enable Windows Event Log (Windows only)
+    pub enable_event_log: bool,
     /// Log rotation configuration
     pub rotation: LogRotationConfig,
 
@@ -112,6 +118,7 @@ impl Default for LoggingConfig {
             file_level: "DEBUG".to_string(),
             enable_console: true,
             enable_file: true,
+            enable_event_log: false,
             rotation: LogRotationConfig::default(),
             include_thread_ids: false,
             include_source_location: false,
@@ -125,6 +132,39 @@ impl LoggingConfig {
     pub fn new(log_dir: PathBuf) -> Self {
         Self {
             log_dir,
+            ..Default::default()
+        }
+    }
+
+    /// Create production logging configuration
+    /// - Disables console logging to prevent terminal windows
+    /// - Enables Windows Event Log on Windows
+    /// - Uses minimal log levels
+    pub fn production() -> Self {
+        Self {
+            enable_console: false,
+            console_level: "ERROR".to_string(),
+            file_level: "WARN".to_string(),
+            enable_file: true,
+            #[cfg(windows)]
+            enable_event_log: true,
+            #[cfg(not(windows))]
+            enable_event_log: false,
+            ..Default::default()
+        }
+    }
+
+    /// Create development logging configuration
+    /// - Enables console logging for debugging
+    /// - Disables Windows Event Log
+    /// - Uses verbose log levels
+    pub fn development() -> Self {
+        Self {
+            enable_console: true,
+            console_level: "DEBUG".to_string(),
+            file_level: "DEBUG".to_string(),
+            enable_file: true,
+            enable_event_log: false,
             ..Default::default()
         }
     }
@@ -176,34 +216,6 @@ impl LoggingConfig {
     pub fn with_thread_ids(mut self) -> Self {
         self.include_thread_ids = true;
         self
-    }
-
-    /// Create development configuration with more verbose logging
-    pub fn development() -> Self {
-        Self {
-            console_level: "DEBUG".to_string(),
-            file_level: "TRACE".to_string(),
-
-            include_thread_ids: true,
-            include_source_location: true,
-            ..Default::default()
-        }
-    }
-
-    /// Create production configuration with optimized logging
-    pub fn production() -> Self {
-        Self {
-            console_level: "WARN".to_string(),
-            file_level: "INFO".to_string(),
-            include_thread_ids: false,
-            include_source_location: false,
-            rotation: LogRotationConfig {
-                max_file_size: 50 * 1024 * 1024, // 50MB for production
-                max_files: 10,
-                compress: true,
-            },
-            ..Default::default()
-        }
     }
 
     /// Get the full path to the current log file
@@ -267,6 +279,35 @@ pub fn initialize_logging(config: LoggingConfig) -> Result<()> {
         info!("File logging enabled: {:?}", log_file);
     }
 
+    // Windows Event Log layer (production only)
+    #[cfg(windows)]
+    if config.enable_event_log {
+        use windows_event_log::EventLogMakeWriter;
+
+        match EventLogMakeWriter::new("ZipLock") {
+            Ok(event_writer) => {
+                let event_filter =
+                    EnvFilter::try_new("WARN").unwrap_or_else(|_| EnvFilter::new("WARN"));
+
+                let event_layer = fmt::layer()
+                    .with_target(false)
+                    .with_thread_ids(false)
+                    .with_file(false)
+                    .with_line_number(false)
+                    .with_ansi(false)
+                    .compact()
+                    .with_writer(event_writer)
+                    .with_filter(event_filter);
+
+                layers.push(event_layer.boxed());
+                info!("Windows Event Log enabled");
+            }
+            Err(e) => {
+                warn!("Failed to initialize Windows Event Log: {}", e);
+            }
+        }
+    }
+
     // Initialize the subscriber
     tracing_subscriber::registry()
         .with(layers)
@@ -283,6 +324,9 @@ pub fn initialize_logging(config: LoggingConfig) -> Result<()> {
         "File logging: {} (level: {}) at {:?}",
         config.enable_file, config.file_level, config.log_dir
     );
+
+    #[cfg(windows)]
+    info!("Event Log: {}", config.enable_event_log);
 
     Ok(())
 }
@@ -321,6 +365,7 @@ fn yaml_to_logging_config(yaml: &YamlLoggingConfig) -> Result<LoggingConfig> {
         file_level: yaml.file.level.clone(),
         enable_console: yaml.console.enabled,
         enable_file: yaml.file.enabled,
+        enable_event_log: false, // Default to false for YAML configs
         rotation: LogRotationConfig {
             max_file_size,
             max_files: yaml.rotation.max_files,

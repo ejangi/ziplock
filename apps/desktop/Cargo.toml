@@ -61,6 +61,7 @@ open = "5.0"
 tracing-appender = "0.2" # For file rotation and advanced logging
 is-terminal = "0.4"      # For terminal detection (colored output)
 serde_yaml = "0.9"       # For YAML configuration file support
+regex = "1.10"           # For cleaning log messages (Event Log)
 
 # Platform-specific dependencies
 [target.'cfg(unix)'.dependencies]
@@ -72,6 +73,8 @@ winreg = "0.50"  # Registry access for file associations
 windows = { version = "0.52", features = [
     "Win32_Foundation",
     "Win32_System_Registry",
+    "Win32_System_EventLog",  # Add Event Log support
+    "Win32_Security",         # Required for registry operations
     "Win32_UI_Shell",
 ] }
 
@@ -111,6 +114,11 @@ file-dialog = ["rfd"]
 # Development features
 debug-ui = []
 mock-backend = []
+
+# Production features
+production = ["minimal-logging", "event-logging"]
+minimal-logging = []
+event-logging = []
 
 # Linux packaging metadata
 [package.metadata.deb]

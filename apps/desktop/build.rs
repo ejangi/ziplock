@@ -25,8 +25,20 @@ fn configure_windows() {
     // Embed Windows icon resource
     embed_windows_icon();
 
-    // Note: Do not set SUBSYSTEM:WINDOWS here as it conflicts with main() function
-    // The GUI will still work properly with console subsystem
+    // Check if building for production
+    let is_production =
+        env::var("ZIPLOCK_PRODUCTION").is_ok() || env::var("CARGO_FEATURE_PRODUCTION").is_ok();
+
+    if is_production {
+        println!("cargo:warning=Building Windows application for production mode");
+        println!(
+            "cargo:warning=Console subsystem will be hidden via #[windows_subsystem] attribute"
+        );
+        println!("cargo:warning=Event logging enabled for production builds");
+    } else {
+        println!("cargo:warning=Building Windows application for development mode");
+        println!("cargo:warning=Console logging available for debugging");
+    }
 
     // Enable static linking of runtime libraries
     if env::var("RUSTFLAGS")

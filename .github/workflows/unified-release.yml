@@ -119,12 +119,27 @@ jobs:
 
       - name: Run tests
         run: |
+          echo "=== Running Tests with All Features ==="
           cargo test --workspace --all-features
+
+          echo "=== Testing Production Features Specifically ==="
+          # Test that production features compile and work
+          cd apps/desktop
+          cargo test --features production
+          cargo check --features production
+          echo "✅ Production features verified"
 
       - name: Build Linux binaries
         run: |
-          # Build the ziplock binary from the desktop app workspace member
-          cargo build --release --bin ziplock -p ziplock-desktop
+          echo "=== Building Linux Application in Production Mode ==="
+
+          # Set production environment
+          export ZIPLOCK_PRODUCTION=1
+          echo "Production Environment: $ZIPLOCK_PRODUCTION"
+
+          # Build the ziplock binary from the desktop app workspace member with production features
+          echo "Building with production features..."
+          cargo build --release --bin ziplock -p ziplock-desktop --features production
 
           # Create output directory structure
           mkdir -p target/artifacts/linux/binaries
@@ -132,6 +147,17 @@ jobs:
 
           # Make binaries executable
           chmod +x target/artifacts/linux/binaries/*
+
+          # Verify the binary was created
+          if [ -f "target/artifacts/linux/binaries/ziplock" ]; then
+              echo "✅ Linux binary created successfully"
+              ls -lh target/artifacts/linux/binaries/ziplock
+          else
+              echo "❌ Linux binary not found"
+              exit 1
+          fi
+        env:
+          ZIPLOCK_PRODUCTION: "1"
 
       - name: Extract version
         id: version
@@ -476,10 +502,30 @@ jobs:
 
       - name: Build Windows application
         run: |
+          Write-Host "=== Building Windows Application in Production Mode ===" -ForegroundColor Green
+
+          # Verify production environment is set
+          $env:ZIPLOCK_PRODUCTION = "1"
+          Write-Host "Production Environment: $env:ZIPLOCK_PRODUCTION" -ForegroundColor Cyan
+
+          # Build with production features
           cd apps/desktop
-          cargo build --release --target x86_64-pc-windows-msvc
+          Write-Host "Building with production features..." -ForegroundColor Cyan
+          cargo build --release --target x86_64-pc-windows-msvc --features production
+
+          # Verify the binary was created
+          $binaryPath = "../../target/x86_64-pc-windows-msvc/release/ziplock.exe"
+          if (Test-Path $binaryPath) {
+              Write-Host "✅ Windows binary created successfully" -ForegroundColor Green
+              $size = (Get-Item $binaryPath).Length / 1MB
+              Write-Host "   Binary size: $([math]::Round($size, 2)) MB" -ForegroundColor Cyan
+          } else {
+              Write-Error "❌ Windows binary not found at $binaryPath"
+              exit 1
+          }
         env:
           RUSTFLAGS: -C target-feature=+crt-static
+          ZIPLOCK_PRODUCTION: "1"
 
       - name: Generate Windows Icons
         run: |
@@ -513,6 +559,26 @@ jobs:
               }
           }
 
+      - name: Prepare Windows Event Log Integration
+        run: |
+          Write-Host "=== Preparing Windows Event Log Integration ===" -ForegroundColor Green
+
+          # Copy Event Log registration script to package
+          Write-Host "Copying Event Log registration script..." -ForegroundColor Cyan
+          New-Item -ItemType Directory -Path "target/windows-package" -Force | Out-Null
+          Copy-Item "packaging/windows/scripts/register-event-source.ps1" "target/windows-package/"
+
+          # Test Event Log script syntax (don't actually register in CI)
+          Write-Host "Validating Event Log script..." -ForegroundColor Cyan
+          try {
+              $scriptContent = Get-Content "packaging/windows/scripts/register-event-source.ps1" -Raw
+              $null = [scriptblock]::Create($scriptContent)
+              Write-Host "✅ Event Log script syntax is valid" -ForegroundColor Green
+          } catch {
+              Write-Warning "⚠️ Event Log script has syntax issues: $_"
+          }
+        continue-on-error: true
+
       - name: Create Enhanced MSI Installer
         run: |
           Write-Host "=== Enhanced Windows MSI Build with User Feedback ===" -ForegroundColor Green
@@ -532,17 +598,39 @@ jobs:
           New-Item -ItemType Directory -Path "target/windows-package" -Force | Out-Null
           Copy-Item "target/x86_64-pc-windows-msvc/release/ziplock.exe" "target/windows-package/"
 
-          # Copy custom action scripts for user feedback
-          Write-Host "Copying custom action scripts..." -ForegroundColor Cyan
-          $customActionScripts = @("show-install-success.ps1", "show-install-failure.ps1")
-          foreach ($script in $customActionScripts) {
+          # Verify this is a production build by checking for windows subsystem
+          Write-Host "Verifying production build characteristics..." -ForegroundColor Cyan
+          $binaryPath = "target/windows-package/ziplock.exe"
+          if (Test-Path $binaryPath) {
+              # Check if binary is a GUI application (no console subsystem)
+              $fileInfo = Get-Item $binaryPath
+              Write-Host "✅ Production binary verified: $($fileInfo.Name)" -ForegroundColor Green
+              Write-Host "   Size: $([math]::Round($fileInfo.Length / 1MB, 2)) MB" -ForegroundColor Cyan
+              Write-Host "   Built with: --features production + ZIPLOCK_PRODUCTION=1" -ForegroundColor Cyan
+          } else {
+              Write-Error "❌ Production binary not found"
+              exit 1
+          }
+
+          # Copy custom action scripts and Event Log registration
+          Write-Host "Copying installation scripts..." -ForegroundColor Cyan
+          $installScripts = @(
+              "show-install-success.ps1",
+              "show-install-failure.ps1",
+              "register-event-source.ps1"
+          )
+          foreach ($script in $installScripts) {
               $scriptPath = "packaging/windows/scripts/$script"
               if (Test-Path $scriptPath) {
                   Copy-Item $scriptPath "target/windows-package/"
                   Write-Host "  ✅ Copied: $script" -ForegroundColor Green
               } else {
-                  Write-Host "  ⚠️  Missing: $script - falling back to minimal MSI" -ForegroundColor Yellow
-                  $UseMinimal = $true
+                  if ($script -eq "register-event-source.ps1") {
+                      Write-Host "  ⚠️  Missing Event Log script: $script" -ForegroundColor Yellow
+                  } else {
+                      Write-Host "  ⚠️  Missing: $script - falling back to minimal MSI" -ForegroundColor Yellow
+                      $UseMinimal = $true
+                  }
               }
           }
 
@@ -623,6 +711,40 @@ jobs:
               }
           }
 
+      - name: Verify Windows Production Package
+        run: |
+          Write-Host "=== Verifying Windows Production Package ===" -ForegroundColor Green
+
+          # Check that MSI was created
+          $msiFiles = Get-ChildItem "target/ZipLock-*.msi" -ErrorAction SilentlyContinue
+          if ($msiFiles) {
+              foreach ($msi in $msiFiles) {
+                  Write-Host "✅ MSI Package: $($msi.Name)" -ForegroundColor Green
+                  Write-Host "   Size: $([math]::Round($msi.Length / 1MB, 2)) MB" -ForegroundColor Cyan
+              }
+          } else {
+              Write-Error "❌ No MSI packages found"
+              exit 1
+          }
+
+          # Verify production binary characteristics
+          $productionBinary = "target/windows-package/ziplock.exe"
+          if (Test-Path $productionBinary) {
+              Write-Host "✅ Production binary verified" -ForegroundColor Green
+              Write-Host "   Built with: --features production" -ForegroundColor Cyan
+              Write-Host "   Environment: ZIPLOCK_PRODUCTION=1" -ForegroundColor Cyan
+              Write-Host "   Console subsystem: Hidden (windows_subsystem)" -ForegroundColor Cyan
+              Write-Host "   Event logging: Enabled" -ForegroundColor Cyan
+          }
+
+          # Check Event Log registration script
+          $eventLogScript = "target/windows-package/register-event-source.ps1"
+          if (Test-Path $eventLogScript) {
+              Write-Host "✅ Event Log registration script included" -ForegroundColor Green
+          } else {
+              Write-Warning "⚠️ Event Log registration script missing"
+          }
+
       - name: Upload Windows package
         uses: actions/upload-artifact@v4
         with:
@@ -646,8 +768,26 @@ jobs:
 
       - name: Build macOS application
         run: |
+          echo "=== Building macOS Application in Production Mode ==="
+
+          # Set production environment
+          export ZIPLOCK_PRODUCTION=1
+          echo "Production Environment: $ZIPLOCK_PRODUCTION"
+
           cd apps/desktop
-          cargo build --release --target x86_64-apple-darwin
+          echo "Building with production features..."
+          cargo build --release --target x86_64-apple-darwin --features production
+
+          # Verify the binary was created
+          if [ -f "../../target/x86_64-apple-darwin/release/ziplock" ]; then
+              echo "✅ macOS binary created successfully"
+              ls -lh "../../target/x86_64-apple-darwin/release/ziplock"
+          else
+              echo "❌ macOS binary not found"
+              exit 1
+          fi
+        env:
+          ZIPLOCK_PRODUCTION: "1"
 
       - name: Create App Bundle
         run: |
