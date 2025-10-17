@@ -69,6 +69,11 @@ config/secrets.toml
 *.pdb
 desktop.ini
 
+# Rust compilation artifacts
+*.rcgu.o
+*.rmeta
+test_syntax*
+
 ## macOS
 .DS_Store
 .AppleDouble

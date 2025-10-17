@@ -104,8 +104,23 @@ impl UnifiedMemoryRepository {
             }
         }
 
-        // Validate loaded data
+        // Validate loaded data with Windows debugging
+        #[cfg(windows)]
+        {
+            eprintln!("DEBUG [Windows]: load_from_files validation");
+            eprintln!("DEBUG [Windows]: Loaded credentials: {}", self.credentials.len());
+            eprintln!("DEBUG [Windows]: Metadata credential_count: {}", self.metadata.credential_count);
+            eprintln!("DEBUG [Windows]: File map entries processed: {}", file_map.len());
+            eprintln!("DEBUG [Windows]: File map contents:");
+            for (path, content) in &file_map {
+                eprintln!("DEBUG [Windows]:   '{}': {} bytes", path, content.len());
+            }
+        }
+
         if self.credentials.len() != self.metadata.credential_count {
+            #[cfg(windows)]
+            eprintln!("DEBUG [Windows]: MISMATCH DETECTED - This is the bug!");
+
             return Err(CoreError::StructureError {
                 message: format!(
                     "Metadata claims {} credentials but found {}",
@@ -139,15 +154,44 @@ impl UnifiedMemoryRepository {
 
         let mut file_map = HashMap::new();
 
+        // Windows-specific debugging
+        #[cfg(windows)]
+        {
+            eprintln!("DEBUG [Windows]: serialize_to_files starting");
+            eprintln!("DEBUG [Windows]: Credential count: {}", self.credentials.len());
+            eprintln!("DEBUG [Windows]: Metadata credential_count: {}", self.metadata.credential_count);
+        }
+
         // Serialize metadata
         let metadata_yaml = serialize_metadata(&self.metadata)?;
+        let metadata_len = metadata_yaml.len();
         file_map.insert(METADATA_FILE.to_string(), metadata_yaml.into_bytes());
+
+        #[cfg(windows)]
+        eprintln!("DEBUG [Windows]: Added metadata file: {} ({} bytes)", METADATA_FILE, metadata_len);
 
         // Serialize each credential
         for credential in self.credentials.values() {
             let credential_yaml = serialize_credential(credential)?;
             let file_path = format!("{}/{}/record.yml", CREDENTIALS_DIR, credential.id);
+
+            #[cfg(windows)]
+            {
+                eprintln!("DEBUG [Windows]: Serializing credential ID: {}", credential.id);
+                eprintln!("DEBUG [Windows]: File path: '{}'", file_path);
+                eprintln!("DEBUG [Windows]: YAML size: {} bytes", credential_yaml.len());
+            }
+
             file_map.insert(file_path, credential_yaml.into_bytes());
+        }
+
+        #[cfg(windows)]
+        {
+            eprintln!("DEBUG [Windows]: serialize_to_files complete");
+            eprintln!("DEBUG [Windows]: Total files in map: {}", file_map.len());
+            for (path, content) in &file_map {
+                eprintln!("DEBUG [Windows]:   '{}': {} bytes", path, content.len());
+            }
         }
 
         Ok(file_map)

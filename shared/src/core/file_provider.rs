@@ -5,6 +5,7 @@
 //! providers while maintaining clean separation of concerns.
 
 use std::collections::HashMap;
+use tracing::{debug, warn, error};
 
 use crate::core::errors::{FileError, FileResult};
 use crate::core::types::FileMap;
@@ -115,30 +116,50 @@ impl FileOperationProvider for DesktopFileProvider {
     }
 
     fn extract_archive(&self, data: &[u8], password: &str) -> FileResult<FileMap> {
+        debug!("Starting archive extraction: {} bytes", data.len());
+        debug!("Archive encryption: {}", if password.is_empty() { "disabled" } else { "enabled" });
+
         // Write buffer to temporary file first since sevenz-rust2 API requires file paths
         let temp_archive =
             std::env::temp_dir().join(format!("ziplock_archive_{}.7z", uuid::Uuid::new_v4()));
         let temp_dir =
             std::env::temp_dir().join(format!("ziplock_extract_{}", uuid::Uuid::new_v4()));
 
+        debug!("Temp archive path: {:?}", temp_archive);
+        debug!("Temp extract dir: {:?}", temp_dir);
+
         // Write archive data to temp file
-        std::fs::write(&temp_archive, data).map_err(|e| FileError::ExtractionFailed {
-            message: format!("Failed to write temp archive file: {}", e),
+        std::fs::write(&temp_archive, data).map_err(|e| {
+            error!("Failed to write temp archive file {:?}: {}", temp_archive, e);
+            FileError::ExtractionFailed {
+                message: format!("Failed to write temp archive file: {}", e),
+            }
         })?;
 
-        std::fs::create_dir_all(&temp_dir).map_err(|e| FileError::ExtractionFailed {
-            message: format!("Failed to create temp directory: {}", e),
+        debug!("Archive data written to temp file: {} bytes", data.len());
+
+        std::fs::create_dir_all(&temp_dir).map_err(|e| {
+            error!("Failed to create temp directory {:?}: {}", temp_dir, e);
+            FileError::ExtractionFailed {
+                message: format!("Failed to create temp directory: {}", e),
+            }
         })?;
+
+        debug!("Temp extraction directory created: {:?}", temp_dir);
 
         // Use sevenz-rust2 helper functions
         let result = if password.is_empty() {
+            debug!("Calling sevenz_rust2::decompress_file without password");
             sevenz_rust2::decompress_file(&temp_archive, &temp_dir)
         } else {
+            debug!("Calling sevenz_rust2::decompress_file_with_password with password");
             sevenz_rust2::decompress_file_with_password(&temp_archive, &temp_dir, password.into())
         };
 
         match result {
             Ok(()) => {
+                debug!("Archive extraction successful, reading extracted files");
+
                 // Read extracted files into memory
                 let mut file_map = HashMap::new();
 
@@ -156,8 +177,11 @@ impl FileOperationProvider for DesktopFileProvider {
                                 .strip_prefix(base_path)
                                 .map_err(|_| std::io::Error::other("Path error"))?;
                             let content = std::fs::read(&path)?;
-                            file_map.insert(relative_path.to_string_lossy().to_string(), content);
+                            let relative_path_str = relative_path.to_string_lossy().to_string();
+                            debug!("Extracted file: {} ({} bytes)", relative_path_str, content.len());
+                            file_map.insert(relative_path_str, content);
                         } else if path.is_dir() {
+                            debug!("Recursing into directory: {:?}", path);
                             read_dir_recursive(&path, base_path, file_map)?;
                         }
                     }
@@ -165,18 +189,47 @@ impl FileOperationProvider for DesktopFileProvider {
                 }
 
                 read_dir_recursive(&temp_dir, &temp_dir, &mut file_map).map_err(|e| {
+                    error!("Failed to read extracted files from {:?}: {}", temp_dir, e);
                     FileError::ExtractionFailed {
                         message: format!("Failed to read extracted files: {}", e),
                     }
                 })?;
 
-                // Clean up temp files
-                let _ = std::fs::remove_file(&temp_archive);
-                let _ = std::fs::remove_dir_all(&temp_dir);
+                debug!("Successfully extracted {} files from archive", file_map.len());
+                for (path, content) in &file_map {
+                    debug!("  - {}: {} bytes", path, content.len());
+                }
 
+                // Clean up temp files
+                debug!("Cleaning up temporary files");
+                if let Err(e) = std::fs::remove_file(&temp_archive) {
+                    warn!("Failed to remove temp archive {:?}: {}", temp_archive, e);
+                }
+                if let Err(e) = std::fs::remove_dir_all(&temp_dir) {
+                    warn!("Failed to remove temp directory {:?}: {}", temp_dir, e);
+                }
+
+                debug!("Archive extraction completed successfully");
                 Ok(file_map)
             }
             Err(e) => {
+                error!("Archive extraction failed: {}", e);
+
+                // Log directory contents for debugging
+                debug!("Checking temp directory contents after extraction failure:");
+                if let Ok(entries) = std::fs::read_dir(&temp_dir) {
+                    let mut file_count = 0;
+                    for entry in entries {
+                        if let Ok(entry) = entry {
+                            debug!("  - {:?}", entry.path());
+                            file_count += 1;
+                        }
+                    }
+                    debug!("Found {} items in temp directory after failed extraction", file_count);
+                } else {
+                    debug!("Could not read temp directory contents for debugging");
+                }
+
                 // Clean up temp files on error
                 let _ = std::fs::remove_file(&temp_archive);
                 let _ = std::fs::remove_dir_all(&temp_dir);
@@ -187,8 +240,10 @@ impl FileOperationProvider for DesktopFileProvider {
                     || error_str.contains("wrong")
                     || error_str.contains("decrypt")
                 {
+                    error!("Archive extraction failed due to password issue");
                     Err(FileError::InvalidPassword)
                 } else {
+                    error!("Archive extraction failed due to format/corruption issue");
                     Err(FileError::ExtractionFailed {
                         message: format!("Failed to extract 7z archive: {}", e),
                     })
@@ -201,47 +256,160 @@ impl FileOperationProvider for DesktopFileProvider {
         // Create temporary directory to write files
         let temp_dir =
             std::env::temp_dir().join(format!("ziplock_create_{}", uuid::Uuid::new_v4()));
-        std::fs::create_dir_all(&temp_dir).map_err(|e| FileError::CreationFailed {
-            message: format!("Failed to create temp directory: {}", e),
+
+        debug!("Creating temp directory for archive creation: {:?}", temp_dir);
+        debug!("Files to be archived: {} files", files.len());
+        for (path, content) in &files {
+            debug!("  - File: {} ({} bytes)", path, content.len());
+        }
+
+        std::fs::create_dir_all(&temp_dir).map_err(|e| {
+            error!("Failed to create temp directory {:?}: {}", temp_dir, e);
+            FileError::CreationFailed {
+                message: format!("Failed to create temp directory: {}", e),
+            }
         })?;
 
-        // Write files to temporary directory
+        debug!("Temp directory created successfully: {:?}", temp_dir);
+
+        // Write files to temporary directory with Windows path separator fix
+        let mut files_written = 0;
         for (path, content) in files {
-            let file_path = temp_dir.join(&path);
+            // Simple Windows path fix: convert forward slashes to backslashes on Windows
+            let normalized_path = if cfg!(windows) {
+                path.replace('/', "\\")
+            } else {
+                path.clone()
+            };
+
+            let file_path = temp_dir.join(&normalized_path);
+            debug!("Writing file: {} -> {:?} ({} bytes)", path, file_path, content.len());
+
+
+
+            // Create parent directory
             if let Some(parent) = file_path.parent() {
+                debug!("Creating parent directory: {:?}", parent);
                 std::fs::create_dir_all(parent).map_err(|e| FileError::CreationFailed {
                     message: format!("Failed to create directory structure: {}", e),
                 })?;
+                debug!("Parent directory created successfully: {:?}", parent);
             }
-            std::fs::write(&file_path, content).map_err(|e| FileError::CreationFailed {
+
+            // Write file
+            std::fs::write(&file_path, &content).map_err(|e| FileError::CreationFailed {
                 message: format!("Failed to write file '{}': {}", path, e),
             })?;
+
+            // Verify file was written correctly
+            let written_size = std::fs::metadata(&file_path)
+                .map(|m| m.len())
+                .unwrap_or(0);
+            debug!("File written successfully: {} ({} bytes on disk)", path, written_size);
+
+            if written_size != content.len() as u64 {
+                warn!("Size mismatch for file {}: expected {} bytes, found {} bytes",
+                      path, content.len(), written_size);
+            }
+
+            files_written += 1;
         }
+
+        debug!("Successfully wrote {} files to temp directory", files_written);
+
+        // Verify directory contents before archiving
+        debug!("Verifying temp directory contents before archiving:");
+        match std::fs::read_dir(&temp_dir) {
+            Ok(entries) => {
+                for entry in entries {
+                    if let Ok(entry) = entry {
+                        let path = entry.path();
+                        if let Ok(metadata) = entry.metadata() {
+                            if metadata.is_dir() {
+                                debug!("  DIR:  {:?}", path);
+                            } else {
+                                debug!("  FILE: {:?} ({} bytes)", path, metadata.len());
+                            }
+                        } else {
+                            warn!("Could not read metadata for {:?}", path);
+                            debug!("  UNKNOWN: {:?}", path);
+                        }
+                    }
+                }
+            },
+            Err(e) => {
+                error!("Failed to read temp directory contents: {}", e);
+            }
+        }
+
 
         // Create archive from temporary directory
         let temp_archive = temp_dir.with_extension("7z");
+        debug!("Creating archive: {:?} from directory: {:?}", temp_archive, temp_dir);
+
+        let has_password = !password.is_empty();
+        debug!("Archive encryption: {}", if has_password { "enabled" } else { "disabled" });
 
         let result = if password.is_empty() {
+            debug!("Calling sevenz_rust2::compress_to_path without password");
             sevenz_rust2::compress_to_path(&temp_dir, &temp_archive)
         } else {
+            debug!("Calling sevenz_rust2::compress_to_path_encrypted with password");
             sevenz_rust2::compress_to_path_encrypted(&temp_dir, &temp_archive, password.into())
         };
 
         match result {
             Ok(()) => {
+                debug!("Archive creation successful, verifying archive file");
+
+                // Verify archive was created
+                let archive_metadata = std::fs::metadata(&temp_archive).map_err(|e| {
+                    error!("Archive file not found after creation: {}", e);
+                    FileError::CreationFailed {
+                        message: format!("Archive file not found after creation: {}", e),
+                    }
+                })?;
+
+                debug!("Archive created successfully: {:?} ({} bytes)", temp_archive, archive_metadata.len());
+
                 // Read the created archive into memory
                 let archive_data =
-                    std::fs::read(&temp_archive).map_err(|e| FileError::CreationFailed {
-                        message: format!("Failed to read created archive: {}", e),
+                    std::fs::read(&temp_archive).map_err(|e| {
+                        error!("Failed to read created archive {:?}: {}", temp_archive, e);
+                        FileError::CreationFailed {
+                            message: format!("Failed to read created archive: {}", e),
+                        }
                     })?;
 
-                // Clean up temporary files
-                let _ = std::fs::remove_dir_all(&temp_dir);
-                let _ = std::fs::remove_file(&temp_archive);
+                debug!("Archive data read into memory: {} bytes", archive_data.len());
 
+                // Clean up temporary files
+                debug!("Cleaning up temporary files");
+                if let Err(e) = std::fs::remove_dir_all(&temp_dir) {
+                    warn!("Failed to remove temp directory {:?}: {}", temp_dir, e);
+                }
+                if let Err(e) = std::fs::remove_file(&temp_archive) {
+                    warn!("Failed to remove temp archive {:?}: {}", temp_archive, e);
+                }
+
+                debug!("Archive creation completed successfully");
                 Ok(archive_data)
             }
             Err(e) => {
+                error!("Archive creation failed: {}", e);
+
+                // Log directory contents for debugging
+                debug!("Directory contents at failure:");
+                if let Ok(entries) = std::fs::read_dir(&temp_dir) {
+                    for entry in entries {
+                        if let Ok(entry) = entry {
+                            debug!("  - {:?}", entry.path());
+                        }
+                    }
+                } else {
+                    debug!("Could not read temp directory for debugging");
+                }
+
                 // Clean up temporary files on error
                 let _ = std::fs::remove_dir_all(&temp_dir);
                 let _ = std::fs::remove_file(&temp_archive);
