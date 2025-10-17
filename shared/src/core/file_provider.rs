@@ -5,7 +5,7 @@
 //! providers while maintaining clean separation of concerns.
 
 use std::collections::HashMap;
-use tracing::{debug, warn, error};
+use tracing::{debug, error, warn};
 
 use crate::core::errors::{FileError, FileResult};
 use crate::core::types::FileMap;
@@ -117,7 +117,14 @@ impl FileOperationProvider for DesktopFileProvider {
 
     fn extract_archive(&self, data: &[u8], password: &str) -> FileResult<FileMap> {
         debug!("Starting archive extraction: {} bytes", data.len());
-        debug!("Archive encryption: {}", if password.is_empty() { "disabled" } else { "enabled" });
+        debug!(
+            "Archive encryption: {}",
+            if password.is_empty() {
+                "disabled"
+            } else {
+                "enabled"
+            }
+        );
 
         // Write buffer to temporary file first since sevenz-rust2 API requires file paths
         let temp_archive =
@@ -130,7 +137,10 @@ impl FileOperationProvider for DesktopFileProvider {
 
         // Write archive data to temp file
         std::fs::write(&temp_archive, data).map_err(|e| {
-            error!("Failed to write temp archive file {:?}: {}", temp_archive, e);
+            error!(
+                "Failed to write temp archive file {:?}: {}",
+                temp_archive, e
+            );
             FileError::ExtractionFailed {
                 message: format!("Failed to write temp archive file: {}", e),
             }
@@ -178,7 +188,11 @@ impl FileOperationProvider for DesktopFileProvider {
                                 .map_err(|_| std::io::Error::other("Path error"))?;
                             let content = std::fs::read(&path)?;
                             let relative_path_str = relative_path.to_string_lossy().to_string();
-                            debug!("Extracted file: {} ({} bytes)", relative_path_str, content.len());
+                            debug!(
+                                "Extracted file: {} ({} bytes)",
+                                relative_path_str,
+                                content.len()
+                            );
                             file_map.insert(relative_path_str, content);
                         } else if path.is_dir() {
                             debug!("Recursing into directory: {:?}", path);
@@ -195,7 +209,10 @@ impl FileOperationProvider for DesktopFileProvider {
                     }
                 })?;
 
-                debug!("Successfully extracted {} files from archive", file_map.len());
+                debug!(
+                    "Successfully extracted {} files from archive",
+                    file_map.len()
+                );
                 for (path, content) in &file_map {
                     debug!("  - {}: {} bytes", path, content.len());
                 }
@@ -225,7 +242,10 @@ impl FileOperationProvider for DesktopFileProvider {
                             file_count += 1;
                         }
                     }
-                    debug!("Found {} items in temp directory after failed extraction", file_count);
+                    debug!(
+                        "Found {} items in temp directory after failed extraction",
+                        file_count
+                    );
                 } else {
                     debug!("Could not read temp directory contents for debugging");
                 }
@@ -257,7 +277,10 @@ impl FileOperationProvider for DesktopFileProvider {
         let temp_dir =
             std::env::temp_dir().join(format!("ziplock_create_{}", uuid::Uuid::new_v4()));
 
-        debug!("Creating temp directory for archive creation: {:?}", temp_dir);
+        debug!(
+            "Creating temp directory for archive creation: {:?}",
+            temp_dir
+        );
         debug!("Files to be archived: {} files", files.len());
         for (path, content) in &files {
             debug!("  - File: {} ({} bytes)", path, content.len());
@@ -283,9 +306,12 @@ impl FileOperationProvider for DesktopFileProvider {
             };
 
             let file_path = temp_dir.join(&normalized_path);
-            debug!("Writing file: {} -> {:?} ({} bytes)", path, file_path, content.len());
-
-
+            debug!(
+                "Writing file: {} -> {:?} ({} bytes)",
+                path,
+                file_path,
+                content.len()
+            );
 
             // Create parent directory
             if let Some(parent) = file_path.parent() {
@@ -302,20 +328,28 @@ impl FileOperationProvider for DesktopFileProvider {
             })?;
 
             // Verify file was written correctly
-            let written_size = std::fs::metadata(&file_path)
-                .map(|m| m.len())
-                .unwrap_or(0);
-            debug!("File written successfully: {} ({} bytes on disk)", path, written_size);
+            let written_size = std::fs::metadata(&file_path).map(|m| m.len()).unwrap_or(0);
+            debug!(
+                "File written successfully: {} ({} bytes on disk)",
+                path, written_size
+            );
 
             if written_size != content.len() as u64 {
-                warn!("Size mismatch for file {}: expected {} bytes, found {} bytes",
-                      path, content.len(), written_size);
+                warn!(
+                    "Size mismatch for file {}: expected {} bytes, found {} bytes",
+                    path,
+                    content.len(),
+                    written_size
+                );
             }
 
             files_written += 1;
         }
 
-        debug!("Successfully wrote {} files to temp directory", files_written);
+        debug!(
+            "Successfully wrote {} files to temp directory",
+            files_written
+        );
 
         // Verify directory contents before archiving
         debug!("Verifying temp directory contents before archiving:");
@@ -336,19 +370,24 @@ impl FileOperationProvider for DesktopFileProvider {
                         }
                     }
                 }
-            },
+            }
             Err(e) => {
                 error!("Failed to read temp directory contents: {}", e);
             }
         }
 
-
         // Create archive from temporary directory
         let temp_archive = temp_dir.with_extension("7z");
-        debug!("Creating archive: {:?} from directory: {:?}", temp_archive, temp_dir);
+        debug!(
+            "Creating archive: {:?} from directory: {:?}",
+            temp_archive, temp_dir
+        );
 
         let has_password = !password.is_empty();
-        debug!("Archive encryption: {}", if has_password { "enabled" } else { "disabled" });
+        debug!(
+            "Archive encryption: {}",
+            if has_password { "enabled" } else { "disabled" }
+        );
 
         let result = if password.is_empty() {
             debug!("Calling sevenz_rust2::compress_to_path without password");
@@ -370,18 +409,24 @@ impl FileOperationProvider for DesktopFileProvider {
                     }
                 })?;
 
-                debug!("Archive created successfully: {:?} ({} bytes)", temp_archive, archive_metadata.len());
+                debug!(
+                    "Archive created successfully: {:?} ({} bytes)",
+                    temp_archive,
+                    archive_metadata.len()
+                );
 
                 // Read the created archive into memory
-                let archive_data =
-                    std::fs::read(&temp_archive).map_err(|e| {
-                        error!("Failed to read created archive {:?}: {}", temp_archive, e);
-                        FileError::CreationFailed {
-                            message: format!("Failed to read created archive: {}", e),
-                        }
-                    })?;
+                let archive_data = std::fs::read(&temp_archive).map_err(|e| {
+                    error!("Failed to read created archive {:?}: {}", temp_archive, e);
+                    FileError::CreationFailed {
+                        message: format!("Failed to read created archive: {}", e),
+                    }
+                })?;
 
-                debug!("Archive data read into memory: {} bytes", archive_data.len());
+                debug!(
+                    "Archive data read into memory: {} bytes",
+                    archive_data.len()
+                );
 
                 // Clean up temporary files
                 debug!("Cleaning up temporary files");
