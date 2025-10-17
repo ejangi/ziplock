@@ -19,7 +19,6 @@ Run one of the following prompts in Zed's agent panel and when you're ready to b
 
 
 ## Windows
-- Taking into consideration `docs/technical.md`, `docs/technical/build.md`, `docs/technical/cross-platform-adaptation-plan.md` and `.github/workflows/unified-release.yml` and remembering to only output summaries here, rather than creating new *.md files, can you please add some user feedback to the MSI installer so the user knows that the installation succeeded (or failed)? Maybe a little dialogue prompt they have to click "Okay" on.
 - Taking into consideration `docs/technical.md`, `docs/technical/build.md`, `docs/technical/cross-platform-adaptation-plan.md` and `.github/workflows/unified-release.yml` and remembering to only output summaries here, rather than creating new *.md files, can you please ensure that the app doesn't launch with a terminal window. I think logs should be minimal in a production environment and should be sent to the Event Viewer, rather than output in the console.
 
 

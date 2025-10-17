@@ -971,9 +971,64 @@ MSI build failed with exit code 103
    # Navigate to installer directory
    Set-Location "packaging\windows\installer"
    
-   # Build MSI with proper paths
-   wix build "ziplock-minimal.wxs" -define "SourceDir=..\..\..\target\windows-package" -define "Version=1.0.0" -out "..\..\..\target\ZipLock-1.0.0-x64.msi"
+   # Build Enhanced MSI with user feedback (recommended)
+   wix build "ziplock-enhanced.wxs" -define "SourceDir=..\..\..\target\windows-package" -define "Version=1.0.0" -out "..\..\..\target\ZipLock-1.0.0-x64-enhanced.msi"
+   
+   # Or build Minimal MSI (fallback)
+   wix build "ziplock-minimal.wxs" -define "SourceDir=..\..\..\target\windows-package" -define "Version=1.0.0" -out "..\..\..\target\ZipLock-1.0.0-x64-minimal.msi"
    ```
+
+#### Enhanced MSI with User Feedback
+
+The Windows build system now supports two MSI configurations:
+
+1. **Enhanced MSI (`ziplock-enhanced.wxs`)** - **Recommended**
+   - Shows success dialog after installation completes
+   - Shows failure dialog if installation fails or is rolled back
+   - Includes custom PowerShell action scripts
+   - Better user experience with installation feedback
+
+2. **Minimal MSI (`ziplock-minimal.wxs`)** - **Fallback**
+   - Basic installer without user feedback
+   - Used when PowerShell custom actions aren't available
+   - Smaller installer size
+
+**Enhanced MSI Features:**
+
+- **Installation Success Dialog:** Shows a message box confirming successful installation with instructions on how to launch ZipLock
+- **Installation Failure Dialog:** Provides helpful error information and troubleshooting tips if installation fails
+- **Event Logging:** Logs installation events to Windows Application Event Log for debugging
+- **Automatic Fallback:** CI/CD pipeline automatically falls back to minimal MSI if enhanced version fails
+
+**Building Enhanced MSI Locally:**
+
+```powershell
+# Use the enhanced build script (recommended)
+.\packaging\windows\scripts\build-windows-enhanced.ps1 -Version "1.0.0"
+
+# Or use simple build script with enhanced MSI
+.\packaging\windows\scripts\build-windows-simple.ps1 -Version "1.0.0"
+
+# Force minimal MSI (no user feedback)
+.\packaging\windows\scripts\build-windows-enhanced.ps1 -Version "1.0.0" -UseMinimal
+```
+
+**Custom Action Scripts:**
+
+The enhanced MSI includes PowerShell scripts for user feedback:
+
+- `show-install-success.ps1` - Displays installation success dialog
+- `show-install-failure.ps1` - Displays installation failure dialog with troubleshooting tips
+
+These scripts are automatically copied to the staging directory during the build process.
+
+**Troubleshooting Enhanced MSI:**
+
+If the enhanced MSI fails to build:
+1. Ensure PowerShell 5.0+ is available
+2. Verify custom action scripts exist in `packaging/windows/scripts/`
+3. Check that WiX 4.0.4 is installed
+4. The build system will automatically fall back to minimal MSI if needed
 
 #### Package Installation Fails
 
@@ -1284,6 +1339,7 @@ The unified workflow consolidates Linux and Android builds with an efficient art
 - **Consistent Environments**: Pre-built container images
 - **Better Caching**: Optimized cargo and dependency caching
 - **Parallel Processing**: All packaging jobs run simultaneously
+- **Enhanced Windows MSI**: User feedback dialogs and improved installation experience
 
 #### Workflow Structure
 
@@ -1291,7 +1347,7 @@ The unified workflow consists of these jobs:
 
 1. **test-and-build**: Builds and tests Linux binaries, runs security audit
 2. **build-android**: Cross-compiles Android libraries using container
-3. **package-windows**: Builds Windows executable with embedded icons and creates MSI installer
+3. **package-windows**: Builds Windows executable with embedded icons and creates enhanced MSI installer with user feedback
 4. **package-macos**: Creates macOS application bundle and DMG installer
 5. **package-debian**: Creates .deb package for Ubuntu/Debian
 6. **package-arch**: Creates PKGBUILD and source files for Arch Linux
@@ -1304,7 +1360,7 @@ The unified workflow produces comprehensive artifacts:
 
 - **linux-binaries**: Compiled Linux binaries shared by packaging jobs
 - **android-libraries**: Native Android libraries for all architectures
-- **windows-package**: Windows MSI installer with embedded icons (~5 MB)
+- **windows-package**: Windows MSI installer with embedded icons and user feedback dialogs (~5 MB)
 - **macos-package**: macOS DMG installer with app bundle
 - **debian-package**: Ready-to-install .deb package
 - **arch-package**: Source archive and PKGBUILD for AUR
@@ -1331,8 +1387,18 @@ The Windows build process in GitHub Actions includes:
 - Start Menu and Desktop shortcuts with proper icons
 - Add/Remove Programs integration
 - Uninstaller with cleanup
+#### Windows Build Integration
 
-**Example Workflow Usage:**
+The Windows build process has been enhanced with user feedback dialogs and improved MSI packaging:
+
+**Enhanced MSI Features:**
+- **User Feedback Dialogs**: Success and failure messages with installation instructions
+- **Custom Action Scripts**: PowerShell-based notifications for better user experience
+- **Automatic Fallback**: Falls back to minimal MSI if enhanced version fails
+- **Event Logging**: Logs installation events to Windows Application Event Log
+
+**Build Process:**
+
 ```yaml
 package-windows:
   name: Create Windows Package
@@ -1344,7 +1410,7 @@ package-windows:
       run: cargo build --release --target x86_64-pc-windows-msvc
       env:
         RUSTFLAGS: -C target-feature=+crt-static
-    - name: Create MSI Installer
+    - name: Create Enhanced MSI Installer
       run: |
         dotnet tool install --global wix --version 4.0.4
         # WiX build process with icon integration

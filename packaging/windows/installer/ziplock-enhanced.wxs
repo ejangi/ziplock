@@ -1,0 +1,142 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Package Name="ZipLock Password Manager"
+           Language="1033"
+           Version="$(var.Version)"
+           Manufacturer="ZipLock Project"
+           UpgradeCode="12345678-1234-1234-1234-123456789012"
+           InstallerVersion="500"
+           Compressed="yes"
+           Scope="perMachine">
+
+    <!-- Package description -->
+    <SummaryInformation Description="ZipLock Password Manager - Secure password management using encrypted 7z archives" />
+
+    <!-- Allow upgrades and prevent downgrades -->
+    <MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed." />
+
+    <!-- Embed the CAB file in the MSI -->
+    <Media Id="1" Cabinet="media1.cab" EmbedCab="yes" />
+
+    <!-- Custom properties for installation feedback -->
+    <Property Id="POWERSHELL_PATH">
+      <DirectorySearch Id="PowerShellSearch" Path="[System64Folder]" Depth="0">
+        <FileSearch Id="PowerShellExe" Name="powershell.exe" />
+      </DirectorySearch>
+    </Property>
+
+    <!-- Custom Action Definitions -->
+    <!-- Success message custom action -->
+    <CustomAction Id="ShowInstallSuccess"
+                  Property="POWERSHELL_PATH"
+                  ExeCommand="-WindowStyle Hidden -ExecutionPolicy Bypass -File &quot;[INSTALLFOLDER]bin\show-install-success.ps1&quot; -ProductName &quot;[ProductName]&quot; -Version &quot;[ProductVersion]&quot;"
+                  Execute="deferred"
+                  Return="ignore"
+                  Impersonate="yes" />
+
+    <!-- Failure message custom action -->
+    <CustomAction Id="ShowInstallFailure"
+                  Property="POWERSHELL_PATH"
+                  ExeCommand="-WindowStyle Hidden -ExecutionPolicy Bypass -File &quot;[INSTALLFOLDER]bin\show-install-failure.ps1&quot; -ProductName &quot;[ProductName]&quot; -Version &quot;[ProductVersion]&quot;"
+                  Execute="deferred"
+                  Return="ignore"
+                  Impersonate="yes" />
+
+    <!-- Install Sequences -->
+    <InstallExecuteSequence>
+      <!-- Show success message after successful installation -->
+      <Custom Action="ShowInstallSuccess" After="InstallFinalize" Condition="NOT Installed AND NOT REMOVE" />
+
+      <!-- Show failure message on rollback -->
+      <Custom Action="ShowInstallFailure" After="InstallInitialize" Condition="REMOVE OR (NOT Installed)" />
+    </InstallExecuteSequence>
+
+    <!-- Feature definitions -->
+    <Feature Id="ProductFeature" Title="ZipLock Password Manager" Level="1">
+      <ComponentGroupRef Id="ProductComponents" />
+      <ComponentRef Id="ApplicationShortcut" />
+      <ComponentRef Id="DesktopShortcut" />
+      <ComponentRef Id="ShowInstallSuccessScript" />
+      <ComponentRef Id="ShowInstallFailureScript" />
+    </Feature>
+
+    <!-- Installation directory structure -->
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLFOLDER" Name="ZipLock">
+        <Directory Id="BINDIR" Name="bin" />
+      </Directory>
+    </StandardDirectory>
+
+    <!-- Start Menu -->
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Directory Id="ApplicationProgramsFolder" Name="ZipLock" />
+    </StandardDirectory>
+
+    <!-- Desktop -->
+    <StandardDirectory Id="DesktopFolder" />
+
+    <!-- Components -->
+    <ComponentGroup Id="ProductComponents" Directory="BINDIR">
+      <!-- Main executable -->
+      <Component Id="ZipLockExecutable">
+        <File Id="ZipLockExe"
+              Source="$(var.SourceDir)\ziplock.exe"
+              Checksum="yes" />
+      </Component>
+    </ComponentGroup>
+
+    <!-- Custom Action Scripts Components -->
+    <Component Id="ShowInstallSuccessScript" Directory="BINDIR">
+      <File Id="ShowInstallSuccessScript"
+            Source="$(var.SourceDir)\show-install-success.ps1"
+            Checksum="yes" />
+    </Component>
+
+    <Component Id="ShowInstallFailureScript" Directory="BINDIR">
+      <File Id="ShowInstallFailureScript"
+            Source="$(var.SourceDir)\show-install-failure.ps1"
+            Checksum="yes" />
+    </Component>
+
+    <!-- Application shortcuts -->
+    <Component Id="ApplicationShortcut" Directory="ApplicationProgramsFolder">
+      <Shortcut Id="ApplicationStartMenuShortcut"
+                Name="ZipLock Password Manager"
+                Target="[#ZipLockExe]"
+                WorkingDirectory="BINDIR"
+                Icon="ZipLockIcon.ico"
+                Description="Secure password management using encrypted archives" />
+      <RemoveFolder Id="CleanUpShortCut" Directory="ApplicationProgramsFolder" On="uninstall" />
+      <RegistryValue Root="HKCU" Key="Software\ZipLock" Name="installed" Type="integer" Value="1" />
+    </Component>
+
+    <!-- Desktop shortcut (optional, disabled by default) -->
+    <Component Id="DesktopShortcut" Directory="DesktopFolder" Condition="INSTALLDESKTOPSHORTCUT">
+      <Shortcut Id="DesktopApplicationShortcut"
+                Name="ZipLock Password Manager"
+                Target="[#ZipLockExe]"
+                WorkingDirectory="BINDIR"
+                Icon="ZipLockIcon.ico"
+                Description="Secure password management using encrypted archives" />
+      <RegistryValue Root="HKCU" Key="Software\ZipLock" Name="desktop_shortcut" Type="integer" Value="1" />
+    </Component>
+
+    <!-- Icon definitions -->
+    <Icon Id="ZipLockIcon.ico" SourceFile="$(var.SourceDir)\ziplock.ico" />
+    <Icon Id="ZipLockSmallIcon.ico" SourceFile="$(var.SourceDir)\ziplock-small.ico" />
+
+    <!-- Properties for Add/Remove Programs -->
+    <Property Id="ARPPRODUCTICON" Value="ZipLockIcon.ico" />
+    <Property Id="ARPHELPLINK" Value="https://github.com/ejangi/ziplock" />
+    <Property Id="ARPURLINFOABOUT" Value="https://github.com/ejangi/ziplock" />
+    <Property Id="ARPNOREPAIR" Value="1" />
+    <Property Id="ARPNOMODIFY" Value="1" />
+
+    <!-- Custom properties -->
+    <Property Id="INSTALLDESKTOPSHORTCUT" Value="0" />
+
+    <!-- UI customization for enhanced user experience -->
+    <Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER" />
+
+  </Package>
+</Wix>

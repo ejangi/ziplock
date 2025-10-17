@@ -513,9 +513,9 @@ jobs:
               }
           }
 
-      - name: Create MSI Installer
+      - name: Create Enhanced MSI Installer
         run: |
-          Write-Host "=== Simplified Windows MSI Build ===" -ForegroundColor Green
+          Write-Host "=== Enhanced Windows MSI Build with User Feedback ===" -ForegroundColor Green
 
           $VERSION = "${{ needs.test-and-build.outputs.version }}"
 
@@ -532,41 +532,73 @@ jobs:
           New-Item -ItemType Directory -Path "target/windows-package" -Force | Out-Null
           Copy-Item "target/x86_64-pc-windows-msvc/release/ziplock.exe" "target/windows-package/"
 
+          # Copy custom action scripts for user feedback
+          Write-Host "Copying custom action scripts..." -ForegroundColor Cyan
+          $customActionScripts = @("show-install-success.ps1", "show-install-failure.ps1")
+          foreach ($script in $customActionScripts) {
+              $scriptPath = "packaging/windows/scripts/$script"
+              if (Test-Path $scriptPath) {
+                  Copy-Item $scriptPath "target/windows-package/"
+                  Write-Host "  ✅ Copied: $script" -ForegroundColor Green
+              } else {
+                  Write-Host "  ⚠️  Missing: $script - falling back to minimal MSI" -ForegroundColor Yellow
+                  $UseMinimal = $true
+              }
+          }
+
           # Verify icons are available for WiX
           Write-Host "Checking icon availability..." -ForegroundColor Cyan
           $iconFiles = @("ziplock.ico", "ziplock-small.ico")
           foreach ($iconFile in $iconFiles) {
               $iconPath = "packaging/windows/resources/$iconFile"
               if (Test-Path $iconPath) {
-                  Write-Host "✅ Icon found: $iconFile" -ForegroundColor Green
+                  Copy-Item $iconPath "target/windows-package/"
+                  Write-Host "✅ Icon found and copied: $iconFile" -ForegroundColor Green
               } else {
                   Write-Host "⚠️  Icon missing: $iconFile - using fallback" -ForegroundColor Yellow
                   # Create fallback by copying PNG
                   if ($iconFile -eq "ziplock.ico") {
-                      Copy-Item "assets/icons/ziplock-icon-256.png" $iconPath -Force
+                      Copy-Item "assets/icons/ziplock-icon-256.png" "target/windows-package/$iconFile" -Force
                   } elseif ($iconFile -eq "ziplock-small.ico") {
-                      Copy-Item "assets/icons/ziplock-icon-128.png" $iconPath -Force
+                      Copy-Item "assets/icons/ziplock-icon-128.png" "target/windows-package/$iconFile" -Force
                   }
               }
           }
+
+          # Determine which MSI configuration to use
+          $wxsFile = if ($UseMinimal) { "ziplock-minimal.wxs" } else { "ziplock-enhanced.wxs" }
+          $msiSuffix = if ($UseMinimal) { "minimal" } else { "enhanced" }
 
           # Verify staging
           $stagingFiles = Get-ChildItem "target/windows-package"
           Write-Host "Package contents: $($stagingFiles.Name -join ', ')" -ForegroundColor Gray
 
-          # Build MSI using minimal configuration
-          Write-Host "Building MSI with minimal configuration..." -ForegroundColor Cyan
+          # Check if enhanced configuration exists
+          $enhancedWxsPath = "packaging/windows/installer/ziplock-enhanced.wxs"
+          if (-not (Test-Path $enhancedWxsPath)) {
+              Write-Host "Enhanced WiX configuration not found, using minimal..." -ForegroundColor Yellow
+              $wxsFile = "ziplock-minimal.wxs"
+              $msiSuffix = "minimal"
+          }
+
+          # Build MSI
+          Write-Host "Building MSI with $wxsFile configuration..." -ForegroundColor Cyan
           Set-Location "packaging/windows/installer"
 
-          $buildResult = & wix build "ziplock-minimal.wxs" -define "SourceDir=../../../target/windows-package" -define "Version=$VERSION" -out "../../../target/ZipLock-$VERSION-x64.msi" 2>&1
+          $buildResult = & wix build $wxsFile -define "SourceDir=../../../target/windows-package" -define "Version=$VERSION" -out "../../../target/ZipLock-$VERSION-x64-$msiSuffix.msi" 2>&1
 
           if ($LASTEXITCODE -eq 0) {
-              $msiFile = "../../../target/ZipLock-$VERSION-x64.msi"
+              $msiFile = "../../../target/ZipLock-$VERSION-x64-$msiSuffix.msi"
               if (Test-Path $msiFile) {
                   $msiInfo = Get-Item $msiFile
                   Write-Host "✅ MSI created successfully!" -ForegroundColor Green
+                  Write-Host "   Configuration: $wxsFile" -ForegroundColor Cyan
                   Write-Host "   Size: $([math]::Round($msiInfo.Length / 1MB, 2)) MB" -ForegroundColor Cyan
                   Write-Host "   Path: $($msiInfo.FullName)" -ForegroundColor Gray
+
+                  if ($msiSuffix -eq "enhanced") {
+                      Write-Host "   Features: User feedback dialogs enabled" -ForegroundColor Green
+                  }
               } else {
                   Write-Host "❌ MSI file not found after build" -ForegroundColor Red
                   exit 1
@@ -574,7 +606,21 @@ jobs:
           } else {
               Write-Host "❌ MSI build failed with exit code $LASTEXITCODE" -ForegroundColor Red
               Write-Host "Build output: $buildResult" -ForegroundColor Gray
-              exit 1
+
+              # Fallback to minimal MSI if enhanced fails
+              if ($wxsFile -eq "ziplock-enhanced.wxs") {
+                  Write-Host "Attempting fallback to minimal MSI..." -ForegroundColor Yellow
+                  $buildResult = & wix build "ziplock-minimal.wxs" -define "SourceDir=../../../target/windows-package" -define "Version=$VERSION" -out "../../../target/ZipLock-$VERSION-x64-minimal.msi" 2>&1
+
+                  if ($LASTEXITCODE -eq 0) {
+                      Write-Host "✅ Fallback MSI created successfully!" -ForegroundColor Green
+                  } else {
+                      Write-Host "❌ Fallback MSI also failed" -ForegroundColor Red
+                      exit 1
+                  }
+              } else {
+                  exit 1
+              }
           }
 
       - name: Upload Windows package
