@@ -56,12 +56,82 @@ For development or platform-specific builds:
 # Linux desktop only
 ./scripts/build/build-linux.sh
 
+# Windows desktop (requires Windows environment)
+powershell -ExecutionPolicy Bypass -File "packaging/windows/scripts/build-windows-simple.ps1"
+
 # Android libraries only
 ./scripts/build/build-android-docker.sh build
 
 # Mobile platforms (native build)
 ./scripts/build/build-mobile.sh -p android
 ```
+
+#### Windows Build Requirements
+
+Windows builds require:
+- Windows 10/11 or Windows Server
+- Rust toolchain with `x86_64-pc-windows-msvc` target
+- Visual Studio Build Tools or Visual Studio Community
+- PowerShell 5.1 or later
+- Optional: Python 3.7+ (for proper .ico file generation)
+
+#### Windows Icon Configuration
+
+The Windows executable includes embedded icons that display in:
+- Windows Explorer file listings
+- Taskbar when application is running
+- Alt+Tab application switcher
+- Start Menu shortcuts (after MSI installation)
+- Add/Remove Programs control panel
+
+**Automatic Icon Generation:**
+```powershell
+# Generate .ico files from PNG assets
+python "packaging/windows/scripts/create-icons.py" --force
+
+# Or use fallback methods
+powershell -ExecutionPolicy Bypass -File "packaging/windows/scripts/create-icons-dotnet.ps1" -Force
+# Or basic batch script
+call "packaging/windows/scripts/create-icons.bat"
+```
+
+**Complete Windows Build:**
+```powershell
+# Full build with icon generation, executable, and MSI installer
+powershell -ExecutionPolicy Bypass -File "packaging/windows/scripts/build-windows-simple.ps1"
+
+# Skip tests for faster development builds
+powershell -ExecutionPolicy Bypass -File "packaging/windows/scripts/build-windows-simple.ps1" -SkipTests
+
+# Build only executable (skip MSI creation)
+powershell -ExecutionPolicy Bypass -File "packaging/windows/scripts/build-windows-simple.ps1" -SkipMsi
+```
+
+**Manual Build Steps:**
+```powershell
+# 1. Generate icons
+python "packaging/windows/scripts/create-icons.py" --force
+
+# 2. Build executable with embedded icons
+cd apps/desktop
+$env:RUSTFLAGS = "-C target-feature=+crt-static"
+cargo build --release --target x86_64-pc-windows-msvc
+
+# 3. Test icon embedding
+powershell -Command "Add-Type -AssemblyName System.Drawing; $icon = [System.Drawing.Icon]::ExtractAssociatedIcon('target/x86_64-pc-windows-msvc/release/ziplock.exe'); Write-Host 'Icon test:' ($icon -ne $null)"
+```
+
+**Build Output:**
+- **Executable**: `target/x86_64-pc-windows-msvc/release/ziplock.exe` (~14 MB)
+  - Embedded multi-size icons (16x16 to 256x256)
+  - Windows GUI subsystem (no console window)
+  - Static CRT linking (no external dependencies)
+  - Complete version information
+- **MSI Installer**: `target/ZipLock-VERSION-x64.msi` (~5 MB)
+  - Start Menu shortcuts with proper icons
+  - Optional Desktop shortcut
+  - Add/Remove Programs integration
+  - Proper uninstallation support
 
 ### Quick Development Workflow
 
@@ -825,6 +895,86 @@ cargo build --release --target x86_64-pc-windows-msvc
 **Verification:**
 The Windows executable now runs on clean Windows systems without requiring Visual Studio or Visual C++ Redistributable installation.
 
+#### Windows Icon Embedding Issues
+
+**Symptoms:**
+- Windows executable shows default icon instead of ZipLock icon
+- MSI installer creation fails with icon-related errors
+- Icon test script reports "No icon found"
+
+**Solutions:**
+
+1. **Verify Icon Files Exist:**
+   ```powershell
+   # Check if .ico files were generated
+   Get-ChildItem "packaging\windows\resources\*.ico"
+   # Should show: ziplock.ico, ziplock-small.ico, ziplock-large.ico
+   ```
+
+2. **Regenerate Icons:**
+   ```powershell
+   # Using Python (recommended)
+   python "packaging\windows\scripts\create-icons.py" --force
+   
+   # Or using fallback batch script
+   call "packaging\windows\scripts\create-icons.bat"
+   ```
+
+3. **Test Icon Embedding:**
+   ```powershell
+   # After building, test if icon is embedded
+   Add-Type -AssemblyName System.Drawing
+   $icon = [System.Drawing.Icon]::ExtractAssociatedIcon('target\x86_64-pc-windows-msvc\release\ziplock.exe')
+   if ($icon) { Write-Host "SUCCESS: Icon found ($($icon.Width)x$($icon.Height))" } else { Write-Host "ERROR: No icon" }
+   ```
+
+4. **Fix Build Script Issues:**
+   ```powershell
+   # Clean rebuild with icon embedding
+   cargo clean
+   python "packaging\windows\scripts\create-icons.py" --force
+   $env:RUSTFLAGS = "-C target-feature=+crt-static"
+   cargo build --release --target x86_64-pc-windows-msvc
+   ```
+
+**Common Causes:**
+- Missing Pillow (PIL) Python package
+- Incorrect file paths in build.rs or WiX configuration
+- Missing PNG source files in `assets\icons\`
+- Build script running in wrong directory
+
+#### Windows MSI Build Failures
+
+**Symptoms:**
+```
+error WIX0103: Cannot find the Icon file
+MSI build failed with exit code 103
+```
+
+**Solutions:**
+
+1. **Install WiX Toolset:**
+   ```powershell
+   dotnet tool install --global wix --version 4.0.4
+   # Ensure tools are in PATH
+   $env:PATH += ";$env:USERPROFILE\.dotnet\tools"
+   ```
+
+2. **Verify Icon Files in Staging:**
+   ```powershell
+   # Icons should be copied to staging directory during build
+   Get-ChildItem "target\windows-package\*.ico"
+   ```
+
+3. **Manual MSI Creation:**
+   ```powershell
+   # Navigate to installer directory
+   Set-Location "packaging\windows\installer"
+   
+   # Build MSI with proper paths
+   wix build "ziplock-minimal.wxs" -define "SourceDir=..\..\..\target\windows-package" -define "Version=1.0.0" -out "..\..\..\target\ZipLock-1.0.0-x64.msi"
+   ```
+
 #### Package Installation Fails
 
 **Symptoms:**
@@ -1141,10 +1291,12 @@ The unified workflow consists of these jobs:
 
 1. **test-and-build**: Builds and tests Linux binaries, runs security audit
 2. **build-android**: Cross-compiles Android libraries using container
-3. **package-debian**: Creates .deb package for Ubuntu/Debian
-4. **package-arch**: Creates PKGBUILD and source files for Arch Linux
-5. **benchmark**: Runs performance tests (main branch only)
-6. **release**: Creates unified release with all artifacts (tags only)
+3. **package-windows**: Builds Windows executable with embedded icons and creates MSI installer
+4. **package-macos**: Creates macOS application bundle and DMG installer
+5. **package-debian**: Creates .deb package for Ubuntu/Debian
+6. **package-arch**: Creates PKGBUILD and source files for Arch Linux
+7. **benchmark**: Runs performance tests (main branch only)
+8. **release**: Creates unified release with all artifacts (tags only)
 
 #### Workflow Artifacts
 
@@ -1152,10 +1304,51 @@ The unified workflow produces comprehensive artifacts:
 
 - **linux-binaries**: Compiled Linux binaries shared by packaging jobs
 - **android-libraries**: Native Android libraries for all architectures
+- **windows-package**: Windows MSI installer with embedded icons (~5 MB)
+- **macos-package**: macOS DMG installer with app bundle
 - **debian-package**: Ready-to-install .deb package
 - **arch-package**: Source archive and PKGBUILD for AUR
 - **benchmark-results**: Performance metrics (on main branch)
 - **unified-release**: Complete release archive with all platforms
+
+#### Windows Build Integration
+
+The Windows build process in GitHub Actions includes:
+
+**Automatic Icon Generation:**
+- Python-based .ico file generation from PNG assets
+- Fallback methods for environments without Python
+- Multi-size icon embedding (16x16 to 256x256 pixels)
+
+**Build Configuration:**
+- Static CRT linking for self-contained executables
+- Windows GUI subsystem (no console window)
+- Embedded version information and company details
+- Rust target: `x86_64-pc-windows-msvc`
+
+**MSI Installer Creation:**
+- WiX Toolset v4 for professional installers
+- Start Menu and Desktop shortcuts with proper icons
+- Add/Remove Programs integration
+- Uninstaller with cleanup
+
+**Example Workflow Usage:**
+```yaml
+package-windows:
+  name: Create Windows Package
+  runs-on: windows-latest
+  steps:
+    - name: Generate Windows Icons
+      run: python "packaging/windows/scripts/create-icons.py" --force
+    - name: Build Windows application
+      run: cargo build --release --target x86_64-pc-windows-msvc
+      env:
+        RUSTFLAGS: -C target-feature=+crt-static
+    - name: Create MSI Installer
+      run: |
+        dotnet tool install --global wix --version 4.0.4
+        # WiX build process with icon integration
+```
 
 #### Container Images
 
@@ -1500,13 +1693,44 @@ mod linux_specific;
 mod windows_specific;
 ```
 
+#### Windows Development Guidelines
+
+When developing Windows-specific features:
+
+**Icon Resources:**
+- Always regenerate .ico files after updating PNG assets
+- Test icon embedding with: `[System.Drawing.Icon]::ExtractAssociatedIcon()`
+- Use multi-size .ico files (16x16 to 256x256) for optimal display
+
+**Build Configuration:**
+- Use static CRT linking: `RUSTFLAGS="-C target-feature=+crt-static"`
+- Configure Windows subsystem: `#![cfg_attr(target_os = "windows", windows_subsystem = "windows")]`
+- Include version resources in build.rs for proper file properties
+
+**MSI Installer Development:**
+- Update WiX files when changing application structure
+- Test installation and uninstallation on clean Windows systems
+- Verify shortcuts and file associations work correctly
+
+**Development Environment:**
+```powershell
+# Set up Windows development environment
+$env:RUSTFLAGS = "-C target-feature=+crt-static"
+rustup target add x86_64-pc-windows-msvc
+python -m pip install Pillow  # For icon generation
+
+# Quick development build
+powershell -ExecutionPolicy Bypass -File "packaging/windows/scripts/build-windows-simple.ps1" -SkipTests -SkipMsi
+```
+
 ### Build Profiles
 
 We maintain several build profiles:
 
 - **dev**: Fast compilation, debug info
-- **release**: Optimized, stripped binaries
+- **release**: Optimized, stripped binaries  
 - **security**: Size-optimized, security-focused
+- **windows-release**: Windows-specific optimizations with embedded icons
 
 ### Testing Checklist
 
@@ -1515,6 +1739,10 @@ Before submitting PRs:
 - [ ] Run `cargo test --workspace`
 - [ ] Run `cargo clippy --all-targets`
 - [ ] Run `./scripts/dev/test-in-container.sh test`
+- [ ] Test Windows builds (if touching Windows code):
+  - [ ] Verify icon embedding works
+  - [ ] Test MSI installer creation
+  - [ ] Check executable runs on clean Windows system
 - [ ] Test package installation in clean environment
 - [ ] Verify binary dependencies with `ldd`
 

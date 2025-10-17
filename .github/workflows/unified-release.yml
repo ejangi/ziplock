@@ -481,6 +481,38 @@ jobs:
         env:
           RUSTFLAGS: -C target-feature=+crt-static
 
+      - name: Generate Windows Icons
+        run: |
+          Write-Host "=== Generating Windows Icons ===" -ForegroundColor Green
+
+          # Check if Python is available and generate .ico files
+          try {
+              python --version
+              Write-Host "Python found, generating proper .ico files..." -ForegroundColor Cyan
+              python "packaging/windows/scripts/create-icons.py" --force
+          } catch {
+              Write-Host "Python not found, using fallback method..." -ForegroundColor Yellow
+              # Ensure icon directory exists
+              New-Item -ItemType Directory -Path "packaging/windows/resources" -Force | Out-Null
+
+              # Copy PNG files as .ico fallback
+              Copy-Item "assets/icons/ziplock-icon-256.png" "packaging/windows/resources/ziplock.ico" -Force
+              Copy-Item "assets/icons/ziplock-icon-128.png" "packaging/windows/resources/ziplock-small.ico" -Force
+              Copy-Item "assets/icons/ziplock-icon-512.png" "packaging/windows/resources/ziplock-large.ico" -Force
+          }
+
+          # Verify icon files exist
+          $iconFiles = @("ziplock.ico", "ziplock-small.ico", "ziplock-large.ico")
+          foreach ($iconFile in $iconFiles) {
+              $iconPath = "packaging/windows/resources/$iconFile"
+              if (Test-Path $iconPath) {
+                  $iconInfo = Get-Item $iconPath
+                  Write-Host "✅ Icon ready: $iconFile ($([math]::Round($iconInfo.Length / 1KB, 1)) KB)" -ForegroundColor Green
+              } else {
+                  Write-Host "❌ Missing icon: $iconFile" -ForegroundColor Red
+              }
+          }
+
       - name: Create MSI Installer
         run: |
           Write-Host "=== Simplified Windows MSI Build ===" -ForegroundColor Green
@@ -499,6 +531,24 @@ jobs:
           Write-Host "Creating package structure..." -ForegroundColor Cyan
           New-Item -ItemType Directory -Path "target/windows-package" -Force | Out-Null
           Copy-Item "target/x86_64-pc-windows-msvc/release/ziplock.exe" "target/windows-package/"
+
+          # Verify icons are available for WiX
+          Write-Host "Checking icon availability..." -ForegroundColor Cyan
+          $iconFiles = @("ziplock.ico", "ziplock-small.ico")
+          foreach ($iconFile in $iconFiles) {
+              $iconPath = "packaging/windows/resources/$iconFile"
+              if (Test-Path $iconPath) {
+                  Write-Host "✅ Icon found: $iconFile" -ForegroundColor Green
+              } else {
+                  Write-Host "⚠️  Icon missing: $iconFile - using fallback" -ForegroundColor Yellow
+                  # Create fallback by copying PNG
+                  if ($iconFile -eq "ziplock.ico") {
+                      Copy-Item "assets/icons/ziplock-icon-256.png" $iconPath -Force
+                  } elseif ($iconFile -eq "ziplock-small.ico") {
+                      Copy-Item "assets/icons/ziplock-icon-128.png" $iconPath -Force
+                  }
+              }
+          }
 
           # Verify staging
           $stagingFiles = Get-ChildItem "target/windows-package"

@@ -81,7 +81,7 @@
         </RegistryKey>
         <RegistryKey Root="HKCR" Key="ZipLock.Archive">
           <RegistryValue Value="ZipLock Password Archive" Type="string" />
-          <RegistryValue Name="DefaultIcon" Value="[#ZipLockExe],0" Type="string" />
+          <RegistryValue Name="DefaultIcon" Value="[INSTALLFOLDER]bin\ziplock.exe,0" Type="string" />
         </RegistryKey>
         <RegistryKey Root="HKCR" Key="ZipLock.Archive\shell\open\command">
           <RegistryValue Value="&quot;[#ZipLockExe]&quot; &quot;%1&quot;" Type="string" />
@@ -104,7 +104,7 @@
                 Name="ZipLock Password Manager"
                 Target="[#ZipLockExe]"
                 WorkingDirectory="BINDIR"
-                Icon="ZipLockIcon.exe"
+                Icon="ZipLockIcon.ico"
                 Description="Secure password management using encrypted archives" />
       <RemoveFolder Id="CleanUpShortCut" Directory="ApplicationProgramsFolder" On="uninstall" />
       <RegistryValue Root="HKCU" Key="Software\ZipLock" Name="installed" Type="integer" Value="1" />
@@ -116,16 +116,17 @@
                 Name="ZipLock Password Manager"
                 Target="[#ZipLockExe]"
                 WorkingDirectory="BINDIR"
-                Icon="ZipLockIcon.exe"
+                Icon="ZipLockIcon.ico"
                 Description="Secure password management using encrypted archives" />
       <RegistryValue Root="HKCU" Key="Software\ZipLock" Name="desktop_shortcut" Type="integer" Value="1" />
     </Component>
 
-    <!-- Icon definition -->
-    <Icon Id="ZipLockIcon.exe" SourceFile="$(var.SourceDir)\ziplock.exe" />
+    <!-- Icon definitions -->
+    <Icon Id="ZipLockIcon.ico" SourceFile="$(var.SourceDir)\..\packaging\windows\resources\ziplock.ico" />
+    <Icon Id="ZipLockSmallIcon.ico" SourceFile="$(var.SourceDir)\..\packaging\windows\resources\ziplock-small.ico" />
 
     <!-- Properties for Add/Remove Programs -->
-    <Property Id="ARPPRODUCTICON" Value="ZipLockIcon.exe" />
+    <Property Id="ARPPRODUCTICON" Value="ZipLockIcon.ico" />
     <Property Id="ARPHELPLINK" Value="https://github.com/ejangi/ziplock" />
     <Property Id="ARPURLINFOABOUT" Value="https://github.com/ejangi/ziplock" />
     <Property Id="ARPNOREPAIR" Value="1" />

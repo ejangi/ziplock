@@ -1,7 +1,10 @@
-//! ZipLock Linux App
+//! ZipLock Desktop App
 //!
-//! This is the Linux desktop app for ZipLock, built with the Iced GUI framework.
-//! It provides a native Linux interface for managing encrypted password archives.
+//! This is the cross-platform desktop app for ZipLock, built with the Iced GUI framework.
+//! It provides a native interface for managing encrypted password archives.
+
+// Windows configuration for GUI applications
+#![cfg_attr(target_os = "windows", windows_subsystem = "windows")]
 
 use iced::{
     widget::{button, svg, text},

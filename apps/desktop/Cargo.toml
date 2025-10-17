@@ -82,6 +82,13 @@ objc = "0.2"
 # Icon and asset loading
 resvg = "0.37"
 
+[build-dependencies]
+# Windows icon embedding
+embed-resource = "2.4"
+
+[target.'cfg(windows)'.build-dependencies]
+winres = "0.1"
+
 [dev-dependencies]
 tempfile = "3.8"
 assert_matches = "1.5"

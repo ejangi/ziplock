@@ -1,0 +1,46 @@
+// ZipLock Windows Resource Configuration File
+// This file defines icons, version information, and other resources
+// that will be embedded in the Windows executable.
+
+#include <windows.h>
+
+// Application Icon (main icon)
+1 ICON "..\\..\\..\\..\\packaging\\windows\\resources\\ziplock.ico"
+
+// Alternative icon sizes (if available)
+2 ICON "..\\..\\..\\..\\packaging\\windows\\resources\\ziplock-small.ico"
+3 ICON "..\\..\\..\\..\\packaging\\windows\\resources\\ziplock-large.ico"
+
+// Version Information
+1 VERSIONINFO
+FILEVERSION 1,0,0,0
+PRODUCTVERSION 1,0,0,0
+FILEFLAGSMASK VS_FFI_FILEFLAGSMASK
+FILEFLAGS 0
+FILEOS VOS__WINDOWS32
+FILETYPE VFT_APP
+FILESUBTYPE VFT2_UNKNOWN
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904E4" // English (US), Unicode
+        BEGIN
+            VALUE "CompanyName", "ZipLock Project"
+            VALUE "FileDescription", "ZipLock Password Manager - Secure password management using encrypted 7z archives"
+            VALUE "FileVersion", "1.0.0.0"
+            VALUE "InternalName", "ziplock"
+            VALUE "LegalCopyright", "© 2024 ZipLock Project"
+            VALUE "OriginalFilename", "ziplock.exe"
+            VALUE "ProductName", "ZipLock Password Manager"
+            VALUE "ProductVersion", "1.0.0.0"
+            VALUE "Comments", "Cross-platform secure password manager"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x409, 1252 // English (US), Windows-1252
+    END
+END
+
+// Application Manifest (for Windows 10/11 compatibility)
+1 RT_MANIFEST "ziplock.manifest"
