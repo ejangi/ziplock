@@ -92,7 +92,11 @@ impl UnifiedMemoryRepository {
         // Load credentials
         self.credentials.clear();
         for (file_path, file_data) in &file_map {
-            if file_path.starts_with(CREDENTIALS_DIR) && file_path.ends_with("/record.yml") {
+            // Normalize path separators for cross-platform compatibility
+            let normalized_path = file_path.replace('\\', "/");
+            if normalized_path.starts_with(CREDENTIALS_DIR)
+                && normalized_path.ends_with("/record.yml")
+            {
                 let credential_str = String::from_utf8(file_data.clone()).map_err(|e| {
                     CoreError::SerializationError {
                         message: format!("Invalid UTF-8 in credential file {}: {}", file_path, e),
@@ -108,9 +112,18 @@ impl UnifiedMemoryRepository {
         #[cfg(windows)]
         {
             eprintln!("DEBUG [Windows]: load_from_files validation");
-            eprintln!("DEBUG [Windows]: Loaded credentials: {}", self.credentials.len());
-            eprintln!("DEBUG [Windows]: Metadata credential_count: {}", self.metadata.credential_count);
-            eprintln!("DEBUG [Windows]: File map entries processed: {}", file_map.len());
+            eprintln!(
+                "DEBUG [Windows]: Loaded credentials: {}",
+                self.credentials.len()
+            );
+            eprintln!(
+                "DEBUG [Windows]: Metadata credential_count: {}",
+                self.metadata.credential_count
+            );
+            eprintln!(
+                "DEBUG [Windows]: File map entries processed: {}",
+                file_map.len()
+            );
             eprintln!("DEBUG [Windows]: File map contents:");
             for (path, content) in &file_map {
                 eprintln!("DEBUG [Windows]:   '{}': {} bytes", path, content.len());
@@ -158,8 +171,14 @@ impl UnifiedMemoryRepository {
         #[cfg(windows)]
         {
             eprintln!("DEBUG [Windows]: serialize_to_files starting");
-            eprintln!("DEBUG [Windows]: Credential count: {}", self.credentials.len());
-            eprintln!("DEBUG [Windows]: Metadata credential_count: {}", self.metadata.credential_count);
+            eprintln!(
+                "DEBUG [Windows]: Credential count: {}",
+                self.credentials.len()
+            );
+            eprintln!(
+                "DEBUG [Windows]: Metadata credential_count: {}",
+                self.metadata.credential_count
+            );
         }
 
         // Serialize metadata
@@ -168,7 +187,10 @@ impl UnifiedMemoryRepository {
         file_map.insert(METADATA_FILE.to_string(), metadata_yaml.into_bytes());
 
         #[cfg(windows)]
-        eprintln!("DEBUG [Windows]: Added metadata file: {} ({} bytes)", METADATA_FILE, metadata_len);
+        eprintln!(
+            "DEBUG [Windows]: Added metadata file: {} ({} bytes)",
+            METADATA_FILE, metadata_len
+        );
 
         // Serialize each credential
         for credential in self.credentials.values() {
@@ -177,9 +199,15 @@ impl UnifiedMemoryRepository {
 
             #[cfg(windows)]
             {
-                eprintln!("DEBUG [Windows]: Serializing credential ID: {}", credential.id);
+                eprintln!(
+                    "DEBUG [Windows]: Serializing credential ID: {}",
+                    credential.id
+                );
                 eprintln!("DEBUG [Windows]: File path: '{}'", file_path);
-                eprintln!("DEBUG [Windows]: YAML size: {} bytes", credential_yaml.len());
+                eprintln!(
+                    "DEBUG [Windows]: YAML size: {} bytes",
+                    credential_yaml.len()
+                );
             }
 
             file_map.insert(file_path, credential_yaml.into_bytes());

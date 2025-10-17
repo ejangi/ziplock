@@ -53,6 +53,9 @@ export RUST_BACKTRACE="1"
 echo -e "${YELLOW}📝 Creating Windows archive persistence test program...${NC}"
 
 # Create Cargo.toml for the test
+# Convert PROJECT_ROOT to Windows-compatible path for Cargo (forward slashes work)
+CARGO_PROJECT_ROOT=$(echo "$PROJECT_ROOT" | sed 's|^/c|C:|')
+
 cat > "$TEST_DIR/Cargo.toml" << EOF
 [package]
 name = "windows-archive-persistence-test"
@@ -60,7 +63,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-ziplock-shared = { path = "../../shared" }
+ziplock-shared = { path = "$CARGO_PROJECT_ROOT/shared" }
 anyhow = "1.0"
 env_logger = "0.10"
 log = "0.4"
@@ -77,7 +80,7 @@ mkdir -p "$TEST_DIR/src"
 cat > "$TEST_DIR/src/main.rs" << 'EOF'
 use std::collections::HashMap;
 use std::path::PathBuf;
-use log::{info, debug, error, warn};
+use log::{info, error, warn};
 use ziplock_shared::core::{
     DesktopFileProvider, UnifiedRepositoryManager, FileOperationProvider
 };
@@ -239,7 +242,7 @@ fn main() -> anyhow::Result<()> {
     // Verify our specific credential exists
     if let Some(loaded_credential) = credentials.iter().find(|c| c.id == credential_id) {
         info!("✅ Found our credential with ID: {}", credential_id);
-        info!("   Name: {}", loaded_credential.name);
+        info!("   Name: {}", loaded_credential.title);
         info!("   Type: {}", loaded_credential.credential_type);
         info!("   Fields: {}", loaded_credential.fields.len());
 
@@ -255,7 +258,7 @@ fn main() -> anyhow::Result<()> {
         error!("   Expected ID: {}", credential_id);
         error!("   Found credentials:");
         for cred in &credentials {
-            error!("     - {} ({})", cred.name, cred.id);
+            error!("     - {} ({})", cred.title, cred.id);
         }
         return Err(anyhow::anyhow!("Test credential not found after loading"));
     }
@@ -285,7 +288,7 @@ fn main() -> anyhow::Result<()> {
     info!("🔧 Phase 7: Testing round-trip modification");
 
     let mut modified_credential = credentials[0].clone();
-    modified_credential.name = "Modified Windows Test Login".to_string();
+    modified_credential.title = "Modified Windows Test Login".to_string();
 
     info!("Updating credential: {}", modified_credential.id);
     manager2.update_credential(modified_credential.clone())?;
