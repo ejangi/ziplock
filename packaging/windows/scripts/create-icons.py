@@ -30,9 +30,11 @@ from pathlib import Path
 
 try:
     from PIL import Image
+
+    PIL_AVAILABLE = True
 except ImportError:
-    print("ERROR: Pillow not found. Please install with: pip install Pillow")
-    sys.exit(1)
+    PIL_AVAILABLE = False
+    Image = None
 
 
 def create_ico_header(num_images):
@@ -138,6 +140,48 @@ def create_ico_file(png_path, ico_path, sizes=None):
 
 
 def main():
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        description="Create high-resolution Windows ICO files"
+    )
+    parser.add_argument(
+        "--install-deps",
+        action="store_true",
+        help="Automatically install Pillow if missing",
+    )
+    args = parser.parse_args()
+
+    # Check if Pillow is available
+    global PIL_AVAILABLE, Image
+    if not PIL_AVAILABLE:
+        if args.install_deps:
+            print("Installing Pillow...")
+            try:
+                import subprocess
+
+                subprocess.check_call(
+                    [sys.executable, "-m", "pip", "install", "Pillow"]
+                )
+                from PIL import Image
+
+                PIL_AVAILABLE = True
+                print("✅ Pillow installed successfully!")
+            except Exception as e:
+                print(f"❌ Failed to install Pillow: {e}")
+                print("Please install manually: pip install Pillow")
+                return
+        else:
+            print("WARNING: Pillow not found. Cannot create proper ICO files.")
+            print("Please install Pillow with: pip install Pillow")
+            print("Or run with --install-deps to install automatically")
+            print()
+            print(
+                "For CI/CD environments, the workflow should handle this with fallback icons."
+            )
+            print("Exiting gracefully - fallback method will be used.")
+            return  # Exit gracefully without error
+
     # Determine paths
     script_dir = Path(__file__).parent
     project_root = script_dir.parent.parent.parent
@@ -145,8 +189,8 @@ def main():
     source_dir = project_root / "assets" / "icons"
     output_dir = project_root / "packaging" / "windows" / "resources"
 
-    print("ZipLock Simple ICO Creation")
-    print("===========================")
+    print("ZipLock High-Resolution ICO Creation")
+    print("====================================")
     print(f"Source: {source_dir}")
     print(f"Output: {output_dir}")
     print()

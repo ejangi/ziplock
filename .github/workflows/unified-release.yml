@@ -531,24 +531,28 @@ jobs:
         run: |
           Write-Host "=== Generating Windows Icons ===" -ForegroundColor Green
 
-          # Check if Python is available and generate .ico files
+          # Try to generate high-resolution icons with automatic dependency installation
           try {
               python --version
-              Write-Host "Python found, generating proper .ico files..." -ForegroundColor Cyan
-              python "packaging/windows/scripts/create-icons.py" --force
+              Write-Host "Generating high-resolution .ico files with automatic dependency installation..." -ForegroundColor Cyan
+              python "packaging/windows/scripts/create-icons.py" --install-deps
+              Write-Host "High-resolution icons generated successfully!" -ForegroundColor Green
           } catch {
-              Write-Host "Python not found, using fallback method..." -ForegroundColor Yellow
+              Write-Host "High-resolution icon generation failed, using fallback method..." -ForegroundColor Yellow
               # Ensure icon directory exists
               New-Item -ItemType Directory -Path "packaging/windows/resources" -Force | Out-Null
 
-              # Copy PNG files as .ico fallback
+              # Copy PNG files as .ico fallback (lower quality but functional)
               Copy-Item "assets/icons/ziplock-icon-256.png" "packaging/windows/resources/ziplock.ico" -Force
               Copy-Item "assets/icons/ziplock-icon-128.png" "packaging/windows/resources/ziplock-small.ico" -Force
+              Copy-Item "assets/icons/ziplock-icon-256.png" "packaging/windows/resources/ziplock-standard.ico" -Force
+              Copy-Item "assets/icons/ziplock-icon-256.png" "packaging/windows/resources/ziplock-taskbar.ico" -Force
               Copy-Item "assets/icons/ziplock-icon-512.png" "packaging/windows/resources/ziplock-large.ico" -Force
+              Write-Host "Fallback icons created (PNG files with .ico extension)" -ForegroundColor Yellow
           }
 
           # Verify icon files exist
-          $iconFiles = @("ziplock.ico", "ziplock-small.ico", "ziplock-large.ico")
+          $iconFiles = @("ziplock.ico", "ziplock-small.ico", "ziplock-standard.ico", "ziplock-taskbar.ico", "ziplock-large.ico")
           foreach ($iconFile in $iconFiles) {
               $iconPath = "packaging/windows/resources/$iconFile"
               if (Test-Path $iconPath) {
