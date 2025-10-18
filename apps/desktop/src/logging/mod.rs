@@ -165,6 +165,8 @@ impl LoggingConfig {
             file_level: "DEBUG".to_string(),
             enable_file: true,
             enable_event_log: false,
+            include_thread_ids: true,
+            include_source_location: true,
             ..Default::default()
         }
     }
