@@ -28,6 +28,18 @@ import sys
 import struct
 from pathlib import Path
 
+# Ensure proper encoding for Windows environments
+if sys.platform == "win32":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+        sys.stderr.reconfigure(encoding="utf-8")
+    except:
+        # Fallback for older Python versions
+        import codecs
+
+        sys.stdout = codecs.getwriter("utf-8")(sys.stdout.detach())
+        sys.stderr = codecs.getwriter("utf-8")(sys.stderr.detach())
+
 try:
     from PIL import Image
 
@@ -127,15 +139,15 @@ def create_ico_file(png_path, ico_path, sizes=None):
         # Verify file was created
         if ico_path.exists():
             size_kb = ico_path.stat().st_size / 1024
-            print(f"  ✅ SUCCESS: Created {ico_path.name} ({size_kb:.1f} KB)")
+            print(f"  SUCCESS: Created {ico_path.name} ({size_kb:.1f} KB)")
             print(f"     Contains {len(sizes)} size variants")
             return True
         else:
-            print(f"  ❌ ERROR: Failed to create {ico_path.name}")
+            print(f"  ERROR: Failed to create {ico_path.name}")
             return False
 
     except Exception as e:
-        print(f"  ❌ ERROR: {e}")
+        print(f"  ERROR: {e}")
         return False
 
 
@@ -166,9 +178,9 @@ def main():
                 from PIL import Image
 
                 PIL_AVAILABLE = True
-                print("✅ Pillow installed successfully!")
+                print("SUCCESS: Pillow installed successfully!")
             except Exception as e:
-                print(f"❌ Failed to install Pillow: {e}")
+                print(f"ERROR: Failed to install Pillow: {e}")
                 print("Please install manually: pip install Pillow")
                 return
         else:
@@ -234,11 +246,11 @@ def main():
         output_path = output_dir / config["output"]
 
         if not source_path.exists():
-            print(f"❌ Source not found: {config['source']}")
+            print(f"ERROR: Source not found: {config['source']}")
             failed += 1
             continue
 
-        print(f"📄 {config['desc']}:")
+        print(f"{config['desc']}:")
         if create_ico_file(source_path, output_path, config["sizes"]):
             generated += 1
         else:
@@ -252,13 +264,13 @@ def main():
 
     if generated > 0:
         print()
-        print("✅ High-resolution ICO files created successfully!")
+        print("SUCCESS: High-resolution ICO files created successfully!")
         print()
         print("Technical improvements achieved:")
-        print("• Multi-resolution ICO files (16px to 512px) for all Windows contexts")
-        print("• High-quality PNG-based icon data for crisp display")
-        print("• Optimized for high-DPI displays and modern Windows versions")
-        print("• Icons are automatically embedded by build.rs during compilation")
+        print("- Multi-resolution ICO files (16px to 512px) for all Windows contexts")
+        print("- High-quality PNG-based icon data for crisp display")
+        print("- Optimized for high-DPI displays and modern Windows versions")
+        print("- Icons are automatically embedded by build.rs during compilation")
         print()
         print("Next steps:")
         print("1. Build the Windows executable:")
