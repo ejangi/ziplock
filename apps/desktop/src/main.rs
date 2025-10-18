@@ -6,6 +6,7 @@
 // Windows configuration for GUI applications
 #![cfg_attr(target_os = "windows", windows_subsystem = "windows")]
 
+use clap::{Arg, Command};
 use iced::{
     widget::{button, svg, text},
     Element, Task, Theme,
@@ -1527,6 +1528,46 @@ impl ZipLockApp {
 }
 
 fn main() -> iced::Result {
+    // Parse command line arguments first (before any other initialization)
+    let matches = Command::new("ZipLock Password Manager")
+        .version(env!("CARGO_PKG_VERSION"))
+        .about("A secure, cross-platform password manager using encrypted 7z archives")
+        .author("James Angus <james@ejangi.com>")
+        .arg(
+            Arg::new("version")
+                .long("version")
+                .short('V')
+                .help("Print version information")
+                .action(clap::ArgAction::SetTrue),
+        )
+        .arg(
+            Arg::new("help")
+                .long("help")
+                .short('h')
+                .help("Print help information")
+                .action(clap::ArgAction::Help),
+        )
+        .arg(
+            Arg::new("headless")
+                .long("headless")
+                .help("Run in headless mode for testing (prints version and exits)")
+                .action(clap::ArgAction::SetTrue),
+        )
+        .get_matches();
+
+    // Handle version flag - exit early before any GUI initialization
+    if matches.get_flag("version") {
+        println!("ziplock {}", env!("CARGO_PKG_VERSION"));
+        std::process::exit(0);
+    }
+
+    // Handle headless flag - useful for CI testing
+    if matches.get_flag("headless") {
+        println!("ZipLock Password Manager {}", env!("CARGO_PKG_VERSION"));
+        println!("Running in headless mode - GUI disabled");
+        std::process::exit(0);
+    }
+
     // Determine if running in production mode
     let is_production = is_production_mode();
 
