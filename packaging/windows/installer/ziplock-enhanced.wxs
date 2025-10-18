@@ -26,29 +26,29 @@
     </Property>
 
     <!-- Custom Action Definitions -->
-    <!-- Success message custom action -->
+    <!-- Success message custom action - runs as immediate (not deferred) -->
     <CustomAction Id="ShowInstallSuccess"
                   Property="POWERSHELL_PATH"
                   ExeCommand="-WindowStyle Hidden -ExecutionPolicy Bypass -File &quot;[INSTALLFOLDER]bin\show-install-success.ps1&quot; -ProductName &quot;[ProductName]&quot; -Version &quot;[ProductVersion]&quot;"
-                  Execute="deferred"
+                  Execute="immediate"
                   Return="ignore"
-                  Impersonate="yes" />
+                  HideTarget="yes" />
 
-    <!-- Failure message custom action -->
-    <CustomAction Id="ShowInstallFailure"
+    <!-- Rollback message custom action for installation failures -->
+    <CustomAction Id="ShowInstallRollback"
                   Property="POWERSHELL_PATH"
                   ExeCommand="-WindowStyle Hidden -ExecutionPolicy Bypass -File &quot;[INSTALLFOLDER]bin\show-install-failure.ps1&quot; -ProductName &quot;[ProductName]&quot; -Version &quot;[ProductVersion]&quot;"
-                  Execute="deferred"
+                  Execute="rollback"
                   Return="ignore"
-                  Impersonate="yes" />
+                  HideTarget="yes" />
 
-    <!-- Install Sequences -->
+    <!-- Install Sequences - Fixed scheduling to avoid error 2762 -->
     <InstallExecuteSequence>
-      <!-- Show success message after successful installation -->
-      <Custom Action="ShowInstallSuccess" After="InstallFinalize" Condition="NOT Installed AND NOT REMOVE" />
+      <!-- Schedule rollback action early, after InstallInitialize -->
+      <Custom Action="ShowInstallRollback" After="InstallInitialize" Condition="NOT Installed AND NOT REMOVE" />
 
-      <!-- Show failure message on rollback -->
-      <Custom Action="ShowInstallFailure" After="InstallInitialize" Condition="REMOVE OR (NOT Installed)" />
+      <!-- Schedule success message before InstallFinalize, only on successful new installation -->
+      <Custom Action="ShowInstallSuccess" Before="InstallFinalize" Condition="NOT Installed AND NOT REMOVE AND NOT ROLLBACK" />
     </InstallExecuteSequence>
 
     <!-- Feature definitions -->

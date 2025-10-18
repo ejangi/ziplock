@@ -978,6 +978,51 @@ MSI build failed with exit code 103
    wix build "ziplock-minimal.wxs" -define "SourceDir=..\..\..\target\windows-package" -define "Version=1.0.0" -out "..\..\..\target\ZipLock-1.0.0-x64-minimal.msi"
    ```
 
+#### MSI Error 2762 - Custom Action Scheduling (FIXED)
+
+**Symptoms:**
+```
+Error 2762: Unable to schedule operation. The action must be scheduled between InstallInitialize and InstallFinalize.
+Event ID 10005 in Windows Application log
+```
+
+**Root Cause:**
+The enhanced MSI configuration had incorrectly scheduled custom actions:
+- `ShowInstallSuccess` was scheduled `After="InstallFinalize"` (impossible)
+- Custom actions marked as `deferred` but running outside valid execution window
+
+**Fix Applied:**
+The `ziplock-enhanced.wxs` has been corrected with proper custom action scheduling:
+
+```xml
+<InstallExecuteSequence>
+  <!-- Schedule rollback action early, after InstallInitialize -->
+  <Custom Action="ShowInstallRollback" After="InstallInitialize">NOT Installed AND NOT REMOVE</Custom>
+  
+  <!-- Schedule success message before InstallFinalize -->
+  <Custom Action="ShowInstallSuccess" Before="InstallFinalize">NOT Installed AND NOT REMOVE AND NOT ROLLBACK</Custom>
+</InstallExecuteSequence>
+```
+
+**Key Changes:**
+- Changed `ShowInstallSuccess` from `After="InstallFinalize"` to `Before="InstallFinalize"`
+- Renamed `ShowInstallFailure` to `ShowInstallRollback` with proper rollback execution
+- Changed custom actions from `Execute="deferred"` to `Execute="immediate"` and `Execute="rollback"`
+- Removed problematic `Impersonate="yes"` settings
+- Added proper condition logic to prevent conflicts
+
+**Validation:**
+```powershell
+# Test the fix using the validation script
+.\scripts\build\test-msi-fix.ps1 -TestBoth -Verbose
+
+# Or test minimal configuration only
+.\scripts\build\test-msi-fix.ps1
+```
+
+**Fallback Strategy:**
+If enhanced MSI still fails, the build system automatically falls back to minimal MSI which has no custom actions and should always work.
+
 #### Enhanced MSI with User Feedback
 
 The Windows build system now supports two MSI configurations:
