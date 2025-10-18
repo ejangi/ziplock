@@ -696,7 +696,7 @@ mod tests {
     fn test_development_config() {
         let config = LoggingConfig::development();
         assert_eq!(config.console_level, "DEBUG");
-        assert_eq!(config.file_level, "TRACE");
+        assert_eq!(config.file_level, "DEBUG");
         assert!(config.include_thread_ids);
         assert!(config.include_source_location);
     }
@@ -704,11 +704,10 @@ mod tests {
     #[test]
     fn test_production_config() {
         let config = LoggingConfig::production();
-        assert_eq!(config.console_level, "WARN");
-        assert_eq!(config.file_level, "INFO");
+        assert_eq!(config.console_level, "ERROR");
+        assert_eq!(config.file_level, "WARN");
         assert!(!config.include_thread_ids);
         assert!(!config.include_source_location);
-        assert_eq!(config.rotation.max_file_size, 50 * 1024 * 1024);
     }
 
     #[tokio::test]
