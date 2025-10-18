@@ -1,251 +1,226 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-ZipLock Windows Icon Generation Script
-Converts PNG assets to .ico format for Windows executable embedding
+ZipLock Windows Icon Creation Script
+====================================
 
-This script uses PIL (Pillow) to convert PNG files to Windows .ico format
-with multiple icon sizes embedded in a single .ico file.
+Creates high-resolution Windows ICO files from PNG sources with multiple embedded sizes.
+
+This script generates proper multi-resolution ICO files using a manual ICO file format
+approach to ensure Windows displays crisp icons at all sizes and DPI settings.
+
+Features:
+- Converts high-resolution PNG files to ICO format
+- Embeds multiple icon sizes (16px to 512px) in a single ICO file
+- Optimized for Windows 10/11 and high-DPI displays
+- Uses PNG data directly in ICO containers for best quality
+- Creates multiple ICO variants for different Windows contexts
+
+Usage:
+    python3 create-icons.py
+
+The script automatically finds PNG sources in assets/icons/ and outputs ICO files
+to packaging/windows/resources/ which are then embedded by the build script.
 """
 
 import os
 import sys
-import argparse
+import struct
 from pathlib import Path
-
-# Set console encoding to UTF-8 for Windows
-if sys.platform == "win32":
-    import codecs
-
-    sys.stdout = codecs.getwriter("utf-8")(sys.stdout.detach())
-    sys.stderr = codecs.getwriter("utf-8")(sys.stderr.detach())
 
 try:
     from PIL import Image
-
-    PIL_AVAILABLE = True
 except ImportError:
-    PIL_AVAILABLE = False
-    Image = None
+    print("ERROR: Pillow not found. Please install with: pip install Pillow")
+    sys.exit(1)
 
 
-def install_pillow():
-    """Attempt to install Pillow if not available."""
-    print("Pillow (PIL) not found. Attempting to install...")
-    try:
-        import subprocess
-
-        result = subprocess.run(
-            [sys.executable, "-m", "pip", "install", "Pillow"],
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-        print("SUCCESS: Pillow installed successfully!")
-        print(result.stdout)
-        return True
-    except subprocess.CalledProcessError as e:
-        print(f"ERROR: Failed to install Pillow: {e}")
-        print(f"Error output: {e.stderr}")
-        return False
-    except Exception as e:
-        print(f"ERROR: Unexpected error installing Pillow: {e}")
-        return False
+def create_ico_header(num_images):
+    """Create ICO file header"""
+    return struct.pack("<HHH", 0, 1, num_images)  # Reserved, Type=1 (ICO), Count
 
 
-def create_ico_from_png(png_path, ico_path, sizes=None):
-    """
-    Create a .ico file from a PNG with multiple sizes.
+def create_ico_entry(width, height, size, offset):
+    """Create an ICO directory entry"""
+    # If size is >= 256, we need to use 0 in the width/height fields
+    w = width if width < 256 else 0
+    h = height if height < 256 else 0
 
-    Args:
-        png_path (Path): Source PNG file
-        ico_path (Path): Output ICO file
-        sizes (list): List of sizes to include (default: [16, 32, 48, 64, 128, 256])
-    """
-    if sizes is None:
-        sizes = [16, 32, 48, 64, 128, 256]
+    return struct.pack(
+        "<BBBBHHII",
+        w,  # Width (0 if >= 256)
+        h,  # Height (0 if >= 256)
+        0,  # Color count (0 for 24-bit+)
+        0,  # Reserved
+        1,  # Color planes
+        32,  # Bits per pixel
+        size,  # Image data size
+        offset,
+    )  # Offset to image data
 
-    print(f"Creating {ico_path.name} from {png_path.name}...")
 
-    try:
-        # Load the source PNG
-        with Image.open(png_path) as img:
-            # Convert to RGBA if not already
-            if img.mode != "RGBA":
-                img = img.convert("RGBA")
+def png_to_ico_data(png_path, sizes):
+    """Convert PNG to multiple sizes and return ICO-compatible data"""
+    with Image.open(png_path) as img:
+        if img.mode != "RGBA":
+            img = img.convert("RGBA")
 
-            # Create list of resized images
-            icon_images = []
-            for size in sizes:
-                print(f"   Generating {size}x{size}...")
-                resized = img.resize((size, size), Image.Resampling.LANCZOS)
-                icon_images.append(resized)
+        ico_images = []
+        for size in sizes:
+            # Resize with high quality
+            resized = img.resize((size, size), Image.Resampling.LANCZOS)
 
-            # Save as ICO with all sizes
-            print(f"   Saving .ico file...")
-            icon_images[0].save(
-                ico_path,
-                format="ICO",
-                sizes=[(size, size) for size in sizes],
-                append_images=icon_images[1:],
+            # Convert to PNG bytes (ICO can contain PNG data directly)
+            from io import BytesIO
+
+            png_buffer = BytesIO()
+            resized.save(png_buffer, format="PNG")
+            png_data = png_buffer.getvalue()
+
+            ico_images.append(
+                {"width": size, "height": size, "data": png_data, "size": len(png_data)}
             )
 
-            # Verify the file was created
-            if ico_path.exists():
-                size_kb = ico_path.stat().st_size / 1024
-                print(f"   SUCCESS: Created: {ico_path.name} ({size_kb:.1f} KB)")
-                return True
-            else:
-                print(f"   ERROR: Failed to create {ico_path.name}")
-                return False
+        return ico_images
+
+
+def create_ico_file(png_path, ico_path, sizes=None):
+    """Create an ICO file from a PNG with multiple sizes"""
+    if sizes is None:
+        sizes = [16, 24, 32, 48, 64, 128, 256]
+
+    print(f"Creating {ico_path.name} from {png_path.name}...")
+    print(f"  Target sizes: {', '.join(map(str, sizes))} pixels")
+
+    try:
+        # Generate image data for all sizes
+        ico_images = png_to_ico_data(png_path, sizes)
+
+        # Calculate offsets
+        header_size = 6  # ICO header
+        entry_size = 16  # Each directory entry
+        entries_size = len(ico_images) * entry_size
+        offset = header_size + entries_size
+
+        for img in ico_images:
+            img["offset"] = offset
+            offset += img["size"]
+
+        # Write ICO file
+        with open(ico_path, "wb") as f:
+            # Write header
+            f.write(create_ico_header(len(ico_images)))
+
+            # Write directory entries
+            for img in ico_images:
+                entry = create_ico_entry(
+                    img["width"], img["height"], img["size"], img["offset"]
+                )
+                f.write(entry)
+
+            # Write image data
+            for img in ico_images:
+                f.write(img["data"])
+
+        # Verify file was created
+        if ico_path.exists():
+            size_kb = ico_path.stat().st_size / 1024
+            print(f"  ✅ SUCCESS: Created {ico_path.name} ({size_kb:.1f} KB)")
+            print(f"     Contains {len(sizes)} size variants")
+            return True
+        else:
+            print(f"  ❌ ERROR: Failed to create {ico_path.name}")
+            return False
 
     except Exception as e:
-        print(f"   ERROR: Error processing {png_path.name}: {e}")
+        print(f"  ❌ ERROR: {e}")
         return False
 
 
 def main():
-    """Main execution function."""
-    parser = argparse.ArgumentParser(
-        description="Convert ZipLock PNG icons to Windows ICO format"
-    )
-    parser.add_argument(
-        "--source-dir", type=str, help="Source directory containing PNG files"
-    )
-    parser.add_argument("--output-dir", type=str, help="Output directory for ICO files")
-    parser.add_argument(
-        "--force", action="store_true", help="Overwrite existing ICO files"
-    )
-
-    args = parser.parse_args()
-
     # Determine paths
     script_dir = Path(__file__).parent
     project_root = script_dir.parent.parent.parent
 
-    source_dir = (
-        Path(args.source_dir) if args.source_dir else project_root / "assets" / "icons"
-    )
-    output_dir = (
-        Path(args.output_dir)
-        if args.output_dir
-        else project_root / "packaging" / "windows" / "resources"
-    )
+    source_dir = project_root / "assets" / "icons"
+    output_dir = project_root / "packaging" / "windows" / "resources"
 
-    print("ZipLock Windows Icon Generation")
-    print("=" * 31)
-    print(f"📂 Source Directory: {source_dir}")
-    print(f"📁 Output Directory: {output_dir}")
-    print(f"Force Overwrite: {args.force}")
+    print("ZipLock Simple ICO Creation")
+    print("===========================")
+    print(f"Source: {source_dir}")
+    print(f"Output: {output_dir}")
     print()
 
-    # Check if Pillow is available
-    global PIL_AVAILABLE
-    if not PIL_AVAILABLE:
-        if not install_pillow():
-            print("ERROR: Cannot proceed without Pillow. Please install it manually:")
-            print("   pip install Pillow")
-            sys.exit(1)
-        else:
-            # Re-import after installation
-            try:
-                from PIL import Image
-
-                PIL_AVAILABLE = True
-                globals()["Image"] = Image
-            except ImportError:
-                print("ERROR: Pillow installation succeeded but import still fails")
-                sys.exit(1)
-
-    # Verify source directory exists
-    if not source_dir.exists():
-        print(f"ERROR: Source directory not found: {source_dir}")
-        sys.exit(1)
-
-    # Create output directory if needed
+    # Ensure output directory exists
     output_dir.mkdir(parents=True, exist_ok=True)
-    print(f"Output directory ready: {output_dir}")
-    print()
 
-    # Icon generation configurations
-    icon_configs = [
+    # Icon configurations with optimized size ranges
+    configs = [
+        {
+            "source": "ziplock-icon-512.png",
+            "output": "ziplock.ico",
+            "sizes": [16, 20, 24, 32, 48, 64, 96, 128, 256, 512],
+            "desc": "Main application icon (full range)",
+        },
         {
             "source": "ziplock-icon-256.png",
-            "output": "ziplock.ico",
-            "sizes": [16, 32, 48, 64, 128, 256],
-            "description": "Main application icon",
+            "output": "ziplock-standard.ico",
+            "sizes": [16, 20, 24, 32, 48, 64, 96, 128, 256],
+            "desc": "Standard icon (up to 256px)",
         },
         {
             "source": "ziplock-icon-128.png",
             "output": "ziplock-small.ico",
-            "sizes": [16, 32, 48, 64, 128],
-            "description": "Small application icon (fallback)",
+            "sizes": [16, 20, 24, 32, 48, 64, 96, 128],
+            "desc": "Small icon variants",
         },
         {
-            "source": "ziplock-icon-512.png",
-            "output": "ziplock-large.ico",
-            "sizes": [16, 32, 48, 64, 128, 256],
-            "description": "Large application icon (high-res displays)",
+            "source": "ziplock-icon-256.png",
+            "output": "ziplock-taskbar.ico",
+            "sizes": [16, 20, 24, 32, 48, 64],
+            "desc": "Taskbar optimized",
         },
     ]
 
-    print("Generating ICO files...")
-    print()
+    generated = 0
+    failed = 0
 
-    generated_count = 0
-    failed_count = 0
-
-    for config in icon_configs:
+    for config in configs:
         source_path = source_dir / config["source"]
         output_path = output_dir / config["output"]
 
         if not source_path.exists():
-            print(f"WARNING: Source file not found: {source_path.name}")
-            failed_count += 1
+            print(f"❌ Source not found: {config['source']}")
+            failed += 1
             continue
 
-        # Check if output already exists and force is not specified
-        if output_path.exists() and not args.force:
-            print(
-                f"Skipping {config['output']} (already exists, use --force to overwrite)"
-            )
-            continue
-
-        print(f"{config['description']}:")
-        if create_ico_from_png(source_path, output_path, config["sizes"]):
-            generated_count += 1
+        print(f"📄 {config['desc']}:")
+        if create_ico_file(source_path, output_path, config["sizes"]):
+            generated += 1
         else:
-            failed_count += 1
+            failed += 1
         print()
 
-    # Summary
-    print("Icon Generation Summary")
-    print("=" * 23)
-    print(f"Generated: {generated_count} files")
-    print(f"Failed: {failed_count} files")
-    print(f"Output directory: {output_dir}")
-    print()
+    print("Summary")
+    print("=======")
+    print(f"Generated: {generated}")
+    print(f"Failed: {failed}")
 
-    # List generated files
-    ico_files = list(output_dir.glob("*.ico"))
-    if ico_files:
-        print("Generated ICO files:")
-        for ico_file in sorted(ico_files):
-            size_kb = ico_file.stat().st_size / 1024
-            print(f"   - {ico_file.name} ({size_kb:.1f} KB)")
-    print()
-
-    if generated_count > 0:
+    if generated > 0:
+        print()
+        print("✅ High-resolution ICO files created successfully!")
+        print()
+        print("Technical improvements achieved:")
+        print("• Multi-resolution ICO files (16px to 512px) for all Windows contexts")
+        print("• High-quality PNG-based icon data for crisp display")
+        print("• Optimized for high-DPI displays and modern Windows versions")
+        print("• Icons are automatically embedded by build.rs during compilation")
+        print()
         print("Next steps:")
-        print("   1. The build.rs script will automatically embed these icons")
-        print("   2. Update WiX installer to reference the .ico files")
-        print("   3. Build the Windows executable to test icon embedding")
-        print()
-        print("Icon generation completed successfully!")
-    else:
-        print("WARNING: No icons were generated. Check source files and try again.")
-        if failed_count > 0:
-            sys.exit(1)
+        print("1. Build the Windows executable:")
+        print("   cargo build --release")
+        print("2. Verify icon quality in Windows Explorer, taskbar, and Alt+Tab")
+        print("3. Test on different DPI settings and screen resolutions")
 
 
 if __name__ == "__main__":

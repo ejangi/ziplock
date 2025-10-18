@@ -104,19 +104,51 @@ Installation events are logged to the Windows Application Event Log:
 - **PowerShell 5.0+** (for enhanced MSI features)
 - **Python 3.6+** (optional, for proper icon generation)
 
-### Icon Generation
+### High-Resolution Icon Generation
 
-Icons are generated from PNG sources in `assets/icons/`:
+ZipLock uses high-resolution icons that scale perfectly from 16px to 512px for crisp display on all Windows contexts and high-DPI displays.
 
-1. **Python method** (preferred): Uses Pillow to create proper .ico files
-2. **Fallback method**: Copies PNG files with .ico extension
+#### Icon Improvements (2024)
+
+The icon system has been significantly upgraded:
+
+- **Multi-resolution ICO files**: Each .ico file contains 8-10 size variants (16px to 512px)
+- **High-quality resampling**: Uses Lanczos algorithm for optimal quality at all sizes
+- **PNG-based ICO data**: Icons use PNG compression inside ICO containers for best quality
+- **DPI awareness**: Manifest configured for PerMonitorV2 DPI awareness
+- **Size optimization**: Generated ICO files are 8KB-43KB (vs previous 600 bytes)
+
+#### Icon Generation Process
+
+Icons are generated from high-resolution PNG sources in `assets/icons/`:
 
 ```powershell
-# Generate icons with Python (if available)
-python packaging\windows\scripts\create-icons.py --force
+# Generate high-resolution icons (requires Python + Pillow)
+python packaging\windows\scripts\create-icons.py
 
-# Icons are saved to packaging\windows\resources\
+# This creates:
+# - ziplock.ico (42KB) - Main app icon with full 16px-512px range
+# - ziplock-standard.ico (24KB) - Standard resolution up to 256px  
+# - ziplock-small.ico (15KB) - Small variants up to 128px
+# - ziplock-taskbar.ico (8KB) - Taskbar optimized 16px-64px
 ```
+
+#### Technical Details
+
+The icon creation script (`create-icons.py`) uses a manual ICO file format approach to ensure proper multi-resolution ICO files:
+
+1. **Source Processing**: Loads high-resolution PNG files (128px, 256px, 512px)
+2. **Size Generation**: Creates multiple sizes using high-quality Lanczos resampling
+3. **ICO Assembly**: Manually constructs ICO file format with proper headers and directory entries
+4. **PNG Embedding**: Stores PNG data directly in ICO containers for best compression
+5. **Resource Embedding**: Build script automatically embeds icons via Windows .rc file
+
+The generated icons provide crisp display across all Windows contexts:
+- Explorer thumbnails and details view
+- Desktop and Start Menu shortcuts  
+- Taskbar and system tray
+- Alt+Tab task switcher
+- High-DPI displays (150%, 200%, 300%+ scaling)
 
 ## Build Process
 

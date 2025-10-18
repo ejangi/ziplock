@@ -4,12 +4,13 @@
 
 #include <windows.h>
 
-// Application Icon (main icon)
+// Application Icon (main icon - high resolution)
 1 ICON "..\\..\\..\\..\\packaging\\windows\\resources\\ziplock.ico"
 
-// Alternative icon sizes (if available)
-2 ICON "..\\..\\..\\..\\packaging\\windows\\resources\\ziplock-small.ico"
-3 ICON "..\\..\\..\\..\\packaging\\windows\\resources\\ziplock-large.ico"
+// Alternative icon sizes for different contexts
+2 ICON "..\\..\\..\\..\\packaging\\windows\\resources\\ziplock-standard.ico"
+3 ICON "..\\..\\..\\..\\packaging\\windows\\resources\\ziplock-small.ico"
+4 ICON "..\\..\\..\\..\\packaging\\windows\\resources\\ziplock-taskbar.ico"
 
 // Version Information
 1 VERSIONINFO
